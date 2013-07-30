@@ -1346,11 +1346,16 @@ int TransShift::myProcess(mytype *inFrame_ptr, mytype *outFrame_ptr, int frame_s
 		
 		if (p.bShift)
 		{
-			during_trans = (pipCfg.fmtPertAmp[stat] != 0);
-
-			if (during_trans) {
-				during_trans = during_trans;
+			if (pipCfg.n == 0) {
+				during_trans = false;
 			}
+			else {
+				during_trans = (pipCfg.fmtPertAmp[stat] != 0);
+			}
+
+			/* if (during_trans) {
+				during_trans = during_trans;
+			} */
 
 			if(during_trans && bDoFmts) // Determine whether the current point in perturbation field
 			{// yes : windowed deviation over x coordinate
