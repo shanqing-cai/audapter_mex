@@ -47,7 +47,7 @@ void printHelp() {
 	mexPrintf("\t\t2 / stop:		Stop audio I/O\n");
 	mexPrintf("\t\t3 / setParam:	Set parameter value\n");
 	mexPrintf("\t\t4 / getData:	Get data from the last run\n");
-	mexPrintf("\t\t5 / runFrame:	Supply a frame of data for offline processing");
+	mexPrintf("\t\t5 / runFrame:	Supply a frame of data for offline processing\n");
 	mexPrintf("\t\t6 / reset:		Software state reset for new run\n");
 	mexPrintf("\t\t7 / outFrame:	Read outFrameBufPS\n");
 	mexPrintf("\t\t8 / ost:		Read online sentence tracking (ost) configuration file\n");
