@@ -1,4 +1,4 @@
-/* 12/28/2008
+/*
 TransShift.cpp
 
 Vowel formant shifting algorithm
@@ -12,9 +12,10 @@ Incorporated
 	4) RMS-based formant smoothing (to reduce the influence of subglottal coupling on formant estimates) (optional)
 
 (c) 2007 Marc Boucek
-(c) 2008 Shanqing Cai (cais@mit.edu)
+(c) 2008-2013 Shanqing Cai (shanqing.cai@gmail.com)
 
 Speech Communication Group, RLE, MIT
+Speech Laboratory, Boston University
 */
 
 //#include <string.h> 
@@ -36,7 +37,7 @@ Speech Communication Group, RLE, MIT
 using namespace std;
 
 #define RSL(INTEGER,SHIFT) (int)( ( (unsigned)INTEGER ) >> SHIFT )
-#define NPARAMS 37
+#define NPARAMS 38
 char *intparamarray[NPARAMS]={"srate","framelen","ndelay","nwin","nlpc","nfmts","ntracks",
 //								 1		   2		3		4				5		6		7								
 	"avglen","cepswinwidth","fb","minvowellen", "delayframes", "bpitchshift", "pvocframelen", "pvochop", "bdownsampfilt", "nfb", "mute",
@@ -52,8 +53,8 @@ char *doubleparamarray[NPARAMS]={"scale","preemp","rmsthr","rmsratio","rmsff","d
 //   11		  12      13       14       15        16      17	  18   19     20          21
  "afact","bfact","gfact","fn1","fn2", "pitchshiftratio", "pvocwarp", "gain", "rmsclipthresh",
 //   22	     23      24     25    26		27				28	       29			30
- "tsgtonedur","tsgtonefreq","tsgtoneamp","tsgtoneramp","tsgint", "rmsff_fb", "fb4gaindb"};
- //	31				32			33			34			35			36			37
+ "tsgtonedur","tsgtonefreq","tsgtoneamp","tsgtoneramp","tsgint", "rmsff_fb", "fb4gaindb", "fb3gain"};
+ //	31				32			33			34			35			36			37			38
 
 char *boolparamarray[NPARAMS]={"bgainadapt","bshift","btrack","bdetect","bweight","bcepslift","bratioshift","bmelshift","brmsclip",
 //									1          2         3         4          5           6			7			8			9
@@ -221,6 +222,8 @@ TransShift::TransShift()		//SC construction function
 
 		p.fb4GainDB			= 0.0;	// Gain (in dB) of the feedback-mode-4 speech-modulated noise
 		p.fb4Gain			= pow(10.0, p.fb4GainDB / 20);
+
+		p.fb3Gain			= 0.0;
 
 		p.dPreemp			= .98;	// preemphasis factor
 		p.dScale			= 1;	// scaling the output (when upsampling) (does not affect internal signal
@@ -838,7 +841,7 @@ int TransShift::setparams(void * name, void * value, int nPars){
 //   22	     23      24     25    26		27				28	       29			30		28			29
 //"tsgtonedur","tsgtonefreq","tsgtoneamp","tsgtoneramp","tsgint", "rmsff_fb"};
 //	31				32			33			34			35
-	k=sw(doubleparamarray, arg, 37);
+	k=sw(doubleparamarray, arg, 38);
 	switch (k){
 	case 1: // scaling factor for IO output ( 1 = 0db)
 		p.dScale			= *(mytype *)value;
@@ -1000,6 +1003,11 @@ int TransShift::setparams(void * name, void * value, int nPars){
 		p.fb4GainDB		= *(mytype *)value;
 		p.fb4Gain		= pow(10.0, p.fb4GainDB / 20);
 		break;
+
+	case 38:
+		p.fb3Gain		= *(mytype *)value;
+		break;
+
 	default:
 		param_set=false;
 	}
@@ -1844,15 +1852,14 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 			if (p.fb == 2)	// noise only
 				outFrameBufSum[n] = data_pb[pbCounter];
 			else if (p.fb == 3)	// voice + noise				
-				outFrameBufSum[n] = outFrameBufSum[n] + data_pb[pbCounter];
+				outFrameBufSum[n] = outFrameBufSum[n] + data_pb[pbCounter] * p.fb3Gain;
 			else if (p.fb == 4)	// Speech-modulated noise	
 				outFrameBufSum[n] = data_pb[pbCounter] * rms_fb * p.fb4Gain * p.dScale;
 
 			pbCounter += DOWNSAMP_FACT;
 			if (pbCounter >= MAX_PB_SIZE)
 				pbCounter -= MAX_PB_SIZE;
-		}
-		
+		}		
 	}
 
 	if (p.bRecord)
