@@ -75,7 +75,7 @@ int algoCallbackFunc(char *buffer, int buffer_size, void * data)	//SC The input 
 	QueryPerformanceCounter(&time1);
 #endif
 
-	algo->myProcess((mytype*)buffer, (mytype*)buffer, buffer_size, true);		//SC(12/19/2007)
+	algo->handleBuffer((mytype*)buffer, (mytype*)buffer, buffer_size, true);		//SC(12/19/2007)
 
 #ifdef TIME_IT
 	QueryPerformanceCounter(&time2);
@@ -92,7 +92,7 @@ int algoCallbackFuncMono(char *buffer, int buffer_size, void * data)	//SC The in
 	QueryPerformanceCounter(&time1);
 #endif
 
-	algo->myProcess((mytype*)buffer, (mytype*)buffer, buffer_size, false);		//SC(12/19/2007)
+	algo->handleBuffer((mytype*)buffer, (mytype*)buffer, buffer_size, false);		//SC(12/19/2007)
 
 #ifdef TIME_IT
 	QueryPerformanceCounter(&time2);
@@ -110,7 +110,7 @@ int algoCallbackFuncToneSeq(char *buffer, int buffer_size, void * data)	//SC Ton
 	//TRACE("%d\n",buffer_size);
 	//DSPF_dp_blk_move((MY_TYPE*)buffer, (MY_TYPE*)buffer, buffer_size);
 
-	algo->myProcessToneSeq((mytype*)buffer, (mytype*)buffer, buffer_size);
+	algo->handleBufferToneSeq((mytype*)buffer, (mytype*)buffer, buffer_size);
 
 
 #ifdef TIME_IT
@@ -129,7 +129,7 @@ int algoCallbackFuncSineGen(char *buffer, int buffer_size, void * data)	//SC sin
 	//TRACE("%d\n",buffer_size);
 	//DSPF_dp_blk_move((MY_TYPE*)buffer, (MY_TYPE*)buffer, buffer_size);
 
-	algo->myProcessSineGen((mytype*)buffer, (mytype*)buffer, buffer_size);
+	algo->handleBufferSineGen((mytype*)buffer, (mytype*)buffer, buffer_size);
 
 
 #ifdef TIME_IT
@@ -146,7 +146,7 @@ int algoCallbackFuncWavePB(char *buffer, int buffer_size, void * data)	//SC sine
 	QueryPerformanceCounter(&time1);
 #endif
 
-	algo->myProcessWavePB((mytype*)buffer, (mytype*)buffer, buffer_size);
+	algo->handleBufferWavePB((mytype*)buffer, (mytype*)buffer, buffer_size);
 
 
 #ifdef TIME_IT
@@ -823,7 +823,7 @@ int TransShift::setparams(void * name, void * value, int nPars){
 		p.anaLen		= p.frameShift+2*(p.nDelay-1)*p.frameLen;
 		time_step		= (mytype)p.frameShift*1000/p.sr;	//SC Unit: ms
 		p.minDetected	= p.nWin;
-		return 0;
+		return 1;	/* Return 1: integer parameter */
 	}
 	else
 		param_set=true;
@@ -1005,7 +1005,7 @@ int TransShift::setparams(void * name, void * value, int nPars){
 	}
 
 	if (param_set)
-		return 0;
+		return 2;		/* Return 2: float / double parameters */
 	else
 		param_set=true;
 
@@ -1049,9 +1049,9 @@ int TransShift::setparams(void * name, void * value, int nPars){
 	}
 
 	if (param_set)
-		return 0;
+		return 3;			/* Return 3: boolean parameters */
 	else
-		return 1;
+		return 0;			/* Return 0: error */
 
 }
 
@@ -1112,7 +1112,7 @@ const mytype* TransShift::getOutFrameBufPS()
 
 // Assumes: MAX_BUFLEN == 3*p.frameLen 
 //		    
-int TransShift::myProcess(mytype *inFrame_ptr, mytype *outFrame_ptr, int frame_size, bool bStereo)	// Sine wave generator
+int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int frame_size, bool bStereo)	// Sine wave generator
 {
 	static bool during_trans=false;
 	static bool maintain_trans=false;
@@ -1974,7 +1974,7 @@ int TransShift::myProcess(mytype *inFrame_ptr, mytype *outFrame_ptr, int frame_s
 	return 0;
 }
 
-int TransShift::myProcessSineGen(mytype *inFrame_ptr, mytype *outFrame_ptr, int frame_size)	// Sine wave (pure tone) generator
+int TransShift::handleBufferSineGen(mytype *inFrame_ptr, mytype *outFrame_ptr, int frame_size)	// Sine wave (pure tone) generator
 {
 	int n;
 	double dt;
@@ -1990,7 +1990,7 @@ int TransShift::myProcessSineGen(mytype *inFrame_ptr, mytype *outFrame_ptr, int 
 	return 0;
 }
 
-int TransShift::myProcessWavePB(mytype *inFrame_ptr, mytype *outFrame_ptr, int frame_size)	// Wave playback
+int TransShift::handleBufferWavePB(mytype *inFrame_ptr, mytype *outFrame_ptr, int frame_size)	// Wave playback
 {	// Wave playback
 	int n;
 
@@ -3961,7 +3961,7 @@ int TransShift::gainPerturb(mytype *buffer,mytype *gtot_ptr,int framelen, int fr
 	return updated;
 }
 
-int TransShift::myProcessToneSeq(mytype *inFrame_ptr, mytype *outFrame_ptr, int frame_size)	// Tone sequence generator
+int TransShift::handleBufferToneSeq(mytype *inFrame_ptr, mytype *outFrame_ptr, int frame_size)	// Tone sequence generator
 {
 	int n,m;
 	double dt=0.00002083333333333333;

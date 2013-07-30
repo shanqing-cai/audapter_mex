@@ -173,11 +173,11 @@ public:
 	void reset();
 
 	// The main function that controls the processing
-	int myProcess(mytype *inFrame_ptr, mytype *outFrame_ptr, int frame_size, bool bStereo);
-	int myProcessSineGen(mytype *inFrame_ptr, mytype *outFrame_ptr, int frame_size);	//SC Since wave generator
-	int myProcessWavePB(mytype *inFrame_ptr, mytype *outFrame_ptr, int frame_size);	//SC Wave playback
+	int handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int frame_size, bool bStereo);
+	int handleBufferSineGen(mytype *inFrame_ptr, mytype *outFrame_ptr, int frame_size);	//SC Since wave generator
+	int handleBufferWavePB(mytype *inFrame_ptr, mytype *outFrame_ptr, int frame_size);	//SC Wave playback
 
-	int myProcessToneSeq(mytype *inFrame_ptr, mytype *outFrame_ptr, int frame_size);	//SC(2009/12/01) Tone sequence generator
+	int handleBufferToneSeq(mytype *inFrame_ptr, mytype *outFrame_ptr, int frame_size);	//SC(2009/12/01) Tone sequence generator
 
 	// Allows external entities to set / get various parameters of the process
 	int setparams(void * name, void * value, int nPars);
