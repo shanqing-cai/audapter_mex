@@ -1347,7 +1347,7 @@ int TransShift::myProcess(mytype *inFrame_ptr, mytype *outFrame_ptr, int frame_s
 		if (p.bShift)
 		{
 			if (pipCfg.n == 0) {
-				during_trans = false;
+				/*during_trans = false;*/
 			}
 			else {
 				during_trans = (pipCfg.fmtPertAmp[stat] != 0);
