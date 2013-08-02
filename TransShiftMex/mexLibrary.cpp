@@ -80,6 +80,7 @@ void mexFunction( int nlhs, mxArray *plhs[],
 	static	DeviceParams devpar;//SC DeviceParams is a struct, fields: num, chans, fs, set
 	static bool started = 0;	
 	int frame_len;
+	int t_downFact;
 	int activeDeviceNum;
 	int bVerbose;
 	char actionStr[512];
@@ -196,13 +197,16 @@ void mexFunction( int nlhs, mxArray *plhs[],
 			}
 
 			frame_len = algo.getparams((void *)"framelen");
-			audio_obj.setcallbackparams(frame_len * DOWNSAMP_FACT, (void *)&algoCallbackFunc, (void *)&algo);			
+			t_downFact = algo.getparams((void *)"downFact");
+
+			audio_obj.setcallbackparams(frame_len * t_downFact, (void *)&algoCallbackFunc, (void *)&algo);			
 			break;
 
 		case 1:			//SC set audio device parameters and start the action
-			audio_obj.setcallbackparams(algo.getparams((void *)"framelen")*DOWNSAMP_FACT, (void *)&algoCallbackFunc, (void *)&algo);
-				
-			devpar.fs = algo.getparams((void *)"srate")*DOWNSAMP_FACT;	//SC device sampling rate
+			t_downFact = algo.getparams((void *)"downFact");
+			audio_obj.setcallbackparams(algo.getparams((void *)"framelen") * t_downFact, (void *)&algoCallbackFunc, (void *)&algo);
+			
+			devpar.fs = algo.getparams((void *)"srate") * t_downFact;	//SC device sampling rate
 
 			devpar.num = activeDeviceNum;
 			devpar.chans = 1;
@@ -332,8 +336,9 @@ void mexFunction( int nlhs, mxArray *plhs[],
 			break;
 
 		case 5:				//SC manually supply the buffer and run the process
+			t_downFact = algo.getparams((void *)"downFact");
 			data_ptr = (double*)mxGetPr(prhs[1]);	//SC pointer to buffer
-			algoCallbackFuncMono((char *)data_ptr, algo.getparams((void *)"framelen")*DOWNSAMP_FACT, (void *)&algo);
+			algoCallbackFuncMono((char *)data_ptr, algo.getparams((void *)"framelen") * t_downFact, (void *)&algo);
 			break;
 
 		case 6:				//SC manually reset algo object
@@ -341,10 +346,11 @@ void mexFunction( int nlhs, mxArray *plhs[],
 			break;
 
 		case 7:				// Read out the outFrameBufPS
+			t_downFact = algo.getparams((void *)"downFact");
 			algobuf_ptr = algo.getOutFrameBufPS();
-			plhs[0] = mxCreateDoubleMatrix(MAX_FRAMELEN * DOWNSAMP_FACT * MAX_DELAY_FRAMES, 1, mxREAL);
+			plhs[0] = mxCreateDoubleMatrix(MAX_FRAMELEN * t_downFact * MAX_DELAY_FRAMES, 1, mxREAL);
 			signal_ptr = mxGetPr(plhs[0]);
-			for (i0 = 0; i0 < (MAX_FRAMELEN * DOWNSAMP_FACT * MAX_DELAY_FRAMES); i0++) {
+			for (i0 = 0; i0 < (MAX_FRAMELEN * t_downFact * MAX_DELAY_FRAMES); i0++) {
 				signal_ptr[i0] = algobuf_ptr[i0];
 			}
 			break;
@@ -386,11 +392,12 @@ void mexFunction( int nlhs, mxArray *plhs[],
 			break;
 
 		case 11:			//SC Sine wave generator
-			audio_obj.setcallbackparams(algo.getparams((void *)"framelen")*DOWNSAMP_FACT, (void *)&algoCallbackFuncSineGen, (void *)&algo);		
+			t_downFact = algo.getparams((void *)"downFact");
+			audio_obj.setcallbackparams(algo.getparams((void *)"framelen") * t_downFact, (void *)&algoCallbackFuncSineGen, (void *)&algo);		
 
 			devpar.num = activeDeviceNum;
 			devpar.chans = 2;
-			devpar.fs = algo.getparams((void *)"srate")*DOWNSAMP_FACT;
+			devpar.fs = algo.getparams((void *)"srate") * t_downFact;
 			audio_obj.setdevparams(&devpar, 1);
 			devpar.num = activeDeviceNum;
 			audio_obj.setdevparams(&devpar, 2);
@@ -413,9 +420,10 @@ void mexFunction( int nlhs, mxArray *plhs[],
 			break;
 
 		case 12:			//SC wave playback
-			audio_obj.setcallbackparams(algo.getparams((void *)"framelen")*DOWNSAMP_FACT, (void *)&algoCallbackFuncWavePB, (void *)&algo);
+			t_downFact = algo.getparams((void *)"downFact");
+			audio_obj.setcallbackparams(algo.getparams((void *)"framelen") * t_downFact, (void *)&algoCallbackFuncWavePB, (void *)&algo);
 					
-			devpar.fs = algo.getparams((void *)"srate")*DOWNSAMP_FACT;	//SC device sampling rate
+			devpar.fs = algo.getparams((void *)"srate") * t_downFact;	//SC device sampling rate
 			devpar.num = activeDeviceNum;
 			devpar.chans = 1;
 			audio_obj.setdevparams(&devpar,1);
@@ -434,9 +442,10 @@ void mexFunction( int nlhs, mxArray *plhs[],
 			break;
 
 		case 13:		//SC Tone sequence generator
-			audio_obj.setcallbackparams(algo.getparams((void *)"framelen")*DOWNSAMP_FACT, (void *)&algoCallbackFuncToneSeq, (void *)&algo);
+			t_downFact = algo.getparams((void *)"downFact");
+			audio_obj.setcallbackparams(algo.getparams((void *)"framelen") * t_downFact, (void *)&algoCallbackFuncToneSeq, (void *)&algo);
 				
-			devpar.fs = algo.getparams((void *)"srate")*DOWNSAMP_FACT;	//SC device sampling rate
+			devpar.fs = algo.getparams((void *)"srate") * t_downFact;	//SC device sampling rate
 
 			algo.tsgRecCounter = 0;
 

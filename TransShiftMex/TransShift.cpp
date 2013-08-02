@@ -42,8 +42,8 @@ char *intparamarray[NPARAMS]={"srate","framelen","ndelay","nwin","nlpc","nfmts",
 //								 1		   2		3		4				5		6		7								
 	"avglen","cepswinwidth","fb","minvowellen", "delayframes", "bpitchshift", "pvocframelen", "pvochop", "bdownsampfilt", "nfb", "mute",
 //		8			9		 10		11				12				13				14			15			16				17	   18
-	"tsgntones"};
-//		19
+	"tsgntones", "downfact"};
+//		19			20
 
 char *doubleparamarray[NPARAMS]={"scale","preemp","rmsthr","rmsratio","rmsff","dfmtsff",
 //									  1        2         3       4        5        6
@@ -190,12 +190,14 @@ TransShift::TransShift()		//SC construction function
 		init_ostTab(&ostTab);
 		init_pipCfg(&pipCfg);
 		
-		p.sr				= 48000 / DOWNSAMP_FACT;				// internal samplerate (souncard samplerate = p.sr*DOWNSAMP_FACT)
+		p.downFact			= DOWNSAMP_FACT_DEFAULT;
+		
+		p.sr				= 48000 / p.downFact;				// internal samplerate (souncard samplerate = p.sr*DOWNSAMP_FACT)
 		p.nLPC				= 13;					// LPC order ... number of lpc coeefs= nLPC +1
 		p.nFmts				= 2;					// originally the number of formants you want shift ( hardseted = 2)
 
 		// framing and processing 
-		p.frameLen			= 96 / DOWNSAMP_FACT;		// length of one internal frame ( framelen = nWin * frameshift) (souncard frame length = p.frameLen *DOWNDAMP_FACT)
+		p.frameLen			= 96 / p.downFact;		// length of one internal frame ( framelen = nWin * frameshift) (souncard frame length = p.frameLen *DOWNDAMP_FACT)
 		p.nDelay			= 7;					// number of delayed framas (of size framelen) before an incoming frame is sent back
 													// thus the overall process latency (without souncard) is :Tproc=nDelay*frameLen/sr
 		p.bufLen			= (2*p.nDelay-1)*p.frameLen;	// main buffer length : buflen stores (2*nDelay -1)*frameLen samples
@@ -496,13 +498,13 @@ void TransShift::reset()
 
 //*****************************************************  BUFFERS   *****************************************************
 	// Initialize input, output and filter buffers (at original sample rate!!!)
-	for(i0=0;i0<MAX_FRAMELEN*DOWNSAMP_FACT;i0++)
+	for(i0 = 0; i0 < MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT; i0++)
 	{
 		inFrameBuf[i0]=0;		
 		srfilt_buf[i0]=0;
 	}
 
-	for (i0 = 0; i0 < MAX_FRAMELEN * DOWNSAMP_FACT * MAX_DELAY_FRAMES; i0 ++){
+	for (i0 = 0; i0 < MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES; i0 ++){
 		outFrameBuf[i0] = 0;
 
 		for (j0 = 0; j0 < MAX_N_VOICES; j0++)
@@ -510,7 +512,7 @@ void TransShift::reset()
 	}
 	outFrameBuf_circPtr = 0;
 
-	for (i0 = 0; i0 < MAX_FRAMELEN * DOWNSAMP_FACT; i0++) {
+	for (i0 = 0; i0 < MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT; i0++) {
 		outFrameBufSum[i0] = 0;
 	}
 
@@ -664,7 +666,7 @@ void TransShift::reset()
 	dataFileCnt = 0;
 
 	//SC(2012/03/13) PVOC time warp
-	for (int i0 = 0; i0 < MAX_FRAMELEN * DOWNSAMP_FACT * MAX_DELAY_FRAMES / 64; i0++){
+	for (int i0 = 0; i0 < MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES / 64; i0++){
 		for (int i1 = 0; i0 < 1024 * 2; i0++){
 			pvocWarpCache[i0][i1] = 0;
 		}
@@ -721,9 +723,9 @@ int TransShift::setparams(void * name, void * value, int nPars){
 //									1		   2		3		4		5		6		7								
 //	"avglen","cepswinwidth","fb","minvowellen", "delayframes", "bpitchshift", "pvocframelen", "pvochop", "bdownsampfilt", "nfb", "mute", 
 //		8			9		 10		11             12				13				14			15				16			17	   18
-//	"tsgntones"};
-//		19
-	k=sw(intparamarray, arg, 19);
+//	"tsgntones", "downfact"};
+//		19			20
+	k=sw(intparamarray, arg, 20);
 	//TRACE("ALGO: setting param: %s\n", arg);
 	switch (k){
 	case 1: // sample rate
@@ -815,6 +817,9 @@ int TransShift::setparams(void * name, void * value, int nPars){
 		break;
 	case 19:
 		p.tsgNTones			= (int)(*(mytype *)value);
+		break;
+	case 20:
+		p.downFact			= (int)(*(mytype *)value);
 		break;
 	default:
 		param_set=false;
@@ -1166,8 +1171,8 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 	}
 	*/
 
-	if (frame_size!=DOWNSAMP_FACT*p.frameLen)	//SC This should be satisfied. Just for safeguard.
-		return 1;	
+	if (frame_size != p.downFact * p.frameLen)	//SC This should be satisfied. Just for safeguard.
+		return 1;
 
 	for (i0=0;i0<p.nTracks;i0++)	//SC Initialize the frequencies and amplitudes of the formant tracks
 	{
@@ -1191,11 +1196,11 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 	if (p.bDownSampFilt == 1)
 		downSampSig(&srfilt_b[0], &srfilt_a[0], inFrame_ptr, 
 				    &srfilt_buf[0], &inFrameBuf[0], &srfilt_delay_down[0], 
-					p.frameLen , N_COEFFS_SRFILT , DOWNSAMP_FACT);
+					p.frameLen , N_COEFFS_SRFILT , p.downFact);
 	else
 		downSampSig_noFilt(&srfilt_b[0], &srfilt_a[0], inFrame_ptr, &srfilt_buf[0], 
 						   &inFrameBuf[0], &srfilt_delay_down[0], 
-						   p.frameLen , N_COEFFS_SRFILT , DOWNSAMP_FACT);
+						   p.frameLen , N_COEFFS_SRFILT , p.downFact);
 	//SC Output: algo.inFrame_ptr (length: p.frameLen)	
 
 	if (p.bRecord)		//SC Record the downsampled original signal
@@ -1480,7 +1485,7 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 		//DSPF_dp_blk_move(&outBuf[0],&outFrameBuf[0],p.frameLen);
 
 		if (rms_o > p.rmsClipThresh && p.bRMSClip == 1){	//SC(2009/02/06) RMS clipping protection
-			for(n=0;n<frame_size/DOWNSAMP_FACT;n++){
+			for(n = 0; n < frame_size / p.downFact; n++){
 				outFrameBuf[n]=0;
 			}
 		}
@@ -1514,7 +1519,7 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 					DSPF_dp_blk_move(&outFrameBuf[outFrameBuf_circPtr - p.pvocFrameLen], xBuf, p.pvocFrameLen);
 				else{ // Take care of wrapping-around
 					DSPF_dp_blk_move(&outFrameBuf[0], &xBuf[p.pvocFrameLen - outFrameBuf_circPtr], outFrameBuf_circPtr);
-					DSPF_dp_blk_move(&outFrameBuf[MAX_FRAMELEN * DOWNSAMP_FACT * MAX_DELAY_FRAMES - p.pvocFrameLen + outFrameBuf_circPtr], 
+					DSPF_dp_blk_move(&outFrameBuf[MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES - p.pvocFrameLen + outFrameBuf_circPtr], 
 								     &xBuf[0], 
 									 p.pvocFrameLen - outFrameBuf_circPtr);
 				}
@@ -1543,8 +1548,8 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 				int cidx1;
 				
 				for (i0 = 0; i0 < p.pvocFrameLen; i0++){
-					pvocWarpCache[cidx0 % (MAX_FRAMELEN * DOWNSAMP_FACT * MAX_DELAY_FRAMES / 64)][i0] = X_magn[i0];
-					pvocWarpCache[cidx0 % (MAX_FRAMELEN * DOWNSAMP_FACT * MAX_DELAY_FRAMES / 64)][i0 + p.pvocFrameLen] = X_phase[i0];
+					pvocWarpCache[cidx0 % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES / 64)][i0] = X_magn[i0];
+					pvocWarpCache[cidx0 % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES / 64)][i0 + p.pvocFrameLen] = X_phase[i0];
 				}
 
 				/*if (frame_counter - (p.nDelay - 1) == p.pvocFrameLen / p.frameLen){
@@ -1580,8 +1585,8 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 					/*cidx1 = cidx0;
 
 					for (i0 = 0; i0 <= p.pvocFrameLen / 2; i0++){
-						magn = pvocWarpCache[cidx1 % (MAX_FRAMELEN * DOWNSAMP_FACT * MAX_DELAY_FRAMES / 64)][i0];
-						phase = pvocWarpCache[cidx1 % (MAX_FRAMELEN * DOWNSAMP_FACT * MAX_DELAY_FRAMES / 64)][i0 + p.pvocFrameLen];
+						magn = pvocWarpCache[cidx1 % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES / 64)][i0];
+						phase = pvocWarpCache[cidx1 % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES / 64)][i0 + p.pvocFrameLen];
 
 						ftBuf2ps[2 * i0] = magn * cos(phase);
 						ftBuf2ps[2 * i0 + 1] = magn * sin(phase);
@@ -1611,16 +1616,16 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 					/* For no-time-warp backup */					
 
 					for (i0 = 0; i0 <= p.pvocFrameLen / 2; i0++) {
-						magn[0] = pvocWarpCache[cidx1 % (MAX_FRAMELEN * DOWNSAMP_FACT * MAX_DELAY_FRAMES / 64)][i0] * (1 - cidx1_f) + 
-								  pvocWarpCache[(cidx1 + 1) % (MAX_FRAMELEN * DOWNSAMP_FACT * MAX_DELAY_FRAMES / 64)][i0] * cidx1_f;
+						magn[0] = pvocWarpCache[cidx1 % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES / 64)][i0] * (1 - cidx1_f) + 
+								  pvocWarpCache[(cidx1 + 1) % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES / 64)][i0] * cidx1_f;
 						/* No time warp */
-						/*magn = pvocWarpCache[cidx0 % (MAX_FRAMELEN * DOWNSAMP_FACT * MAX_DELAY_FRAMES / 64)][i0];*/
+						/*magn = pvocWarpCache[cidx0 % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES / 64)][i0];*/
 					
-						/*phase1 = pvocWarpCache[cidx1 % (MAX_FRAMELEN * DOWNSAMP_FACT * MAX_DELAY_FRAMES / 64)][i0 + p.pvocFrameLen] * (1 - cidx1_f) + 
-								 pvocWarpCache[(cidx1 + 1) % (MAX_FRAMELEN * DOWNSAMP_FACT * MAX_DELAY_FRAMES / 64)][i0 + p.pvocFrameLen] * cidx1_f;*/
+						/*phase1 = pvocWarpCache[cidx1 % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES / 64)][i0 + p.pvocFrameLen] * (1 - cidx1_f) + 
+								 pvocWarpCache[(cidx1 + 1) % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES / 64)][i0 + p.pvocFrameLen] * cidx1_f;*/
 
-						dp = pvocWarpCache[(cidx1 + 1) % (MAX_FRAMELEN * DOWNSAMP_FACT * MAX_DELAY_FRAMES / 64)][i0 + p.pvocFrameLen] - 
-							 pvocWarpCache[cidx1 % (MAX_FRAMELEN * DOWNSAMP_FACT * MAX_DELAY_FRAMES / 64)][i0 + p.pvocFrameLen];
+						dp = pvocWarpCache[(cidx1 + 1) % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES / 64)][i0 + p.pvocFrameLen] - 
+							 pvocWarpCache[cidx1 % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES / 64)][i0 + p.pvocFrameLen];
 						/*dp = phase1 - phase0;
 						phase0 = phase1;*/
 						
@@ -1750,14 +1755,14 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 
 				// --- Accumulate to buffer ---
 				for (i0 = 0; i0 < p.pvocFrameLen; i0++){					
-					outFrameBufPS[ifb][(outFrameBuf_circPtr + i0) % (MAX_FRAMELEN * DOWNSAMP_FACT * MAX_DELAY_FRAMES)] = 
-						outFrameBufPS[ifb][(outFrameBuf_circPtr + i0) % (MAX_FRAMELEN * DOWNSAMP_FACT * MAX_DELAY_FRAMES)] + 
+					outFrameBufPS[ifb][(outFrameBuf_circPtr + i0) % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES)] = 
+						outFrameBufPS[ifb][(outFrameBuf_circPtr + i0) % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES)] + 
 						2 * ftBuf2ps[1 - duringPitchShift][2 * i0] * hwin2[i0] / (osamp / 2);
 				}
 
 				// Front zeroing
 				for (i0 = 0; i0 < p.pvocHop; i0++) {
-					outFrameBufPS[ifb][(outFrameBuf_circPtr + p.pvocFrameLen + i0) % (MAX_FRAMELEN * DOWNSAMP_FACT * MAX_DELAY_FRAMES)] = 0.;
+					outFrameBufPS[ifb][(outFrameBuf_circPtr + p.pvocFrameLen + i0) % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES)] = 0.;
 				}
 				
 				/*
@@ -1770,14 +1775,14 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 
 				/*
 				if (ifb == 0) {
-					int zero_idx0 = (outFrameBuf_circPtr - p.delayFrames[ifb] * p.frameLen - p.pvocHop) % (MAX_FRAMELEN * DOWNSAMP_FACT * MAX_DELAY_FRAMES);
+					int zero_idx0 = (outFrameBuf_circPtr - p.delayFrames[ifb] * p.frameLen - p.pvocHop) % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES);
 					if (zero_idx0 >= 0 && zero_idx0 < p.pvocHop) {
 						mexPrintf("outFrameBuf_circPtr = %d; p.delayFrames[ifb] = %d; p.frameLen = %d; frame_counter = %d; zero_idx0 = %d\n", 
 								   outFrameBuf_circPtr, p.delayFrames[ifb], p.frameLen, frame_counter, zero_idx0);
-						mexPrintf("(MAX_FRAMELEN * DOWNSAMP_FACT * MAX_DELAY_FRAMES) = %d\n", (MAX_FRAMELEN * DOWNSAMP_FACT * MAX_DELAY_FRAMES));
+						mexPrintf("(MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES) = %d\n", (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES));
 
 						for (int ii0 = 1; ii0 < 4; ii0++){
-							printf("pre[%d] = %f\n", ii0, outFrameBufPS[ifb][(zero_idx0 - ii0) % (MAX_FRAMELEN * DOWNSAMP_FACT * MAX_DELAY_FRAMES)]);
+							printf("pre[%d] = %f\n", ii0, outFrameBufPS[ifb][(zero_idx0 - ii0) % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES)]);
 						}
 					}
 
@@ -1786,7 +1791,7 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 				*/
 				//Back Zeroing
 				for (i0 = 1; i0 <= p.pvocHop; i0++){ // Ad hoc alert!
-					outFrameBufPS[ifb][(outFrameBuf_circPtr - p.delayFrames[ifb] * p.frameLen - i0) % (MAX_FRAMELEN * DOWNSAMP_FACT * MAX_DELAY_FRAMES)] = 0.;						
+					outFrameBufPS[ifb][(outFrameBuf_circPtr - p.delayFrames[ifb] * p.frameLen - i0) % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES)] = 0.;						
 				}
 				
 				/*
@@ -1795,7 +1800,7 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 				for (i0 = 1; i0 <= p.pvocHop; i0++) {
 					zidx = outFrameBuf_circPtr - p.delayFrames[ifb] * p.frameLen - i0;
 					if (zidx < 0)
-						zidx += (MAX_FRAMELEN * DOWNSAMP_FACT * MAX_DELAY_FRAMES);
+						zidx += (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES);
 					///if (i0 == 1)
 					///	printf("%d\n", zidx);
 					outFrameBufPS[ifb][zidx] = 0.;
@@ -1819,7 +1824,7 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 		optr = outFrameBuf_circPtr - p.delayFrames[0] * p.frameLen;
 	}
 	else{
-		optr = outFrameBuf_circPtr - p.delayFrames[0] * p.frameLen + (MAX_FRAMELEN * DOWNSAMP_FACT * MAX_DELAY_FRAMES);
+		optr = outFrameBuf_circPtr - p.delayFrames[0] * p.frameLen + (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES);
 	}
 	*/
 
@@ -1828,7 +1833,7 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 			optr[h0] = outFrameBuf_circPtr - p.delayFrames[h0] * p.frameLen;
 		}
 		else {
-			optr[h0] = outFrameBuf_circPtr - p.delayFrames[h0] * p.frameLen + (MAX_FRAMELEN * DOWNSAMP_FACT * MAX_DELAY_FRAMES);
+			optr[h0] = outFrameBuf_circPtr - p.delayFrames[h0] * p.frameLen + (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES);
 		}
 	}
 
@@ -1856,7 +1861,7 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 			else if (p.fb == 4)	// Speech-modulated noise	
 				outFrameBufSum[n] = data_pb[pbCounter] * rms_fb * p.fb4Gain * p.dScale;
 
-			pbCounter += DOWNSAMP_FACT;
+			pbCounter += p.downFact;
 			if (pbCounter >= MAX_PB_SIZE)
 				pbCounter -= MAX_PB_SIZE;
 		}		
@@ -1873,14 +1878,14 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 	// Upsample signal, scale and send to sound card buffer
 	//SC(2012/02/28) For DAF: use a past frame for playback, if p.delayFrames > 0
 	//upSampSig(&srfilt_b[0], &srfilt_a[0], &outFrameBufPS[0][optr[0]], 
-	//	      &srfilt_buf[0], &outFrame_ptr[0], &srfilt_delay_up[0], p.frameLen * DOWNSAMP_FACT, 
-	//		  N_COEFFS_SRFILT ,DOWNSAMP_FACT, p.dScale);
+	//	      &srfilt_buf[0], &outFrame_ptr[0], &srfilt_delay_up[0], p.frameLen * p.downFact, 
+	//		  N_COEFFS_SRFILT, p.downFact, p.dScale);
 	upSampSig(&srfilt_b[0], &srfilt_a[0], &outFrameBufSum[0], 
-		      &srfilt_buf[0], outputBuf, &srfilt_delay_up[0], p.frameLen * DOWNSAMP_FACT, 
-			  N_COEFFS_SRFILT ,DOWNSAMP_FACT, p.dScale);
+		      &srfilt_buf[0], outputBuf, &srfilt_delay_up[0], p.frameLen * p.downFact, 
+			  N_COEFFS_SRFILT ,p.downFact, p.dScale);
 
 	outFrameBuf_circPtr += p.frameLen;
-	if (outFrameBuf_circPtr >= MAX_FRAMELEN * DOWNSAMP_FACT * MAX_DELAY_FRAMES){
+	if (outFrameBuf_circPtr >= MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES){
 		//mexPrintf("outFrameBuf_circPtr = %d --> 0\n", outFrameBuf_circPtr);
 		outFrameBuf_circPtr = 0;
 	}
@@ -1986,7 +1991,7 @@ int TransShift::handleBufferSineGen(mytype *inFrame_ptr, mytype *outFrame_ptr, i
 	int n;
 	double dt;
 
-	dt=0.00002083333333333333;//((double)p.sr)*((double)DOWNSAMP_FACT);
+	dt=0.00002083333333333333;//((double) p.sr)*((double) p.downFact);
 
 	for(n=0;n<frame_size;n++){
 		// outFrame_ptr[n]=p.wgAmp*sin(2*M_PI*p.wgFreq*p.wgTime);

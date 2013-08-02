@@ -18,9 +18,9 @@ typedef double mytype;
 
 #define N_COEFFS_SRFILT 21
 //#define DOWNSAMP_FACT 4
-#define DOWNSAMP_FACT 3
+#define DOWNSAMP_FACT_DEFAULT 3
 //#define MAX_FRAMELEN (768 / DOWNSAMP_FACT)
-#define MAX_FRAMELEN (384 / DOWNSAMP_FACT)
+#define MAX_FRAMELEN (384 / DOWNSAMP_FACT_DEFAULT)
 #define MAX_BUFLEN (15 * MAX_FRAMELEN)  // max ndelay< 8
 #define MAX_NWIN   16
 #define M_1_SQRTPI 0.564189583547756
@@ -263,18 +263,18 @@ private:
 	//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  BUFFERS  *****************************************************%%%%%%%%%%%	
 
 	// buffers stores samples at original sample rate
-	mytype inFrameBuf[MAX_FRAMELEN*DOWNSAMP_FACT];      // stores incoming  frame from soundcard @p.sr*downsamp_fact
+	mytype inFrameBuf[MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT];      // stores incoming  frame from soundcard @p.sr*downsamp_fact
 	//mytype outFrameBuf[MAX_FRAMELEN*DOWNSAMP_FACT];     // stroes outgoing frame to soundcard @p.sr*downsamp_fact
 	//SC(2012/02/28) DAF: expanded outFrameBuf for DAF
-	mytype outFrameBuf[MAX_FRAMELEN * DOWNSAMP_FACT * MAX_DELAY_FRAMES]; // Shifting output buffer after formant shifting, before pitch shifting
-	mytype outFrameBufPS[MAX_N_VOICES][MAX_FRAMELEN * DOWNSAMP_FACT * MAX_DELAY_FRAMES]; // Shifting output buffer after pitch shifting
+	mytype outFrameBuf[MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES]; // Shifting output buffer after formant shifting, before pitch shifting
+	mytype outFrameBufPS[MAX_N_VOICES][MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES]; // Shifting output buffer after pitch shifting
 
 	int outFrameBuf_circPtr;
 
 	//SCai (2012/09/08) BlueShift
-	mytype outFrameBufSum[MAX_FRAMELEN * DOWNSAMP_FACT];
+	mytype outFrameBufSum[MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT];
 
-	mytype srfilt_buf[MAX_FRAMELEN*DOWNSAMP_FACT];      // multiple purpose before for down / upsampling
+	mytype srfilt_buf[MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT];      // multiple purpose before for down / upsampling
 
 	// buffers stores samples at downsampled rate
 	mytype filtbuf[MAX_FRAMELEN];                       // filter buffer (formant shift)
@@ -399,7 +399,7 @@ private:
 	int dataFileCnt;
 
 	//SC(2012/03/13) For PVOC time warping
-	mytype pvocWarpCache[MAX_FRAMELEN * DOWNSAMP_FACT * MAX_DELAY_FRAMES / 64][1024 * 2];
+	mytype pvocWarpCache[MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES / 64][1024 * 2];
 
 	mytype rms_ratio;
 
@@ -438,6 +438,7 @@ private:
 		// can be greater /shorter if you want more / lesss moothing)
 		// avgLen = 1 ---> no smoothing ( i.e. smoothing over one value)
 
+		int		downFact;				// Down-sampling factor (Default: DOWNSAMP_FACT_DEFAULT)
 		int    sr;						// internal samplerate
 
 		int    nLPC;					// lpc order ... number of lpc coeefs= nLPC +1
