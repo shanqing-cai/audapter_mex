@@ -1072,15 +1072,17 @@ int TransShift::setparams(void * name, void * value, int nPars){
 int TransShift::getparams(void * name){
 	char *arg = (char *)name;
 	int k;
-//char *intparamarray[NPARAMS]={"srate","framelen","ndelay","nwin","nlpc","nfmts","ntracks",
-//								 1		   2		3		4		 5		 6		 7								
-//	"avglen","cepswinwidth","fb"};
-//		8			9		 10
-	k=sw(intparamarray, arg, 10);
+//	char *intparamarray[NPARAMS]={"srate","framelen","ndelay","nwin","nlpc","nfmts","ntracks",
+//									1		   2		3		4		5		6		7								
+//	"avglen","cepswinwidth","fb","minvowellen", "delayframes", "bpitchshift", "pvocframelen", "pvochop", "bdownsampfilt", "nfb", "mute", 
+//		8			9		 10		11             12				13				14			15				16			17	   18
+//	"tsgntones", "downfact"};
+//		19			20
+	k=sw(intparamarray, arg, 20);
 	//TRACE("ALGO: Getting param: %s\n", arg);
 	switch (k){
 		case 1: // sample rate
-			return p.sr;	
+			return p.sr;
 		case 2: //
 			return p.frameLen;
 		case 3: // 
@@ -1099,6 +1101,27 @@ int TransShift::getparams(void * name){
 			return p.cepsWinWidth;			
 		case 10: // downsample factor
 			return  p.fb;
+		case 11:
+			break;
+		case 12:
+			return p.delayFrames[0];
+		case 13:
+			return p.bPitchShift;
+		case 14:
+			return p.pvocFrameLen;
+		case 15:
+			return p.pvocHop;
+		case 16:
+			return p.bDownSampFilt;
+		case 17:
+			return p.nFB;
+		case 18:
+			return p.mute[0];
+		case 19:
+			return p.tsgNTones;
+		case 20:
+			return p.downFact;
+
 		default:
 			TRACE("ALGO: Unknown parameter: %s\n", arg);
 			return 0;
