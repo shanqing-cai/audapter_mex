@@ -173,7 +173,7 @@ public:
 	void reset();
 
 	// The main function that controls the processing
-	int handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int frame_size, bool bStereo);
+	int handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int frame_size, bool bSingleOutputBuffer);
 	int handleBufferSineGen(mytype *inFrame_ptr, mytype *outFrame_ptr, int frame_size);	//SC Since wave generator
 	int handleBufferWavePB(mytype *inFrame_ptr, mytype *outFrame_ptr, int frame_size);	//SC Wave playback
 
@@ -565,6 +565,9 @@ private:
 
 		/*SC(2013/04/07) Options to bypass the formant tracker (useful for situations in which lower latency under pitch shifting or time warping is required */
 		int bBypassFmt;
+
+		/* SC (2013-08-06) stereoMode */
+		int stereoMode;		/* 0 - left only; 1 - left-right identical; 2 - left audio + right simulate TTL */
 	} p;
 
 

@@ -204,7 +204,7 @@ void mexFunction( int nlhs, mxArray *plhs[],
 
 		case 1:			//SC set audio device parameters and start the action
 			t_downFact = algo.getparams((void *)"downfact");
-			audio_obj.setcallbackparams(algo.getparams((void *)"framelen") * t_downFact, (void *)&algoCallbackFunc, (void *)&algo);
+			audio_obj.setcallbackparams(algo.getparams((void *)"framelen") * t_downFact, (void *)&algoCallbackFunc, (void *)&algo);			
 			
 			devpar.fs = algo.getparams((void *)"srate") * t_downFact;	//SC device sampling rate
 
@@ -232,8 +232,9 @@ void mexFunction( int nlhs, mxArray *plhs[],
 				if (audio_obj.started)
 					audio_obj.stopdev();
 			}
-			else
+			else {
 				printf("Not started\n");
+			}
 			started = 0;
 			break;
 			

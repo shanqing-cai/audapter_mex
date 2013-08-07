@@ -42,8 +42,8 @@ char *intparamarray[NPARAMS]={"srate","framelen","ndelay","nwin","nlpc","nfmts",
 //								 1		   2		3		4				5		6		7								
 	"avglen","cepswinwidth","fb","minvowellen", "delayframes", "bpitchshift", "pvocframelen", "pvochop", "bdownsampfilt", "nfb", "mute",
 //		8			9		 10		11				12				13				14			15			16				17	   18
-	"tsgntones", "downfact"};
-//		19			20
+	"tsgntones", "downfact", "stereomode"};
+//		19			20			21
 
 char *doubleparamarray[NPARAMS]={"scale","preemp","rmsthr","rmsratio","rmsff","dfmtsff",
 //									  1        2         3       4        5        6
@@ -76,7 +76,24 @@ int algoCallbackFunc(char *buffer, int buffer_size, void * data)	//SC The input 
 	QueryPerformanceCounter(&time1);
 #endif
 
-	algo->handleBuffer((mytype*)buffer, (mytype*)buffer, buffer_size, true);		//SC(12/19/2007)
+	algo->handleBuffer((mytype*)buffer, (mytype*)buffer, buffer_size, false);		//SC(12/19/2007)
+
+#ifdef TIME_IT
+	QueryPerformanceCounter(&time2);
+	TRACE("%.6f\n",double(time2.QuadPart - time1.QuadPart - overhead)/double(freq.QuadPart));
+#endif
+	return 0;
+}
+
+int algoCallbackFunc_zeroBuffer(char *buffer, int buffer_size, void * data)	//SC The input is 8-bit, so char type is proper for buffer.
+{
+	TransShift *algo = (TransShift*)data;	//SC copy data to algo
+#ifdef TIME_IT
+	QueryPerformanceCounter(&time1);
+#endif
+
+	/* algo->handleBuffer((mytype*)buffer, (mytype*)buffer, buffer_size, false);		//SC(12/19/2007) */
+
 
 #ifdef TIME_IT
 	QueryPerformanceCounter(&time2);
@@ -93,7 +110,7 @@ int algoCallbackFuncMono(char *buffer, int buffer_size, void * data)	//SC The in
 	QueryPerformanceCounter(&time1);
 #endif
 
-	algo->handleBuffer((mytype*)buffer, (mytype*)buffer, buffer_size, false);		//SC(12/19/2007)
+	algo->handleBuffer((mytype*)buffer, (mytype*)buffer, buffer_size, true);		//SC(12/19/2007)
 
 #ifdef TIME_IT
 	QueryPerformanceCounter(&time2);
@@ -342,6 +359,9 @@ TransShift::TransShift()		//SC construction function
 			p.tsgToneRamp[n]=0;
 			p.tsgInt[n]=0;
 		}
+
+		/* SC (2013-08-06) */
+		p.stereoMode = 1;		/* Default: left-right identical */
 
 		rmsSlopeWin = 0.03; // Unit: s
 		rmsSlopeN = (int)(rmsSlopeWin / ((mytype)p.frameLen / (mytype)p.sr));
@@ -699,6 +719,9 @@ void TransShift::reset()
 	rmsFF_fb_now = p.rmsFF_fb[0];
 	fb4_status = 0;
 	fb4_counter = 0;	
+
+	duringPitchShift = false;
+	duringPitchShift_prev = false;
 }
 
 int sw(char *table[], const char *str, const int &entries)
@@ -723,9 +746,9 @@ int TransShift::setparams(void * name, void * value, int nPars){
 //									1		   2		3		4		5		6		7								
 //	"avglen","cepswinwidth","fb","minvowellen", "delayframes", "bpitchshift", "pvocframelen", "pvochop", "bdownsampfilt", "nfb", "mute", 
 //		8			9		 10		11             12				13				14			15				16			17	   18
-//	"tsgntones", "downfact"};
-//		19			20
-	k=sw(intparamarray, arg, 20);
+//	"tsgntones", "downfact", "stereomode"};
+//		19			20				21
+	k=sw(intparamarray, arg, 21);
 	//TRACE("ALGO: setting param: %s\n", arg);
 	switch (k){
 	case 1: // sample rate
@@ -820,6 +843,9 @@ int TransShift::setparams(void * name, void * value, int nPars){
 		break;
 	case 20:
 		p.downFact			= (int)(*(mytype *)value);
+		break;
+	case 21:
+		p.stereoMode		= (int)(*(mytype *)value);
 		break;
 	default:
 		param_set=false;
@@ -1148,7 +1174,7 @@ const mytype* TransShift::getOutFrameBufPS()
 
 // Assumes: MAX_BUFLEN == 3*p.frameLen 
 //		    
-int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int frame_size, bool bStereo)	// Sine wave generator
+int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int frame_size, bool bSingleOutputBuffer)	// Sine wave generator
 {
 	static bool during_trans=false;
 	static bool maintain_trans=false;
@@ -1487,8 +1513,6 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 		offs += 1;
 		data_recorder[offs][data_counter] = stat;
 
-		data_counter++;
-		circ_counter= data_counter % MAX_PITCHLEN;
 	}
 	
 	// gain adaption: optional
@@ -1530,10 +1554,22 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 	if (p.bPitchShift == 1){		// PVOC Pitch shifting
 		//////////////////////////////////////////////////////////////////////
 		if ((frame_counter_nowarp - (p.nDelay - 1)) % (p.pvocHop / p.frameLen) != 0){
-			
+			duringPitchShift = duringPitchShift_prev;
 		}
 		else{
-			if (frame_counter_nowarp - (p.nDelay - 1) >= p.pvocFrameLen / p.frameLen){
+			if (!(frame_counter_nowarp - (p.nDelay - 1) >= p.pvocFrameLen / p.frameLen)) {
+				duringPitchShift = false;
+				p.pitchShiftRatio[0] = 1.0;
+			}
+			else {
+				//mytype ss_in = 0.0; // DEBUG: amp
+				//mytype ss_out = 0.0; // DEBUG: amp
+				//mytype out_over_in = 0.0; // DEBUG: amp
+				//mytype ss_inBuf = 0.0; // DEBUG: amp
+				//mytype ss_outBuf = 0.0; // DEBUG: amp
+				//mytype ss_anaMagn = 0.0; // DEBUG: amp
+				//mytype ss_synMagn = 0.0;// DEBUG: amp
+
 				expct = 2.* M_PI * (double)p.pvocHop / (double)p.pvocFrameLen;
 				osamp = p.pvocFrameLen / p.pvocHop;
 				freqPerBin = p.sr / (double)p.pvocFrameLen;
@@ -1551,7 +1587,14 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 				for (i0 = 0; i0 < p.pvocFrameLen; i0++){
 					ftBuf1ps[i0 * 2] = xFrameW[i0];
 					ftBuf1ps[i0 * 2 + 1] = 0;
-				}
+
+					//ss_inBuf += ftBuf1ps[i0 * 2] * ftBuf1ps[i0 * 2]; // DEBUG: amp
+				}				
+				
+				//// DEBUG: amp
+				//for (i0 = 0; i0 < p.pvocFrameLen; i0++) {
+				//	ss_in += xFrameW[i0] * xFrameW[i0];
+				//}
 
 				DSPF_dp_cfftr2(p.pvocFrameLen, ftBuf1ps, fftc_ps0, 1);
 				bit_rev(ftBuf1ps, p.pvocFrameLen);
@@ -1603,7 +1646,10 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 
 				// duringTimeWarp = false; /* DEBUG */
 
+				
 				if (duringTimeWarp){
+					duringPitchShift = false;
+					p.pitchShiftRatio[0] = 1.0;
 					/* Steps to take when there is the time warping is zero */
 					/*cidx1 = cidx0;
 
@@ -1676,11 +1722,13 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 					}
 				}
 				else { /* Pitch shifting */
-					p.pitchShiftRatio[ifb] = pow(2.0, pipCfg.pitchShift[stat] / 12.0);					
-					duringPitchShift = (pipCfg.pitchShift[stat] != 0.0);
-					
-					if (duringPitchShift)
-						duringPitchShift = duringPitchShift;
+					if (pipCfg.pitchShift && stat < pipCfg.n) {
+						p.pitchShiftRatio[ifb] = pow(2.0, pipCfg.pitchShift[stat] / 12.0);
+					}
+					/* else {
+						p.pitchShiftRatio[ifb] = 1.0;
+					} */
+					duringPitchShift = (pipCfg.pitchShift[stat] != 0.0); /* TODO: Fix it */
 
 					//if (duringPitchShift_prev && !duringPitchShift) { /* Recover from time warping */ 
 					//	for (i0 = 0; i0 <= p.pvocFrameLen / 2; i0++) {
@@ -1688,6 +1736,7 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 					//	}
 					//}	
 
+					
 					for (i0=0; i0 <= p.pvocFrameLen / 2; i0++){
 						for (int i1 = 0; i1 < 2; i1++) {
 							p_tmp[i1] = X_phase[i0] - lastPhase[i1][i0];
@@ -1706,6 +1755,10 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 							anaMagn[i1][i0] = X_magn[i0];
 							anaFreq[i1][i0] = p_tmp[i1];
 
+							//if (i1 == 0) { // DEBUG: amp
+							//	ss_anaMagn += anaMagn[i1][i0] * anaMagn[i1][i0];
+							//} 
+
 							lastPhase[i1][i0] = X_phase[i0];
 						}						
 					}
@@ -1717,7 +1770,7 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 							synFreq[i1][i0] = 0.0;
 						}
 					}
-
+					
 					for (i0 = 0; i0 <= p.pvocFrameLen / 2; i0++){
 						for (int i1 = 0; i1 < 2; i1++) {
 							if (i1 == 0)
@@ -1726,7 +1779,7 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 								index[i1] = i0;
 							
 							if (index[i1] <= p.pvocFrameLen / 2) {
-								synMagn[i1][i0] += anaMagn[i1][index[i1]];
+								synMagn[i1][i0] += anaMagn[i1][index[i1]];								
 
 								if (i1 == 0)
 									synFreq[i1][i0] = anaFreq[i1][index[i1]] * p.pitchShiftRatio[ifb];
@@ -1737,6 +1790,15 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 	
 					}
 
+					
+					/* if (p.pitchShiftRatio[ifb] != 1.0) {
+						for (i0 = 0; i0 <= p.pvocFrameLen / 2; i0++) {
+							ss_synMagn += synMagn[0][i0] * synMagn[0][i0];
+						}
+						ss_synMagn = ss_synMagn;
+					} */
+
+					
 					for (i0 = 0; i0 <= p.pvocFrameLen / 2; i0++) {
 						for (int i1 = 0; i1 < 2; i1++) {
 							magn[i1] = synMagn[i1][i0]; // get magnitude and true frequency from synthesis arrays						
@@ -1754,11 +1816,24 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 							/* get real and imag part and re-interleave */
 							ftBuf2ps[i1][2 * i0] = magn[i1] * cos(phase[i1]);
 							ftBuf2ps[i1][2 * i0 + 1] = magn[i1] * sin(phase[i1]);			// What causes the sign reversal here?
-						}						
+
+							//if (i1 == 0) { // DEBUG
+							//	ss_synMagn += ftBuf2ps[i1][2 * i0] * ftBuf2ps[i1][2 * i0] + ftBuf2ps[i1][2 * i0 + 1] * ftBuf2ps[i1][2 * i0 + 1];
+							//}
+						}
 					}
+
+					//if (p.pitchShiftRatio[ifb] != 1.0) { // DEBUG
+					//	ss_synMagn += 0.0; // DEBUG
+					//}
 				}
 
-				duringPitchShift_prev = duringPitchShift;
+				/* if (duringPitchShift_prev == true && duringPitchShift == false) { // DEBUG
+					mexPrintf("Falling edge: frame_counter = %d\n", frame_counter);
+				}
+				else if  (duringPitchShift_prev == false && duringPitchShift == true) { // DEBUG
+					mexPrintf("Rising edge: frame_counter = %d\n", frame_counter);
+				} */
 
 				for (i0 = p.pvocFrameLen + 1; i0 < p.pvocFrameLen * 2; i0++) {
 					for (int i1 = 0; i1 < 2; i1++) {
@@ -1766,15 +1841,24 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 					}
 				}
 			
-				/* Inverse Fourier transform */
+				/* Inverse Fourier transform */				
 				for (int i1 = 0; i1 < 2; i1 ++ ) {
 					DSPF_dp_icfftr2(p.pvocFrameLen, ftBuf2ps[i1], fftc_ps0, 1);
 					bit_rev(ftBuf2ps[i1], p.pvocFrameLen);
 					for (i0 = 0; i0 < p.pvocFrameLen; i0++){
 						ftBuf2ps[i1][i0 * 2] /= p.pvocFrameLen;
 						ftBuf2ps[i1][i0 * 2 + 1] /= p.pvocFrameLen;
+
+						//if (i1 == 0){ // DEBUG
+						//	ss_outBuf += ftBuf2ps[i1][i0 * 2] * ftBuf2ps[i1][i0 * 2];
+						//}
 					}
 				}
+
+
+				//if (p.pitchShiftRatio[ifb] != 1.0) { // DEBUG
+				//	ss_outBuf += 0.0; // DEBUG
+				//}
 
 				// --- Accumulate to buffer ---
 				for (i0 = 0; i0 < p.pvocFrameLen; i0++){					
@@ -1783,61 +1867,64 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 						2 * ftBuf2ps[1 - duringPitchShift][2 * i0] * hwin2[i0] / (osamp / 2);
 				}
 
+				//// DEBUG: Amp
+				//for (int n0 = 0; n0 < p.pvocFrameLen; n0++) {
+				//	ss_out += outFrameBufPS[ifb][(outFrameBuf_circPtr + n0) % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES)] * 
+				//		      outFrameBufPS[ifb][(outFrameBuf_circPtr + n0) % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES)];
+				//}
+
+				//out_over_in = ss_out / ss_in;
+				//mytype sqrt_ratio = sqrt(out_over_in);
+
+				///* Amp normalization */
+				//for (int n0 = 0; n0 < p.pvocFrameLen; n0++) {
+				//	outFrameBufPS[ifb][(outFrameBuf_circPtr + n0) % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES)] = 
+				//		outFrameBufPS[ifb][(outFrameBuf_circPtr + n0) % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES)] / sqrt_ratio;
+				//}
+
+				///* Verify */
+				//ss_out = 0.0;
+				//for (int n0 = 0; n0 < p.pvocFrameLen; n0++) {
+				//	ss_out += outFrameBufPS[ifb][(outFrameBuf_circPtr + n0) % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES)] * 
+				//		      outFrameBufPS[ifb][(outFrameBuf_circPtr + n0) % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES)];
+				//}
+
+				//out_over_in = ss_out / ss_in;
+
 				// Front zeroing
 				for (i0 = 0; i0 < p.pvocHop; i0++) {
 					outFrameBufPS[ifb][(outFrameBuf_circPtr + p.pvocFrameLen + i0) % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES)] = 0.;
 				}
 				
-				/*
-				if (ifb == 0) { //DEBUG
-					printf("frame_counter = %d; Zeroing outFrameBuf %d to %d\n", frame_counter,
-							  outFrameBuf_circPtr - p.delayFrames[ifb] * p.frameLen - p.pvocHop, 
-						      outFrameBuf_circPtr - p.delayFrames[ifb] * p.frameLen - 1);
-				}
-				*/
-
-				/*
-				if (ifb == 0) {
-					int zero_idx0 = (outFrameBuf_circPtr - p.delayFrames[ifb] * p.frameLen - p.pvocHop) % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES);
-					if (zero_idx0 >= 0 && zero_idx0 < p.pvocHop) {
-						mexPrintf("outFrameBuf_circPtr = %d; p.delayFrames[ifb] = %d; p.frameLen = %d; frame_counter = %d; zero_idx0 = %d\n", 
-								   outFrameBuf_circPtr, p.delayFrames[ifb], p.frameLen, frame_counter, zero_idx0);
-						mexPrintf("(MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES) = %d\n", (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES));
-
-						for (int ii0 = 1; ii0 < 4; ii0++){
-							printf("pre[%d] = %f\n", ii0, outFrameBufPS[ifb][(zero_idx0 - ii0) % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES)]);
-						}
-					}
-
-					
-				}
-				*/
-				//Back Zeroing
+				// Back Zeroing
 				for (i0 = 1; i0 <= p.pvocHop; i0++){ // Ad hoc alert!
 					outFrameBufPS[ifb][(outFrameBuf_circPtr - p.delayFrames[ifb] * p.frameLen - i0) % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES)] = 0.;						
-				}
-				
-				/*
-				int zidx;
-				///printf("Zeroing start index = ");
-				for (i0 = 1; i0 <= p.pvocHop; i0++) {
-					zidx = outFrameBuf_circPtr - p.delayFrames[ifb] * p.frameLen - i0;
-					if (zidx < 0)
-						zidx += (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES);
-					///if (i0 == 1)
-					///	printf("%d\n", zidx);
-					outFrameBufPS[ifb][zidx] = 0.;
-				}
-				*/
-				//}
+				}								
 			}
+
 		}
 
+		duringPitchShift_prev = duringPitchShift;
 	}
 	else{
+		duringPitchShift = false;
+		p.pitchShiftRatio[0] = 1.0;
 		for (i0 = 0; i0 < p.nFB; i0++)
 			DSPF_dp_blk_move(&outFrameBuf[outFrameBuf_circPtr], &outFrameBufPS[i0][outFrameBuf_circPtr], p.frameLen);
 	}
+
+
+	offs++;
+	data_recorder[offs][data_counter] = p.pitchShiftRatio[0];
+
+	data_counter++;
+	circ_counter= data_counter % MAX_PITCHLEN;
+
+	/* if (frame_counter <= 50) { // DEBUG
+		mexPrintf("frame_counter = %d; duringPitchShift = %d\n", frame_counter, duringPitchShift);
+		fflush(stdout);
+	}; */
+	
 
 	// === ~Frequency/pitch shifting code ===
 
@@ -1939,12 +2026,35 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 	} */
 
 	/* Duplex into stereo */
-	if (bStereo)
-		for (n = 0; n < frame_size; n++)
-			outFrame_ptr[n * 2] = outFrame_ptr[n * 2 + 1] = outputBuf[n];
-	else
-		for (n = 0; n < frame_size; n++)
+	if (duringPitchShift)
+		duringPitchShift = duringPitchShift; // DEBUG
+
+	if (bSingleOutputBuffer) {
+		for (n = 0; n < frame_size; n++) {
 			outFrame_ptr[n] = outputBuf[n];
+		}
+	}
+	else {
+		if (p.stereoMode == 1) {	/* Left-right audio identical */
+			for (n = 0; n < frame_size; n++)
+				outFrame_ptr[2 * n] = outFrame_ptr[2 * n + 1] = outputBuf[n];
+			}
+		else if (p.stereoMode == 0) { /* Left audio only */
+			for (n = 0; n < frame_size; n++) {
+				outFrame_ptr[2 * n] = outputBuf[n];
+				outFrame_ptr[2 * n + 1] = 0.0;
+			}
+		}
+		else if (p.stereoMode == 2) { /* Left audio; right simulated TTL */
+			for (n = 0; n < frame_size; n++) {
+				outFrame_ptr[2 * n] = outputBuf[n];
+				outFrame_ptr[2 * n + 1] = 0.99 * (mytype) duringPitchShift;
+			}
+		}
+		else {
+
+		}
+	}
 
 	//SC(2008/06/22) Impose the onset and offset ramps, mainly to avoid the unpleasant "clicks" at the beginning and end
 	/* if ((mytype)frame_counter*(mytype)p.frameLen/(mytype)p.sr>p.trialLen){
