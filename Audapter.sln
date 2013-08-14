@@ -1,6 +1,6 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 11.00
-# Visual C++ Express 2010
+# Visual Studio 2010
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "audioIO", "audioIO\audioIO.vcxproj", "{C4A1C4A9-1308-45ED-9377-551141D6E565}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Audapter", "TransShiftMex\TransShiftMex.vcxproj", "{DB1F1AE4-86D6-4A22-92E9-7E6BC096D723}"
@@ -15,6 +15,8 @@ Global
 		DEBUG_UCh|x64 = DEBUG_UCh|x64
 		Debug_UIUC|Win32 = Debug_UIUC|Win32
 		Debug_UIUC|x64 = Debug_UIUC|x64
+		Debug_USyd|Win32 = Debug_USyd|Win32
+		Debug_USyd|x64 = Debug_USyd|x64
 		Debug|Win32 = Debug|Win32
 		Debug|x64 = Debug|x64
 		Release float SSE|Win32 = Release float SSE|Win32
@@ -31,6 +33,8 @@ Global
 		Release_UCh|x64 = Release_UCh|x64
 		Release_UIUC|Win32 = Release_UIUC|Win32
 		Release_UIUC|x64 = Release_UIUC|x64
+		Release_USyd|Win32 = Release_USyd|Win32
+		Release_USyd|x64 = Release_USyd|x64
 		Release|Win32 = Release|Win32
 		Release|x64 = Release|x64
 		Rlease_CNS-PC34|Win32 = Rlease_CNS-PC34|Win32
@@ -49,6 +53,10 @@ Global
 		{C4A1C4A9-1308-45ED-9377-551141D6E565}.Debug_UIUC|Win32.ActiveCfg = Debug_UIUC|Win32
 		{C4A1C4A9-1308-45ED-9377-551141D6E565}.Debug_UIUC|Win32.Build.0 = Debug_UIUC|Win32
 		{C4A1C4A9-1308-45ED-9377-551141D6E565}.Debug_UIUC|x64.ActiveCfg = Debug_UIUC|Win32
+		{C4A1C4A9-1308-45ED-9377-551141D6E565}.Debug_USyd|Win32.ActiveCfg = Debug_USyd|Win32
+		{C4A1C4A9-1308-45ED-9377-551141D6E565}.Debug_USyd|Win32.Build.0 = Debug_USyd|Win32
+		{C4A1C4A9-1308-45ED-9377-551141D6E565}.Debug_USyd|x64.ActiveCfg = Debug_USyd|x64
+		{C4A1C4A9-1308-45ED-9377-551141D6E565}.Debug_USyd|x64.Build.0 = Debug_USyd|x64
 		{C4A1C4A9-1308-45ED-9377-551141D6E565}.Debug|Win32.ActiveCfg = Debug|Win32
 		{C4A1C4A9-1308-45ED-9377-551141D6E565}.Debug|Win32.Build.0 = Debug|Win32
 		{C4A1C4A9-1308-45ED-9377-551141D6E565}.Debug|x64.ActiveCfg = Debug|Win32
@@ -73,6 +81,8 @@ Global
 		{C4A1C4A9-1308-45ED-9377-551141D6E565}.Release_UIUC|Win32.ActiveCfg = Release_UIUC|Win32
 		{C4A1C4A9-1308-45ED-9377-551141D6E565}.Release_UIUC|Win32.Build.0 = Release_UIUC|Win32
 		{C4A1C4A9-1308-45ED-9377-551141D6E565}.Release_UIUC|x64.ActiveCfg = Release_UIUC|Win32
+		{C4A1C4A9-1308-45ED-9377-551141D6E565}.Release_USyd|Win32.ActiveCfg = Release_USyd|Win32
+		{C4A1C4A9-1308-45ED-9377-551141D6E565}.Release_USyd|x64.ActiveCfg = Release_USyd|x64
 		{C4A1C4A9-1308-45ED-9377-551141D6E565}.Release|Win32.ActiveCfg = Release|Win32
 		{C4A1C4A9-1308-45ED-9377-551141D6E565}.Release|Win32.Build.0 = Release|Win32
 		{C4A1C4A9-1308-45ED-9377-551141D6E565}.Release|x64.ActiveCfg = Release|Win32
@@ -91,6 +101,10 @@ Global
 		{DB1F1AE4-86D6-4A22-92E9-7E6BC096D723}.Debug_UIUC|Win32.ActiveCfg = Debug_UIUC|Win32
 		{DB1F1AE4-86D6-4A22-92E9-7E6BC096D723}.Debug_UIUC|Win32.Build.0 = Debug_UIUC|Win32
 		{DB1F1AE4-86D6-4A22-92E9-7E6BC096D723}.Debug_UIUC|x64.ActiveCfg = Debug_UIUC|Win32
+		{DB1F1AE4-86D6-4A22-92E9-7E6BC096D723}.Debug_USyd|Win32.ActiveCfg = Debug_USyd|Win32
+		{DB1F1AE4-86D6-4A22-92E9-7E6BC096D723}.Debug_USyd|Win32.Build.0 = Debug_USyd|Win32
+		{DB1F1AE4-86D6-4A22-92E9-7E6BC096D723}.Debug_USyd|x64.ActiveCfg = Debug_USyd|x64
+		{DB1F1AE4-86D6-4A22-92E9-7E6BC096D723}.Debug_USyd|x64.Build.0 = Debug_USyd|x64
 		{DB1F1AE4-86D6-4A22-92E9-7E6BC096D723}.Debug|Win32.ActiveCfg = Debug|Win32
 		{DB1F1AE4-86D6-4A22-92E9-7E6BC096D723}.Debug|Win32.Build.0 = Debug|Win32
 		{DB1F1AE4-86D6-4A22-92E9-7E6BC096D723}.Debug|x64.ActiveCfg = Debug|Win32
@@ -115,6 +129,8 @@ Global
 		{DB1F1AE4-86D6-4A22-92E9-7E6BC096D723}.Release_UIUC|Win32.ActiveCfg = Release_UIUC|Win32
 		{DB1F1AE4-86D6-4A22-92E9-7E6BC096D723}.Release_UIUC|Win32.Build.0 = Release_UIUC|Win32
 		{DB1F1AE4-86D6-4A22-92E9-7E6BC096D723}.Release_UIUC|x64.ActiveCfg = Release_UIUC|Win32
+		{DB1F1AE4-86D6-4A22-92E9-7E6BC096D723}.Release_USyd|Win32.ActiveCfg = Release_USyd|Win32
+		{DB1F1AE4-86D6-4A22-92E9-7E6BC096D723}.Release_USyd|x64.ActiveCfg = Release_USyd|x64
 		{DB1F1AE4-86D6-4A22-92E9-7E6BC096D723}.Release|Win32.ActiveCfg = Release|Win32
 		{DB1F1AE4-86D6-4A22-92E9-7E6BC096D723}.Release|Win32.Build.0 = Release|Win32
 		{DB1F1AE4-86D6-4A22-92E9-7E6BC096D723}.Release|x64.ActiveCfg = Release|Win32
