@@ -1922,9 +1922,7 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 		}
 	}
 
-	data_counter++;
-	circ_counter= data_counter % MAX_PITCHLEN;
-
+	
 	/* if (frame_counter <= 50) { // DEBUG
 		mexPrintf("frame_counter = %d; duringPitchShift = %d\n", frame_counter, duringPitchShift);
 		fflush(stdout);
@@ -2018,6 +2016,9 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 
 	offs++;
 	data_recorder[offs][data_counter] = ms_out;
+
+	data_counter++;
+	circ_counter= data_counter % MAX_PITCHLEN;
 
 	if (p.fb == 0) {	// Mute
 		for(n = 0;n < p.frameLen; n++){
