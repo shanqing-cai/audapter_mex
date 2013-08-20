@@ -20,7 +20,7 @@ typedef double mytype;
 //#define DOWNSAMP_FACT 4
 #define DOWNSAMP_FACT_DEFAULT 3
 //#define MAX_FRAMELEN (768 / DOWNSAMP_FACT)
-#define MAX_FRAMELEN (384 / DOWNSAMP_FACT_DEFAULT)
+#define MAX_FRAMELEN (1152 / DOWNSAMP_FACT_DEFAULT)
 #define MAX_BUFLEN (15 * MAX_FRAMELEN)  // max ndelay< 8
 #define MAX_NWIN   16
 #define M_1_SQRTPI 0.564189583547756
@@ -44,7 +44,7 @@ typedef double mytype;
 #define NFFT 1024			//SC(2008/05/06)
 #define MAX_NFFT 4096		//SC(2012/03/05): for frequency/pitch shifting
 
-#define MAX_DATA_VEC (2 * MAX_NTRACKS + 10 + MAX_NLPC + 2)
+#define MAX_DATA_VEC (2 * MAX_NTRACKS + 10 + MAX_NLPC + 5)
 #define MAX_REC_SIZE  230400 // 10 sec recording at p.sr = 48kHz/4 
 #define MAX_DATA_SIZE 230400 // 10 sec data p.sr = 48kHz/4 and frameshift>=1
 
@@ -273,6 +273,7 @@ private:
 
 	//SCai (2012/09/08) BlueShift
 	mytype outFrameBufSum[MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT];
+	mytype outFrameBufSum2[MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT];
 
 	mytype srfilt_buf[MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT];      // multiple purpose before for down / upsampling
 
@@ -416,6 +417,9 @@ private:
 	// 2 - During utterance; 3 - Tentative voice ending; 4 - Voice ended; 5 - Kernel size ramping down.
 
 	int fb4_counter;
+
+	mytype amp_ratio;
+	mytype amp_ratio_prev;
 
 	//pvocWarpAtom warpCfg;
 
@@ -568,6 +572,9 @@ private:
 
 		/* SC (2013-08-06) stereoMode */
 		int stereoMode;		/* 0 - left only; 1 - left-right identical; 2 - left audio + right simulate TTL */
+
+		int bPvocAmpNorm;	/* Pitch vocoder amplitude normalization */		
+		int pvocAmpNormTrans; /* Length of the amplitude normalization factor transitional period */
 	} p;
 
 

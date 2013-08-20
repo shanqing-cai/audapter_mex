@@ -42,8 +42,8 @@ char *intparamarray[NPARAMS]={"srate","framelen","ndelay","nwin","nlpc","nfmts",
 //								 1		   2		3		4				5		6		7								
 	"avglen","cepswinwidth","fb","minvowellen", "delayframes", "bpitchshift", "pvocframelen", "pvochop", "bdownsampfilt", "nfb", "mute",
 //		8			9		 10		11				12				13				14			15			16				17	   18
-	"tsgntones", "downfact", "stereomode"};
-//		19			20			21
+	"tsgntones", "downfact", "stereomode", "bpvocampnorm", "pvocampnormtrans"};
+//		19			20			21				22				23
 
 char *doubleparamarray[NPARAMS]={"scale","preemp","rmsthr","rmsratio","rmsff","dfmtsff",
 //									  1        2         3       4        5        6
@@ -363,11 +363,17 @@ TransShift::TransShift()		//SC construction function
 		/* SC (2013-08-06) */
 		p.stereoMode = 1;		/* Default: left-right identical */
 
+		/* SC (2013-08-20) */
+		p.bPvocAmpNorm = 0;
+		p.pvocAmpNormTrans = 16;
+
 		rmsSlopeWin = 0.03; // Unit: s
 		rmsSlopeN = (int)(rmsSlopeWin / ((mytype)p.frameLen / (mytype)p.sr));
 //************************************** Initialize filter coefs **************************************	
 
 	intShiftRatio = 1.0;
+	amp_ratio = 1.0;
+	amp_ratio_prev = 1.0;
 
 	// preemphasis filter
 	a_preemp[0] = 1;
@@ -534,6 +540,7 @@ void TransShift::reset()
 
 	for (i0 = 0; i0 < MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT; i0++) {
 		outFrameBufSum[i0] = 0;
+		outFrameBufSum2[i0] = 0;
 	}
 
 	// Initialize internal input, output buffers  (at downsampled  rate !!!)
@@ -722,6 +729,8 @@ void TransShift::reset()
 
 	duringPitchShift = false;
 	duringPitchShift_prev = false;
+
+	amp_ratio = 1.0;
 }
 
 int sw(char *table[], const char *str, const int &entries)
@@ -746,9 +755,9 @@ int TransShift::setparams(void * name, void * value, int nPars){
 //									1		   2		3		4		5		6		7								
 //	"avglen","cepswinwidth","fb","minvowellen", "delayframes", "bpitchshift", "pvocframelen", "pvochop", "bdownsampfilt", "nfb", "mute", 
 //		8			9		 10		11             12				13				14			15				16			17	   18
-//	"tsgntones", "downfact", "stereomode"};
-//		19			20				21
-	k=sw(intparamarray, arg, 21);
+//	"tsgntones", "downfact", "stereomode", "bpvocampnorm", "pvocampnormtrans"};
+//		19			20				21			22				23
+	k=sw(intparamarray, arg, 23);
 	//TRACE("ALGO: setting param: %s\n", arg);
 	switch (k){
 	case 1: // sample rate
@@ -846,6 +855,12 @@ int TransShift::setparams(void * name, void * value, int nPars){
 		break;
 	case 21:
 		p.stereoMode		= (int)(*(mytype *)value);
+		break;
+	case 22:
+		p.bPvocAmpNorm		= (int)(*(mytype *)value);
+		break;
+	case 23:
+		p.pvocAmpNormTrans	= (int)(*(mytype *)value);
 		break;
 	default:
 		param_set=false;
@@ -1163,7 +1178,7 @@ const mytype* TransShift::getsignal(int & size)	//SC
 const mytype* TransShift::getdata(int & size, int & vecsize)
 {
 	size = data_counter;
-	vecsize = 4 +2 * p.nTracks + 2 * 2 + p.nLPC + 5;
+	vecsize = 4 +2 * p.nTracks + 2 * 2 + p.nLPC + 8;
 	return data_recorder[0];
 }
 
@@ -1551,356 +1566,336 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 		intShiftRatio = pow(10, pipCfg.intShift[stat] / 20.0);
 	}
 
+
+	mytype ms_in = 0.0; // DEBUG: amp
+	mytype ms_out = 0.0; // DEBUG: amp
+	mytype out_over_in = 0.0; // DEBUG: amp
+	mytype ss_inBuf = 0.0; // DEBUG: amp
+	mytype ss_outBuf = 0.0; // DEBUG: amp
+	mytype ss_anaMagn = 0.0; // DEBUG: amp
+	mytype ss_synMagn = 0.0;// DEBUG: amp
+
+	int isPvocFrame = (((frame_counter_nowarp - (p.nDelay - 1)) % (p.pvocHop / p.frameLen) == 0) && 
+					   (frame_counter_nowarp - (p.nDelay - 1) >= p.pvocFrameLen / p.frameLen));
+
 	if (p.bPitchShift == 1){		// PVOC Pitch shifting
 		//////////////////////////////////////////////////////////////////////
-		if ((frame_counter_nowarp - (p.nDelay - 1)) % (p.pvocHop / p.frameLen) != 0){
+		if (isPvocFrame == 0) {
 			duringPitchShift = duringPitchShift_prev;
-		}
-		else{
-			if (!(frame_counter_nowarp - (p.nDelay - 1) >= p.pvocFrameLen / p.frameLen)) {
+
+			if (frame_counter_nowarp - (p.nDelay - 1) < p.pvocFrameLen / p.frameLen) {
 				duringPitchShift = false;
 				p.pitchShiftRatio[0] = 1.0;
 			}
+		}
+		else {
+			expct = 2.* M_PI * (double)p.pvocHop / (double)p.pvocFrameLen;
+			osamp = p.pvocFrameLen / p.pvocHop;
+			freqPerBin = p.sr / (double)p.pvocFrameLen;
+
+			if (outFrameBuf_circPtr - p.pvocFrameLen >= 0)
+				DSPF_dp_blk_move(&outFrameBuf[outFrameBuf_circPtr - p.pvocFrameLen], xBuf, p.pvocFrameLen);
+			else{ // Take care of wrapping-around
+				DSPF_dp_blk_move(&outFrameBuf[0], &xBuf[p.pvocFrameLen - outFrameBuf_circPtr], outFrameBuf_circPtr);
+				DSPF_dp_blk_move(&outFrameBuf[MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES - p.pvocFrameLen + outFrameBuf_circPtr], 
+								    &xBuf[0], 
+									p.pvocFrameLen - outFrameBuf_circPtr);
+			}
+			DSPF_dp_vecmul(xBuf, hwin2, xFrameW, p.pvocFrameLen);
+
+			for (i0 = 0; i0 < p.pvocFrameLen; i0++){
+				ftBuf1ps[i0 * 2] = xFrameW[i0];
+				ftBuf1ps[i0 * 2 + 1] = 0;
+
+				//ss_inBuf += ftBuf1ps[i0 * 2] * ftBuf1ps[i0 * 2]; // DEBUG: amp
+			}				
+			
+			// DEBUG: amp
+			for (i0 = 0; i0 < p.pvocFrameLen; i0++) {
+				ms_in += xFrameW[i0] * xFrameW[i0];
+			}
+			ms_in /= (mytype) p.pvocFrameLen;
+
+			DSPF_dp_cfftr2(p.pvocFrameLen, ftBuf1ps, fftc_ps0, 1);
+			bit_rev(ftBuf1ps, p.pvocFrameLen);
+
+			for (i0=0; i0 < p.pvocFrameLen; i0++){
+				X_magn[i0] = 2. * sqrt(ftBuf1ps[i0*2] * ftBuf1ps[i0*2] + ftBuf1ps[i0*2+1] * ftBuf1ps[i0*2+1]);
+				X_phase[i0] = atan2(ftBuf1ps[i0*2+1], ftBuf1ps[i0*2]);
+			}
+
+			// --- Time warping preparation ---
+			mytype t0 = (mytype)(frame_counter - (p.nDelay - 1)) * p.frameLen / p.sr;
+			mytype t1, t01;				
+			mytype cidx1_d, cidx1_f;
+			// mytype cidx0_d, cidx0_f;
+			mytype dp;
+			int cidx0 = (frame_counter - (p.nDelay - 1)) / (p.pvocHop / p.frameLen);
+			int cidx1;
+				
+			for (i0 = 0; i0 < p.pvocFrameLen; i0++){
+				pvocWarpCache[cidx0 % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES / 64)][i0] = X_magn[i0];
+				pvocWarpCache[cidx0 % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES / 64)][i0 + p.pvocFrameLen] = X_phase[i0];
+			}
+
+			/*if (frame_counter - (p.nDelay - 1) == p.pvocFrameLen / p.frameLen){
+				for (i0 = 0; i0 <= p.pvocFrameLen / 2; i0++){
+					lastPhase[i0] = X_phase[i0];
+				}
+			}*/
+
+			// --- ~Time warping preparation ---
+			/* Time warping, overrides pitch shifting */
+			int ifb = 0;
+				
+			if (warpCfg->ostInitState < 0) {
+				duringTimeWarp = (t0 >= warpCfg->tBegin && t0 < warpCfg->tBegin + warpCfg->dur1 + warpCfg->durHold + warpCfg->dur2);
+			}
 			else {
-				//mytype ss_in = 0.0; // DEBUG: amp
-				//mytype ss_out = 0.0; // DEBUG: amp
-				//mytype out_over_in = 0.0; // DEBUG: amp
-				//mytype ss_inBuf = 0.0; // DEBUG: amp
-				//mytype ss_outBuf = 0.0; // DEBUG: amp
-				//mytype ss_anaMagn = 0.0; // DEBUG: amp
-				//mytype ss_synMagn = 0.0;// DEBUG: amp
-
-				expct = 2.* M_PI * (double)p.pvocHop / (double)p.pvocFrameLen;
-				osamp = p.pvocFrameLen / p.pvocHop;
-				freqPerBin = p.sr / (double)p.pvocFrameLen;
-
-				if (outFrameBuf_circPtr - p.pvocFrameLen >= 0)
-					DSPF_dp_blk_move(&outFrameBuf[outFrameBuf_circPtr - p.pvocFrameLen], xBuf, p.pvocFrameLen);
-				else{ // Take care of wrapping-around
-					DSPF_dp_blk_move(&outFrameBuf[0], &xBuf[p.pvocFrameLen - outFrameBuf_circPtr], outFrameBuf_circPtr);
-					DSPF_dp_blk_move(&outFrameBuf[MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES - p.pvocFrameLen + outFrameBuf_circPtr], 
-								     &xBuf[0], 
-									 p.pvocFrameLen - outFrameBuf_circPtr);
-				}
-				DSPF_dp_vecmul(xBuf, hwin2, xFrameW, p.pvocFrameLen);
-
-				for (i0 = 0; i0 < p.pvocFrameLen; i0++){
-					ftBuf1ps[i0 * 2] = xFrameW[i0];
-					ftBuf1ps[i0 * 2 + 1] = 0;
-
-					//ss_inBuf += ftBuf1ps[i0 * 2] * ftBuf1ps[i0 * 2]; // DEBUG: amp
-				}				
-				
-				//// DEBUG: amp
-				//for (i0 = 0; i0 < p.pvocFrameLen; i0++) {
-				//	ss_in += xFrameW[i0] * xFrameW[i0];
-				//}
-
-				DSPF_dp_cfftr2(p.pvocFrameLen, ftBuf1ps, fftc_ps0, 1);
-				bit_rev(ftBuf1ps, p.pvocFrameLen);
-
-				for (i0=0; i0 < p.pvocFrameLen; i0++){
-					X_magn[i0] = 2. * sqrt(ftBuf1ps[i0*2] * ftBuf1ps[i0*2] + ftBuf1ps[i0*2+1] * ftBuf1ps[i0*2+1]);
-					X_phase[i0] = atan2(ftBuf1ps[i0*2+1], ftBuf1ps[i0*2]);
-				}
-
-				// --- Time warping preparation ---
-				mytype t0 = (mytype)(frame_counter - (p.nDelay - 1)) * p.frameLen / p.sr;
-				mytype t1, t01;				
-				mytype cidx1_d, cidx1_f;
-				// mytype cidx0_d, cidx0_f;
-				mytype dp;
-				int cidx0 = (frame_counter - (p.nDelay - 1)) / (p.pvocHop / p.frameLen);
-				int cidx1;
-				
-				for (i0 = 0; i0 < p.pvocFrameLen; i0++){
-					pvocWarpCache[cidx0 % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES / 64)][i0] = X_magn[i0];
-					pvocWarpCache[cidx0 % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES / 64)][i0 + p.pvocFrameLen] = X_phase[i0];
-				}
-
-				/*if (frame_counter - (p.nDelay - 1) == p.pvocFrameLen / p.frameLen){
-					for (i0 = 0; i0 <= p.pvocFrameLen / 2; i0++){
-						lastPhase[i0] = X_phase[i0];
-					}
-				}*/
-
-				// --- ~Time warping preparation ---
-				/* Time warping, overrides pitch shifting */
-				int ifb = 0;
-				
-				if (warpCfg->ostInitState < 0) {
-					duringTimeWarp = (t0 >= warpCfg->tBegin && t0 < warpCfg->tBegin + warpCfg->dur1 + warpCfg->durHold + warpCfg->dur2);
+				if (stat < warpCfg->ostInitState) {
+					duringTimeWarp = false;
 				}
 				else {
-					if (stat < warpCfg->ostInitState) {
-						duringTimeWarp = false;
-					}
-					else {
-						t01 = t0 - ((mytype) (statOnsetIndices[warpCfg->ostInitState] - (p.nDelay - 1)) * p.frameLen / p.sr);
-						duringTimeWarp = (t01 >= warpCfg->tBegin && t01 < warpCfg->tBegin + warpCfg->dur1 + warpCfg->durHold + warpCfg->dur2);
-						if (duringTimeWarp)
-							t0 = t01;
-					}
-					/* TODO */
+					t01 = t0 - ((mytype) (statOnsetIndices[warpCfg->ostInitState] - (p.nDelay - 1)) * p.frameLen / p.sr);
+					duringTimeWarp = (t01 >= warpCfg->tBegin && t01 < warpCfg->tBegin + warpCfg->dur1 + warpCfg->durHold + warpCfg->dur2);
+					if (duringTimeWarp)
+						t0 = t01;
 				}
+				/* TODO */
+			}
 
-				// duringTimeWarp = false; /* DEBUG */
+			// duringTimeWarp = false; /* DEBUG */
 
 				
-				if (duringTimeWarp){
-					duringPitchShift = false;
-					p.pitchShiftRatio[0] = 1.0;
-					/* Steps to take when there is the time warping is zero */
-					/*cidx1 = cidx0;
+			if (duringTimeWarp){
+				duringPitchShift = false;
+				p.pitchShiftRatio[0] = 1.0;
+				/* Steps to take when there is the time warping is zero */
+				/*cidx1 = cidx0;
 
-					for (i0 = 0; i0 <= p.pvocFrameLen / 2; i0++){
-						magn = pvocWarpCache[cidx1 % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES / 64)][i0];
-						phase = pvocWarpCache[cidx1 % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES / 64)][i0 + p.pvocFrameLen];
+				for (i0 = 0; i0 <= p.pvocFrameLen / 2; i0++){
+					magn = pvocWarpCache[cidx1 % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES / 64)][i0];
+					phase = pvocWarpCache[cidx1 % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES / 64)][i0 + p.pvocFrameLen];
 
-						ftBuf2ps[2 * i0] = magn * cos(phase);
-						ftBuf2ps[2 * i0 + 1] = magn * sin(phase);
+					ftBuf2ps[2 * i0] = magn * cos(phase);
+					ftBuf2ps[2 * i0 + 1] = magn * sin(phase);
 
-						lastPhase[i0] = phase;						
-					}*/
+					lastPhase[i0] = phase;						
+				}*/
 
-					if (t0 < warpCfg->tBegin + warpCfg->dur1){ /* Time dilation (deceleration) */
-						t1 = (t0 - warpCfg->tBegin) * warpCfg->rate1 + warpCfg->tBegin;
-					}
-					else if (t0 < warpCfg->tBegin + warpCfg->dur1 + warpCfg->durHold){ /* Time shifting (no compression or dilation) */
-						t1 = warpCfg->rate1 * warpCfg->dur1 - warpCfg->dur1 + t0;
-					}
-					else if (t0 < warpCfg->tBegin + warpCfg->dur1 + warpCfg->durHold + warpCfg->dur2){ /* Time compression (acceleration) at the end of the warp interval */
-						//t1 = (t0 - (warpCfg->tBegin + warpCfg->dur1 + warpCfg->durHold)) * warpCfg->rate2 + warpCfg->tBegin + warpCfg->dur1 + warpCfg->durHold;
-						t1 = warpCfg->tBegin + warpCfg->dur1 + warpCfg->durHold + warpCfg->dur2;
-						t1 -= (warpCfg->tBegin + warpCfg->dur1 + warpCfg->durHold + warpCfg->dur2 - t0) * warpCfg->rate2;
-					}
+				if (t0 < warpCfg->tBegin + warpCfg->dur1){ /* Time dilation (deceleration) */
+					t1 = (t0 - warpCfg->tBegin) * warpCfg->rate1 + warpCfg->tBegin;
+				}
+				else if (t0 < warpCfg->tBegin + warpCfg->dur1 + warpCfg->durHold){ /* Time shifting (no compression or dilation) */
+					t1 = warpCfg->rate1 * warpCfg->dur1 - warpCfg->dur1 + t0;
+				}
+				else if (t0 < warpCfg->tBegin + warpCfg->dur1 + warpCfg->durHold + warpCfg->dur2){ /* Time compression (acceleration) at the end of the warp interval */
+					//t1 = (t0 - (warpCfg->tBegin + warpCfg->dur1 + warpCfg->durHold)) * warpCfg->rate2 + warpCfg->tBegin + warpCfg->dur1 + warpCfg->durHold;
+					t1 = warpCfg->tBegin + warpCfg->dur1 + warpCfg->durHold + warpCfg->dur2;
+					t1 -= (warpCfg->tBegin + warpCfg->dur1 + warpCfg->durHold + warpCfg->dur2 - t0) * warpCfg->rate2;
+				}
 					
-					if (warpCfg->ostInitState >= 0)
-						t1 += (mytype) (statOnsetIndices[warpCfg->ostInitState] - (p.nDelay - 1)) * p.frameLen / p.sr;
+				if (warpCfg->ostInitState >= 0)
+					t1 += (mytype) (statOnsetIndices[warpCfg->ostInitState] - (p.nDelay - 1)) * p.frameLen / p.sr;
 
-					cidx1_d = t1 * (mytype)p.sr / (mytype)p.pvocHop;
-					cidx1 = (int)floor(cidx1_d);
-					cidx1_f = cidx1_d - (mytype)cidx1;
+				cidx1_d = t1 * (mytype)p.sr / (mytype)p.pvocHop;
+				cidx1 = (int)floor(cidx1_d);
+				cidx1_f = cidx1_d - (mytype)cidx1;
 					
-					/* For no-time-warp backup */					
+				/* For no-time-warp backup */					
 
-					for (i0 = 0; i0 <= p.pvocFrameLen / 2; i0++) {
-						magn[0] = pvocWarpCache[cidx1 % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES / 64)][i0] * (1 - cidx1_f) + 
-								  pvocWarpCache[(cidx1 + 1) % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES / 64)][i0] * cidx1_f;
-						/* No time warp */
-						/*magn = pvocWarpCache[cidx0 % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES / 64)][i0];*/
+				for (i0 = 0; i0 <= p.pvocFrameLen / 2; i0++) {
+					magn[0] = pvocWarpCache[cidx1 % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES / 64)][i0] * (1 - cidx1_f) + 
+								pvocWarpCache[(cidx1 + 1) % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES / 64)][i0] * cidx1_f;
+					/* No time warp */
+					/*magn = pvocWarpCache[cidx0 % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES / 64)][i0];*/
 					
-						/*phase1 = pvocWarpCache[cidx1 % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES / 64)][i0 + p.pvocFrameLen] * (1 - cidx1_f) + 
-								 pvocWarpCache[(cidx1 + 1) % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES / 64)][i0 + p.pvocFrameLen] * cidx1_f;*/
+					/*phase1 = pvocWarpCache[cidx1 % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES / 64)][i0 + p.pvocFrameLen] * (1 - cidx1_f) + 
+								pvocWarpCache[(cidx1 + 1) % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES / 64)][i0 + p.pvocFrameLen] * cidx1_f;*/
 
-						dp = pvocWarpCache[(cidx1 + 1) % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES / 64)][i0 + p.pvocFrameLen] - 
-							 pvocWarpCache[cidx1 % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES / 64)][i0 + p.pvocFrameLen];
-						/*dp = phase1 - phase0;
-						phase0 = phase1;*/
+					dp = pvocWarpCache[(cidx1 + 1) % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES / 64)][i0 + p.pvocFrameLen] - 
+							pvocWarpCache[cidx1 % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES / 64)][i0 + p.pvocFrameLen];
+					/*dp = phase1 - phase0;
+					phase0 = phase1;*/
 						
-						dp -= (mytype)i0 * expct;
+					dp -= (mytype)i0 * expct;
 						
-						qpd = (int)(dp / M_PI);
-						if (qpd >= 0) qpd += qpd & 1;
-						else qpd -= qpd & 1;
-						dp -= M_PI * (mytype)qpd;
+					qpd = (int)(dp / M_PI);
+					if (qpd >= 0) qpd += qpd & 1;
+					else qpd -= qpd & 1;
+					dp -= M_PI * (mytype)qpd;
 
-						ftBuf2ps[0][2 * i0] = magn[0] * cos(lastPhase[0][i0]);
-						ftBuf2ps[0][2 * i0 + 1] = magn[0] * sin(lastPhase[0][i0]);
+					ftBuf2ps[0][2 * i0] = magn[0] * cos(lastPhase[0][i0]);
+					ftBuf2ps[0][2 * i0 + 1] = magn[0] * sin(lastPhase[0][i0]);
 
-						/* No time warp */
-						/*ftBuf2ps[2 * i0] = magn * cos(X_phase[i0]);
-						ftBuf2ps[2 * i0 + 1] = magn * sin(X_phase[i0]);*/
-						lastPhase[0][i0] += (mytype)i0 * expct + dp;
+					/* No time warp */
+					/*ftBuf2ps[2 * i0] = magn * cos(X_phase[i0]);
+					ftBuf2ps[2 * i0 + 1] = magn * sin(X_phase[i0]);*/
+					lastPhase[0][i0] += (mytype)i0 * expct + dp;
 
-						/* No time warp */
-						/*lastPhase[i0] = X_phase[i0];*/
+					/* No time warp */
+					/*lastPhase[i0] = X_phase[i0];*/
 
-						/* No-time-warp backup */
-						lastPhase_ntw[i0] = X_phase[i0];
-						sumPhase[0][ifb][i0] = X_phase[i0];
+					/* No-time-warp backup */
+					lastPhase_ntw[i0] = X_phase[i0];
+					sumPhase[0][ifb][i0] = X_phase[i0];
+				}
+			}
+			else { /* Pitch shifting */
+				if (pipCfg.pitchShift && stat < pipCfg.n) {
+					p.pitchShiftRatio[ifb] = pow(2.0, pipCfg.pitchShift[stat] / 12.0);
+				}
+				/* else {
+					p.pitchShiftRatio[ifb] = 1.0;
+				} */
+				duringPitchShift = (pipCfg.pitchShift[stat] != 0.0); /* TODO: Fix it */
+
+				//if (duringPitchShift_prev && !duringPitchShift) { /* Recover from time warping */ 
+				//	for (i0 = 0; i0 <= p.pvocFrameLen / 2; i0++) {
+				//		lastPhase[i0] = lastPhase_nps[i0];
+				//	}
+				//}	
+
+					
+				for (i0=0; i0 <= p.pvocFrameLen / 2; i0++){
+					for (int i1 = 0; i1 < 2; i1++) {
+						p_tmp[i1] = X_phase[i0] - lastPhase[i1][i0];
+
+						p_tmp[i1] -= (mytype)i0 * expct;
+
+						qpd = (int)(p_tmp[i1] / M_PI);
+
+						if (qpd >= 0) qpd += qpd&1;
+						else qpd -= qpd&1;
+						p_tmp[i1] -= M_PI * (mytype)qpd;
+
+						p_tmp[i1] = osamp * p_tmp[i1] / (2. * M_PI);
+						p_tmp[i1] = (mytype)i0 * freqPerBin + p_tmp[i1] * freqPerBin;
+
+						anaMagn[i1][i0] = X_magn[i0];
+						anaFreq[i1][i0] = p_tmp[i1];
+
+						//if (i1 == 0) { // DEBUG: amp
+						//	ss_anaMagn += anaMagn[i1][i0] * anaMagn[i1][i0];
+						//} 
+
+						lastPhase[i1][i0] = X_phase[i0];
+					}						
+				}
+
+				/* SCai: Pitch shifting synthesis */
+				for (i0 = 0; i0 < p.pvocFrameLen; i0++){
+					for (int i1 = 0; i1 < 2; i1++) {
+						synMagn[i1][i0] = 0.0;
+						synFreq[i1][i0] = 0.0;
 					}
 				}
-				else { /* Pitch shifting */
-					if (pipCfg.pitchShift && stat < pipCfg.n) {
-						p.pitchShiftRatio[ifb] = pow(2.0, pipCfg.pitchShift[stat] / 12.0);
-					}
-					/* else {
-						p.pitchShiftRatio[ifb] = 1.0;
-					} */
-					duringPitchShift = (pipCfg.pitchShift[stat] != 0.0); /* TODO: Fix it */
-
-					//if (duringPitchShift_prev && !duringPitchShift) { /* Recover from time warping */ 
-					//	for (i0 = 0; i0 <= p.pvocFrameLen / 2; i0++) {
-					//		lastPhase[i0] = lastPhase_nps[i0];
-					//	}
-					//}	
-
 					
-					for (i0=0; i0 <= p.pvocFrameLen / 2; i0++){
-						for (int i1 = 0; i1 < 2; i1++) {
-							p_tmp[i1] = X_phase[i0] - lastPhase[i1][i0];
+				for (i0 = 0; i0 <= p.pvocFrameLen / 2; i0++){
+					for (int i1 = 0; i1 < 2; i1++) {
+						if (i1 == 0)
+							index[i1] = (int)(i0 / p.pitchShiftRatio[ifb]);
+						else
+							index[i1] = i0;
+							
+						if (index[i1] <= p.pvocFrameLen / 2) {
+							synMagn[i1][i0] += anaMagn[i1][index[i1]];								
 
-							p_tmp[i1] -= (mytype)i0 * expct;
-
-							qpd = (int)(p_tmp[i1] / M_PI);
-
-							if (qpd >= 0) qpd += qpd&1;
-							else qpd -= qpd&1;
-							p_tmp[i1] -= M_PI * (mytype)qpd;
-
-							p_tmp[i1] = osamp * p_tmp[i1] / (2. * M_PI);
-							p_tmp[i1] = (mytype)i0 * freqPerBin + p_tmp[i1] * freqPerBin;
-
-							anaMagn[i1][i0] = X_magn[i0];
-							anaFreq[i1][i0] = p_tmp[i1];
-
-							//if (i1 == 0) { // DEBUG: amp
-							//	ss_anaMagn += anaMagn[i1][i0] * anaMagn[i1][i0];
-							//} 
-
-							lastPhase[i1][i0] = X_phase[i0];
-						}						
-					}
-
-					/* SCai: Pitch shifting synthesis */
-					for (i0 = 0; i0 < p.pvocFrameLen; i0++){
-						for (int i1 = 0; i1 < 2; i1++) {
-							synMagn[i1][i0] = 0.0;
-							synFreq[i1][i0] = 0.0;
-						}
-					}
-					
-					for (i0 = 0; i0 <= p.pvocFrameLen / 2; i0++){
-						for (int i1 = 0; i1 < 2; i1++) {
 							if (i1 == 0)
-								index[i1] = (int)(i0 / p.pitchShiftRatio[ifb]);
+								synFreq[i1][i0] = anaFreq[i1][index[i1]] * p.pitchShiftRatio[ifb];
 							else
-								index[i1] = i0;
-							
-							if (index[i1] <= p.pvocFrameLen / 2) {
-								synMagn[i1][i0] += anaMagn[i1][index[i1]];								
-
-								if (i1 == 0)
-									synFreq[i1][i0] = anaFreq[i1][index[i1]] * p.pitchShiftRatio[ifb];
-								else
-									synFreq[i1][i0] = anaFreq[i1][index[i1]];
-							}
+								synFreq[i1][i0] = anaFreq[i1][index[i1]];
 						}
+					}
 	
-					}
+				}
 
 					
-					/* if (p.pitchShiftRatio[ifb] != 1.0) {
-						for (i0 = 0; i0 <= p.pvocFrameLen / 2; i0++) {
-							ss_synMagn += synMagn[0][i0] * synMagn[0][i0];
-						}
-						ss_synMagn = ss_synMagn;
-					} */
-
-					
+				/* if (p.pitchShiftRatio[ifb] != 1.0) {
 					for (i0 = 0; i0 <= p.pvocFrameLen / 2; i0++) {
-						for (int i1 = 0; i1 < 2; i1++) {
-							magn[i1] = synMagn[i1][i0]; // get magnitude and true frequency from synthesis arrays						
-
-							p_tmp[i1] = synFreq[i1][i0];
-							
-							p_tmp[i1] -= (double)i0 * freqPerBin;	// subtract bin mid frequency		
-							p_tmp[i1] /= freqPerBin;	// get bin deviation from freq deviation
-							p_tmp[i1] = 2. * M_PI * p_tmp[i1] / osamp;	// take osamp into account
-							p_tmp[i1] += (double)i0 * expct;		// add the overlap phase advance back in
-							
-							sumPhase[i1][ifb][i0] += p_tmp[i1];		// accumulate delta phase to get bin phase
-							phase[i1] = sumPhase[i1][ifb][i0];
-
-							/* get real and imag part and re-interleave */
-							ftBuf2ps[i1][2 * i0] = magn[i1] * cos(phase[i1]);
-							ftBuf2ps[i1][2 * i0 + 1] = magn[i1] * sin(phase[i1]);			// What causes the sign reversal here?
-
-							//if (i1 == 0) { // DEBUG
-							//	ss_synMagn += ftBuf2ps[i1][2 * i0] * ftBuf2ps[i1][2 * i0] + ftBuf2ps[i1][2 * i0 + 1] * ftBuf2ps[i1][2 * i0 + 1];
-							//}
-						}
+						ss_synMagn += synMagn[0][i0] * synMagn[0][i0];
 					}
-
-					//if (p.pitchShiftRatio[ifb] != 1.0) { // DEBUG
-					//	ss_synMagn += 0.0; // DEBUG
-					//}
-				}
-
-				/* if (duringPitchShift_prev == true && duringPitchShift == false) { // DEBUG
-					mexPrintf("Falling edge: frame_counter = %d\n", frame_counter);
-				}
-				else if  (duringPitchShift_prev == false && duringPitchShift == true) { // DEBUG
-					mexPrintf("Rising edge: frame_counter = %d\n", frame_counter);
+					ss_synMagn = ss_synMagn;
 				} */
 
-				for (i0 = p.pvocFrameLen + 1; i0 < p.pvocFrameLen * 2; i0++) {
+					
+				for (i0 = 0; i0 <= p.pvocFrameLen / 2; i0++) {
 					for (int i1 = 0; i1 < 2; i1++) {
-						ftBuf2ps[i1][i0] = 0.;
-					}
-				}
-			
-				/* Inverse Fourier transform */				
-				for (int i1 = 0; i1 < 2; i1 ++ ) {
-					DSPF_dp_icfftr2(p.pvocFrameLen, ftBuf2ps[i1], fftc_ps0, 1);
-					bit_rev(ftBuf2ps[i1], p.pvocFrameLen);
-					for (i0 = 0; i0 < p.pvocFrameLen; i0++){
-						ftBuf2ps[i1][i0 * 2] /= p.pvocFrameLen;
-						ftBuf2ps[i1][i0 * 2 + 1] /= p.pvocFrameLen;
+						magn[i1] = synMagn[i1][i0]; // get magnitude and true frequency from synthesis arrays						
 
-						//if (i1 == 0){ // DEBUG
-						//	ss_outBuf += ftBuf2ps[i1][i0 * 2] * ftBuf2ps[i1][i0 * 2];
+						p_tmp[i1] = synFreq[i1][i0];
+							
+						p_tmp[i1] -= (double)i0 * freqPerBin;	// subtract bin mid frequency		
+						p_tmp[i1] /= freqPerBin;	// get bin deviation from freq deviation
+						p_tmp[i1] = 2. * M_PI * p_tmp[i1] / osamp;	// take osamp into account
+						p_tmp[i1] += (double)i0 * expct;		// add the overlap phase advance back in
+							
+						sumPhase[i1][ifb][i0] += p_tmp[i1];		// accumulate delta phase to get bin phase
+						phase[i1] = sumPhase[i1][ifb][i0];
+
+						/* get real and imag part and re-interleave */
+						ftBuf2ps[i1][2 * i0] = magn[i1] * cos(phase[i1]);
+						ftBuf2ps[i1][2 * i0 + 1] = magn[i1] * sin(phase[i1]);			// What causes the sign reversal here?
+
+						//if (i1 == 0) { // DEBUG
+						//	ss_synMagn += ftBuf2ps[i1][2 * i0] * ftBuf2ps[i1][2 * i0] + ftBuf2ps[i1][2 * i0 + 1] * ftBuf2ps[i1][2 * i0 + 1];
 						//}
 					}
 				}
 
-
 				//if (p.pitchShiftRatio[ifb] != 1.0) { // DEBUG
-				//	ss_outBuf += 0.0; // DEBUG
+				//	ss_synMagn += 0.0; // DEBUG
 				//}
-
-				// --- Accumulate to buffer ---
-				for (i0 = 0; i0 < p.pvocFrameLen; i0++){					
-					outFrameBufPS[ifb][(outFrameBuf_circPtr + i0) % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES)] = 
-						outFrameBufPS[ifb][(outFrameBuf_circPtr + i0) % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES)] + 
-						2 * ftBuf2ps[1 - duringPitchShift][2 * i0] * hwin2[i0] / (osamp / 2);
-				}
-
-				//// DEBUG: Amp
-				//for (int n0 = 0; n0 < p.pvocFrameLen; n0++) {
-				//	ss_out += outFrameBufPS[ifb][(outFrameBuf_circPtr + n0) % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES)] * 
-				//		      outFrameBufPS[ifb][(outFrameBuf_circPtr + n0) % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES)];
-				//}
-
-				//out_over_in = ss_out / ss_in;
-				//mytype sqrt_ratio = sqrt(out_over_in);
-
-				///* Amp normalization */
-				//for (int n0 = 0; n0 < p.pvocFrameLen; n0++) {
-				//	outFrameBufPS[ifb][(outFrameBuf_circPtr + n0) % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES)] = 
-				//		outFrameBufPS[ifb][(outFrameBuf_circPtr + n0) % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES)] / sqrt_ratio;
-				//}
-
-				///* Verify */
-				//ss_out = 0.0;
-				//for (int n0 = 0; n0 < p.pvocFrameLen; n0++) {
-				//	ss_out += outFrameBufPS[ifb][(outFrameBuf_circPtr + n0) % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES)] * 
-				//		      outFrameBufPS[ifb][(outFrameBuf_circPtr + n0) % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES)];
-				//}
-
-				//out_over_in = ss_out / ss_in;
-
-				// Front zeroing
-				for (i0 = 0; i0 < p.pvocHop; i0++) {
-					outFrameBufPS[ifb][(outFrameBuf_circPtr + p.pvocFrameLen + i0) % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES)] = 0.;
-				}
-				
-				// Back Zeroing
-				for (i0 = 1; i0 <= p.pvocHop; i0++){ // Ad hoc alert!
-					outFrameBufPS[ifb][(outFrameBuf_circPtr - p.delayFrames[ifb] * p.frameLen - i0) % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES)] = 0.;						
-				}								
 			}
+
+			/* if (duringPitchShift_prev == true && duringPitchShift == false) { // DEBUG
+				mexPrintf("Falling edge: frame_counter = %d\n", frame_counter);
+			}
+			else if  (duringPitchShift_prev == false && duringPitchShift == true) { // DEBUG
+				mexPrintf("Rising edge: frame_counter = %d\n", frame_counter);
+			} */
+
+			for (i0 = p.pvocFrameLen + 1; i0 < p.pvocFrameLen * 2; i0++) {
+				for (int i1 = 0; i1 < 2; i1++) {
+					ftBuf2ps[i1][i0] = 0.;
+				}
+			}
+			
+			/* Inverse Fourier transform */				
+			for (int i1 = 0; i1 < 2; i1 ++ ) {
+				DSPF_dp_icfftr2(p.pvocFrameLen, ftBuf2ps[i1], fftc_ps0, 1);
+				bit_rev(ftBuf2ps[i1], p.pvocFrameLen);
+				for (i0 = 0; i0 < p.pvocFrameLen; i0++){
+					ftBuf2ps[i1][i0 * 2] /= p.pvocFrameLen;
+					ftBuf2ps[i1][i0 * 2 + 1] /= p.pvocFrameLen;
+
+					//if (i1 == 0){ // DEBUG
+					//	ss_outBuf += ftBuf2ps[i1][i0 * 2] * ftBuf2ps[i1][i0 * 2];
+					//}
+				}
+			}
+
+
+			//if (p.pitchShiftRatio[ifb] != 1.0) { // DEBUG: amp
+			//	ss_outBuf += 0.0; // DEBUG: amp
+			//}
+
+			// --- Accumulate to buffer ---
+			for (i0 = 0; i0 < p.pvocFrameLen; i0++){					
+				outFrameBufPS[ifb][(outFrameBuf_circPtr + i0) % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES)] = 
+					outFrameBufPS[ifb][(outFrameBuf_circPtr + i0) % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES)] + 
+					2 * ftBuf2ps[1 - duringPitchShift][2 * i0] * hwin2[i0] / (osamp / 2);
+			}			
+
+			// Front zeroing
+			for (i0 = 0; i0 < p.pvocHop; i0++) {
+				outFrameBufPS[ifb][(outFrameBuf_circPtr + p.pvocFrameLen + i0) % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES)] = 0.;
+			}
+				
+			// Back Zeroing
+			for (i0 = 1; i0 <= p.pvocHop; i0++){ // Ad hoc alert!
+				outFrameBufPS[ifb][(outFrameBuf_circPtr - p.delayFrames[ifb] * p.frameLen - i0) % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES)] = 0.;						
+			}			
 
 		}
 
@@ -1916,6 +1911,16 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 
 	offs++;
 	data_recorder[offs][data_counter] = p.pitchShiftRatio[0];
+
+	offs++;
+	if (isPvocFrame) {
+		data_recorder[offs][data_counter] = ms_in;
+	}
+	else {
+		if (data_counter > 0) {
+			data_recorder[offs][data_counter] = data_recorder[offs][data_counter - 1];
+		}
+	}
 
 	data_counter++;
 	circ_counter= data_counter % MAX_PITCHLEN;
@@ -1949,27 +1954,84 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 
 	//SCai(2012/09/08) Blueshift: Sum to cumulative buffer (p.nFB)
 	for (int n0 = 0; n0 < p.frameLen; n0++) {
-		outFrameBufSum[n0] = 0;
+		outFrameBufSum[n0 + p.pvocFrameLen - p.frameLen] = 0;
 		for (int m0 = 0; m0 < p.nFB; m0++) {
 			if (p.mute[m0] == 0)
-				outFrameBufSum[n0] += outFrameBufPS[m0][optr[m0] + n0] * p.gain[m0];
-			//TODO: separate gains
+				outFrameBufSum[n0 + p.pvocFrameLen - p.frameLen] += outFrameBufPS[m0][optr[m0] + n0] * p.gain[m0];
 		}
 	}
 
+	if (p.bPitchShift == 1 && p.bPvocAmpNorm == 1) {
+		/* Circularly move the non-normalized cumulative buffer: outFrameBufSum2 */
+		DSPF_dp_blk_move(outFrameBufSum2 + p.frameLen, 
+						 outFrameBufSum2, 
+						 p.pvocFrameLen - p.frameLen);
+
+		/* Move to outFrameBufSum2: the non-normalized cumulative buffer */	
+		DSPF_dp_blk_move(outFrameBufSum + p.pvocFrameLen - p.frameLen, 
+						 outFrameBufSum2 + p.pvocFrameLen - p.frameLen, 
+						 p.frameLen);
+	
+		// DEBUG: amp normalization
+		int nzCnt = 0;
+		for (int n0 = 0; n0 < p.pvocFrameLen; n0++) {
+			if (outFrameBufSum2[n0] != 0) {
+				ms_out += outFrameBufSum2[n0] * outFrameBufSum2[n0];
+				nzCnt++;
+			}
+		}
+		ms_out /= (mytype) nzCnt;
+
+		offs++;
+		data_recorder[offs][data_counter] = ms_out;
+
+		if (isPvocFrame == 1
+			//&& (frame_counter_nowarp - (p.nDelay - 1) > p.pvocFrameLen / p.frameLen)
+			&& (nzCnt == p.pvocFrameLen)) {
+				out_over_in = ms_out / ms_in;
+				amp_ratio = sqrt(out_over_in);
+		}
+
+		mytype t_amp_ratio;
+		mytype trans_n;
+
+		if (p.pvocAmpNormTrans <= p.frameLen)
+			trans_n = p.pvocAmpNormTrans;
+		else
+			trans_n = p.frameLen;
+
+		for (int n0 = 0; n0 < p.frameLen; n0++) {
+			for (int m0 = 0; m0 < p.nFB; m0++) {
+				if (n0 < trans_n) {
+					t_amp_ratio = amp_ratio_prev + (amp_ratio - amp_ratio_prev) / trans_n * n0;
+				}
+				else {
+					t_amp_ratio = amp_ratio;
+				}
+
+				outFrameBufSum[n0 + p.pvocFrameLen - p.frameLen] /= t_amp_ratio;
+			}
+		}
+
+		amp_ratio_prev = amp_ratio;
+	}
+
+	offs++;
+	data_recorder[offs][data_counter] = ms_out;
+
 	if (p.fb == 0) {	// Mute
 		for(n = 0;n < p.frameLen; n++){
-			outFrameBufSum[n] = 0;
+			outFrameBufSum[n + p.pvocFrameLen - p.frameLen] = 0;
 		}
 	}
 	else if (p.fb >= 2 && p.fb <= 4) {
 		for(n = 0;n < p.frameLen; n++) {
 			if (p.fb == 2)	// noise only
-				outFrameBufSum[n] = data_pb[pbCounter];
+				outFrameBufSum[n + p.pvocFrameLen - p.frameLen] = data_pb[pbCounter];
 			else if (p.fb == 3)	// voice + noise				
-				outFrameBufSum[n] = outFrameBufSum[n] + data_pb[pbCounter] * p.fb3Gain;
+				outFrameBufSum[n + p.pvocFrameLen - p.frameLen] = outFrameBufSum[n + p.pvocFrameLen - p.frameLen] + data_pb[pbCounter] * p.fb3Gain;
 			else if (p.fb == 4)	// Speech-modulated noise	
-				outFrameBufSum[n] = data_pb[pbCounter] * rms_fb * p.fb4Gain * p.dScale;
+				outFrameBufSum[n + p.pvocFrameLen - p.frameLen] = data_pb[pbCounter] * rms_fb * p.fb4Gain * p.dScale;
 
 			pbCounter += p.downFact;
 			if (pbCounter >= MAX_PB_SIZE)
@@ -1980,7 +2042,7 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 	if (p.bRecord)
 	{// recording signal output
 		//DSPF_dp_blk_move(&outFrameBufPS[optr], &signal_recorder[1][frame_counter*p.frameLen], p.frameLen);
-		DSPF_dp_blk_move(&outFrameBufSum[0], 
+		DSPF_dp_blk_move(outFrameBufSum + p.pvocFrameLen - p.frameLen, 
 						 &signal_recorder[1][frame_counter * p.frameLen], 
 						 p.frameLen);
 	}
@@ -1990,9 +2052,11 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 	//upSampSig(&srfilt_b[0], &srfilt_a[0], &outFrameBufPS[0][optr[0]], 
 	//	      &srfilt_buf[0], &outFrame_ptr[0], &srfilt_delay_up[0], p.frameLen * p.downFact, 
 	//		  N_COEFFS_SRFILT, p.downFact, p.dScale);
-	upSampSig(&srfilt_b[0], &srfilt_a[0], &outFrameBufSum[0], 
+	upSampSig(&srfilt_b[0], &srfilt_a[0], outFrameBufSum + p.pvocFrameLen - p.frameLen, 
 		      &srfilt_buf[0], outputBuf, &srfilt_delay_up[0], p.frameLen * p.downFact, 
 			  N_COEFFS_SRFILT ,p.downFact, p.dScale);
+
+	
 
 	outFrameBuf_circPtr += p.frameLen;
 	if (outFrameBuf_circPtr >= MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES){

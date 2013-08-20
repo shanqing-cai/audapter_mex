@@ -316,7 +316,7 @@ void mexFunction( int nlhs, mxArray *plhs[],
 					signal_ptr[size + ii] = algosignal_ptr[MAX_REC_SIZE + ii];
 				}
 
-				// data 
+				// data
 				algodata_ptr = algo.getdata(size,vecsize);
 				plhs[1] = mxCreateDoubleMatrix(size,vecsize, mxREAL);
 				data_ptr = mxGetPr(plhs[1]);
