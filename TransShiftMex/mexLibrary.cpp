@@ -1,5 +1,5 @@
 #include "mex.h"
-#include "TransShift.h"
+#include "Audapter.h"
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -68,17 +68,19 @@ void mexFunction( int nlhs, mxArray *plhs[],
 {
 	unsigned int i0;
 	int action;	
-	mytype  *signal_ptr,*data_ptr;
-	const mytype  *algosignal_ptr, *algodata_ptr, *algobuf_ptr;
-	mytype   retval = 0;
-	mytype   value= 0;
+	dtype  *signal_ptr,*data_ptr;
+	const dtype  *algosignal_ptr, *algodata_ptr, *algobuf_ptr;
+	dtype   retval = 0;
+	dtype   value= 0;
 	int size=1;
 	int vecsize=1;
 	int toPrompt=0;
-	static TransShift algo;		//SC algo is a TransShift class object. Notice it is a static pointer.
+
+	static Audapter audapter;		//SC audapter is a Audapter class object. Notice it is a static pointer.
 	static audioIO audio_obj;	//SC Refer to the audioIO project
 	static	DeviceParams devpar;//SC DeviceParams is a struct, fields: num, chans, fs, set
-	static bool started = 0;	
+	static bool started = 0;
+
 	int frame_len;
 	int t_downFact;
 	int activeDeviceNum;
@@ -138,7 +140,7 @@ void mexFunction( int nlhs, mxArray *plhs[],
 		//LPCWSTR in_wav_fn = L"E:\\speechres\\blueshift\\mcode\\test1.wav";
 
 	if (action == 1 || action == 11 || action == 12 || action == 13) { /* Audio I and/or O required: determine the device number */
-		if (strlen(algo.deviceName) == 0) { /* In which case we select the first suitable device */
+		if (strlen(audapter.deviceName) == 0) { /* In which case we select the first suitable device */
 			for(i0 = 0; i0 < audio_obj.devices.size(); i0++) {
 				if ((audio_obj.devices[i0].inputChannels > 0) && (audio_obj.devices[i0].outputChannels > 0)) { // Find the first active output device
 					activeDeviceNum = i0 + 1;
@@ -153,7 +155,7 @@ void mexFunction( int nlhs, mxArray *plhs[],
 		else {
 			bool devFound = false;
 			for(i0 = 0; i0 < audio_obj.devices.size(); i0++) {
-				if (strstr(audio_obj.devices[i0].name.c_str(), algo.deviceName) != NULL
+				if (strstr(audio_obj.devices[i0].name.c_str(), audapter.deviceName) != NULL
 					&& audio_obj.devices[i0].inputChannels > 0
 					&& audio_obj.devices[i0].outputChannels > 0) { // Find the first active output device
 					activeDeviceNum = i0 + 1;
@@ -163,7 +165,7 @@ void mexFunction( int nlhs, mxArray *plhs[],
 			}
 
 			if (!devFound) {
-				sprintf_s(tmpMsg, sizeof(tmpMsg), "Cannot find device with specified name: \"%s\"", algo.deviceName);
+				sprintf_s(tmpMsg, sizeof(tmpMsg), "Cannot find device with specified name: \"%s\"", audapter.deviceName);
 				mexErrMsgTxt(tmpMsg);
 			}
 		}
@@ -172,7 +174,7 @@ void mexFunction( int nlhs, mxArray *plhs[],
 	switch (action){
 		case 0:		//SC enumerate all the audio devices
 			mexPrintf("Information: \n");
-			mexPrintf("User-selected deviceName = \"%s\"\n", algo.deviceName);
+			mexPrintf("User-selected deviceName = \"%s\"\n", audapter.deviceName);
 
 			for(i0 = 0; i0 < audio_obj.devices.size(); i0++)
 			{
@@ -182,11 +184,11 @@ void mexFunction( int nlhs, mxArray *plhs[],
 					mexPrintf("[O]: %d : %s", i0, audio_obj.devices[i0].name.c_str());
 
 				if (audio_obj.devices[i0].inputChannels > 0 && audio_obj.devices[i0].outputChannels > 0) {
-					if (strlen(algo.deviceName) == 0) {
+					if (strlen(audapter.deviceName) == 0) {
 						mexPrintf("\n");
 					}
 					else {
-						if (strstr(audio_obj.devices[i0].name.c_str(), algo.deviceName) != NULL) {
+						if (strstr(audio_obj.devices[i0].name.c_str(), audapter.deviceName) != NULL) {
 							mexPrintf(" (Match)\n");
 						}
 						else {
@@ -196,17 +198,17 @@ void mexFunction( int nlhs, mxArray *plhs[],
 				}
 			}
 
-			frame_len = algo.getparams((void *)"framelen");
-			t_downFact = algo.getparams((void *)"downfact");
+			frame_len = audapter.getparams((void *)"framelen");
+			t_downFact = audapter.getparams((void *)"downfact");
 
-			audio_obj.setcallbackparams(frame_len * t_downFact, (void *)&algoCallbackFunc, (void *)&algo);			
+			audio_obj.setcallbackparams(frame_len * t_downFact, (void *)&algoCallbackFunc, (void *)&audapter);			
 			break;
 
 		case 1:			//SC set audio device parameters and start the action
-			t_downFact = algo.getparams((void *)"downfact");
-			audio_obj.setcallbackparams(algo.getparams((void *)"framelen") * t_downFact, (void *)&algoCallbackFunc, (void *)&algo);			
+			t_downFact = audapter.getparams((void *)"downfact");
+			audio_obj.setcallbackparams(audapter.getparams((void *)"framelen") * t_downFact, (void *)&algoCallbackFunc, (void *)&audapter);			
 			
-			devpar.fs = algo.getparams((void *)"srate") * t_downFact;	//SC device sampling rate
+			devpar.fs = audapter.getparams((void *)"srate") * t_downFact;	//SC device sampling rate
 
 			devpar.num = activeDeviceNum;
 			devpar.chans = 1;
@@ -218,7 +220,7 @@ void mexFunction( int nlhs, mxArray *plhs[],
 			if (!started)
 			{
 				printf("Action Start:  %d\n", action);
-				algo.reset();			//SC Reset audio device params
+				audapter.reset();			//SC Reset audio device params
 				audio_obj.startdev();	//SC Start audio device. Callback function will be automatically called
 			}
 			else
@@ -238,7 +240,7 @@ void mexFunction( int nlhs, mxArray *plhs[],
 			started = 0;
 			break;
 			
-		case 3:			//SC Set paramters of the algo object
+		case 3:			//SC Set paramters of the audapter object
 			inParNDims = mxGetNumberOfDimensions(prhs[2]);
 			inParSize = mxGetDimensions(prhs[2]);
 
@@ -257,7 +259,7 @@ void mexFunction( int nlhs, mxArray *plhs[],
 			}
 
 			if (nrhs >= 3) {
-				retval = algo.setparams((void *)mxArrayToString(prhs[1]), (void *)mxGetPr(prhs[2]), nPars);
+				retval = audapter.setparams((void *)mxArrayToString(prhs[1]), (void *)mxGetPr(prhs[2]), nPars);
 			}
 
 			toPrompt=1;
@@ -274,18 +276,18 @@ void mexFunction( int nlhs, mxArray *plhs[],
 
 				if (retval == 1 || retval == 3) { /* Integer or boolean values */
 					if (nPars == 1) {
-						mexPrintf("%d", (int) *(mytype *) mxGetPr(prhs[2]));
+						mexPrintf("%d", (int) *(dtype *) mxGetPr(prhs[2]));
 					}
 					else {
-						mexPrintf("%d, ..., %d", (int) *(mytype *) mxGetPr(prhs[2]), (int) *(mytype *) (mxGetPr(prhs[2]) + nPars - 1));
+						mexPrintf("%d, ..., %d", (int) *(dtype *) mxGetPr(prhs[2]), (int) *(dtype *) (mxGetPr(prhs[2]) + nPars - 1));
 					}
 				}
 				else {
 					if (nPars == 1) {
-						mexPrintf("%.3f", *(mytype *) mxGetPr(prhs[2]));
+						mexPrintf("%.3f", *(dtype *) mxGetPr(prhs[2]));
 					}
 					else {
-						mexPrintf("%.3f, ..., %.3f", *(mytype *) mxGetPr(prhs[2]), *(mytype *) (mxGetPr(prhs[2]) + nPars - 1));
+						mexPrintf("%.3f, ..., %.3f", *(dtype *) mxGetPr(prhs[2]), *(dtype *) (mxGetPr(prhs[2]) + nPars - 1));
 					}
 				}
 
@@ -305,7 +307,7 @@ void mexFunction( int nlhs, mxArray *plhs[],
 
 		case 4:			//SC Manually get three outputs: 1
 			// signal
-			algosignal_ptr = algo.getsignal(size);	//SC size is updated in this process: size = frame_counter*p.frameLen
+			algosignal_ptr = audapter.getsignal(size);	//SC size is updated in this process: size = frame_counter*p.frameLen
 			if (size > 0)
 			{
 				plhs[0] = mxCreateDoubleMatrix(size,2, mxREAL);
@@ -313,18 +315,18 @@ void mexFunction( int nlhs, mxArray *plhs[],
 				for(int ii = 0; ii < size; ii++)
 				{
 					signal_ptr[ii] = algosignal_ptr[ii];
-					signal_ptr[size + ii] = algosignal_ptr[MAX_REC_SIZE + ii];
+					signal_ptr[size + ii] = algosignal_ptr[audapter.getMaxRecSize() + ii];
 				}
 
 				// data
-				algodata_ptr = algo.getdata(size,vecsize);
+				algodata_ptr = audapter.getdata(size,vecsize);
 				plhs[1] = mxCreateDoubleMatrix(size,vecsize, mxREAL);
 				data_ptr = mxGetPr(plhs[1]);
 
 				for(int ii = 0; ii < size; ii++)
 				{
 					for(int jj = 0; jj < vecsize; jj++)
-						data_ptr[jj * size + ii] = algodata_ptr[jj * MAX_DATA_SIZE + ii];
+						data_ptr[jj * size + ii] = algodata_ptr[jj * audapter.getMaxDataSize() + ii];
 				}				
 			}
 			else
@@ -337,22 +339,22 @@ void mexFunction( int nlhs, mxArray *plhs[],
 			break;
 
 		case 5:				//SC manually supply the buffer and run the process
-			t_downFact = algo.getparams((void *)"downfact");
+			t_downFact = audapter.getparams((void *)"downfact");
 			data_ptr = (double*)mxGetPr(prhs[1]);	//SC pointer to buffer
-			algoCallbackFuncMono((char *)data_ptr, algo.getparams((void *)"framelen") * t_downFact, (void *)&algo);
+			algoCallbackFuncMono((char *)data_ptr, audapter.getparams((void *)"framelen") * t_downFact, (void *)&audapter);
 			break;
 
-		case 6:				//SC manually reset algo object
-			algo.reset();
+		case 6:				//SC manually reset audapter object
+			audapter.reset();
 			break;
 
 		case 7:				// Read out the outFrameBufPS
-			t_downFact = algo.getparams((void *)"downfact");
-			algobuf_ptr = algo.getOutFrameBufPS();
-			plhs[0] = mxCreateDoubleMatrix(MAX_FRAMELEN * t_downFact * MAX_DELAY_FRAMES, 1, mxREAL);
+			t_downFact = audapter.getparams((void *)"downfact");
+			algobuf_ptr = audapter.getOutFrameBufPS();
+			plhs[0] = mxCreateDoubleMatrix(audapter.getMaxFrameLen() * t_downFact * audapter.getMaxDelayFrames(), 1, mxREAL);
 			signal_ptr = mxGetPr(plhs[0]);
-			for (i0 = 0; i0 < (MAX_FRAMELEN * t_downFact * MAX_DELAY_FRAMES); i0++) {
-				signal_ptr[i0] = algobuf_ptr[i0];
+			for (int i = 0; i < (audapter.getMaxFrameLen() * t_downFact * audapter.getMaxDelayFrames()); i++) {
+				signal_ptr[i] = algobuf_ptr[i];
 			}
 			break;
 
@@ -363,10 +365,10 @@ void mexFunction( int nlhs, mxArray *plhs[],
 				else
 					bVerbose = (int)(*(double *) mxGetPr(prhs[2]));
 
-				strcpy_s(algo.ostfn, sizeof(algo.ostfn), mxArrayToString(prhs[1]));
+				strcpy_s(audapter.ostfn, sizeof(audapter.ostfn), mxArrayToString(prhs[1]));
 				if (bVerbose)
-					printf("ostfn = %s\n", algo.ostfn);
-				algo.readOSTTab(bVerbose);
+					printf("ostfn = %s\n", audapter.ostfn);
+				audapter.readOSTTab(bVerbose);
 			}
 			else {
 				printf("Syntax error.\n");
@@ -381,10 +383,10 @@ void mexFunction( int nlhs, mxArray *plhs[],
 				else
 					bVerbose = (int)(*(double *) mxGetPr(prhs[2]));
 
-				strcpy_s(algo.pipcfgfn, sizeof(algo.pipcfgfn), mxArrayToString(prhs[1]));				
+				strcpy_s(audapter.pipcfgfn, sizeof(audapter.pipcfgfn), mxArrayToString(prhs[1]));				
 				if (bVerbose)
-					printf("pipcfgfn = %s\n", algo.pipcfgfn);
-				algo.readPIPCfg(bVerbose);
+					printf("pipcfgfn = %s\n", audapter.pipcfgfn);
+				audapter.readPIPCfg(bVerbose);
 			}
 			else {
 				printf("Syntax error.\n");
@@ -393,17 +395,17 @@ void mexFunction( int nlhs, mxArray *plhs[],
 			break;
 
 		case 11:			//SC Sine wave generator
-			t_downFact = algo.getparams((void *)"downfact");
-			audio_obj.setcallbackparams(algo.getparams((void *)"framelen") * t_downFact, (void *)&algoCallbackFuncSineGen, (void *)&algo);		
+			t_downFact = audapter.getparams((void *)"downfact");
+			audio_obj.setcallbackparams(audapter.getparams((void *)"framelen") * t_downFact, (void *)&algoCallbackFuncSineGen, (void *)&audapter);		
 
 			devpar.num = activeDeviceNum;
 			devpar.chans = 2;
-			devpar.fs = algo.getparams((void *)"srate") * t_downFact;
+			devpar.fs = audapter.getparams((void *)"srate") * t_downFact;
 			audio_obj.setdevparams(&devpar, 1);
 			devpar.num = activeDeviceNum;
 			audio_obj.setdevparams(&devpar, 2);
 
-			//devpar.fs = algo.getparams((void *)"srate")*DOWNSAMP_FACT;	//SC device sampling rate
+			//devpar.fs = audapter.getparams((void *)"srate")*DOWNSAMP_FACT;	//SC device sampling rate
 			//devpar.num = 0;		
 			//audio_obj.setdevparams(&devpar,1);
 			//devpar.num = 0;		
@@ -412,7 +414,7 @@ void mexFunction( int nlhs, mxArray *plhs[],
 			if (!started)
 			{
 				printf("Action Start:  %d\n", action);
-				algo.reset();			//SC Reset audio device params
+				audapter.reset();			//SC Reset audio device params
 				audio_obj.startdev();	//SC Start audio device. Callback function will be automatically called
 			}
 			else
@@ -421,10 +423,10 @@ void mexFunction( int nlhs, mxArray *plhs[],
 			break;
 
 		case 12:			//SC wave playback
-			t_downFact = algo.getparams((void *)"downfact");
-			audio_obj.setcallbackparams(algo.getparams((void *)"framelen") * t_downFact, (void *)&algoCallbackFuncWavePB, (void *)&algo);
+			t_downFact = audapter.getparams((void *)"downfact");
+			audio_obj.setcallbackparams(audapter.getparams((void *)"framelen") * t_downFact, (void *)&algoCallbackFuncWavePB, (void *)&audapter);
 					
-			devpar.fs = algo.getparams((void *)"srate") * t_downFact;	//SC device sampling rate
+			devpar.fs = audapter.getparams((void *)"srate") * t_downFact;	//SC device sampling rate
 			devpar.num = activeDeviceNum;
 			devpar.chans = 1;
 			audio_obj.setdevparams(&devpar,1);
@@ -434,7 +436,7 @@ void mexFunction( int nlhs, mxArray *plhs[],
 			if (!started)
 			{
 				printf("Action Start:  %d\n", action);
-				algo.reset();			//SC Reset audio device params
+				audapter.reset();			//SC Reset audio device params
 				audio_obj.startdev();	//SC Start audio device. Callback function will be automatically called
 			}
 			else
@@ -443,12 +445,12 @@ void mexFunction( int nlhs, mxArray *plhs[],
 			break;
 
 		case 13:		//SC Tone sequence generator
-			t_downFact = algo.getparams((void *)"downfact");
-			audio_obj.setcallbackparams(algo.getparams((void *)"framelen") * t_downFact, (void *)&algoCallbackFuncToneSeq, (void *)&algo);
+			t_downFact = audapter.getparams((void *)"downfact");
+			audio_obj.setcallbackparams(audapter.getparams((void *)"framelen") * t_downFact, (void *)&algoCallbackFuncToneSeq, (void *)&audapter);
 				
-			devpar.fs = algo.getparams((void *)"srate") * t_downFact;	//SC device sampling rate
+			devpar.fs = audapter.getparams((void *)"srate") * t_downFact;	//SC device sampling rate
 
-			algo.tsgRecCounter = 0;
+			audapter.tsgRecCounter = 0;
 
 			devpar.num = activeDeviceNum;
 			devpar.chans = 2;
@@ -459,7 +461,7 @@ void mexFunction( int nlhs, mxArray *plhs[],
 			if (!started)
 			{
 				printf("Action Start:  %d\n", action);
-				algo.reset();			//SC Reset audio device params
+				audapter.reset();			//SC Reset audio device params
 				audio_obj.startdev();	//SC Start audio device. Callback function will be automatically called
 			}
 			else
@@ -485,8 +487,8 @@ void mexFunction( int nlhs, mxArray *plhs[],
 				return;
 			}
 
-			for (n = 0; n < algo.tsgRecCounter; n++) {
-				if ((nwrit = fprintf(tsgWavF, "%.6f\n", algo.tsg_wf[n])) < 0) {
+			for (n = 0; n < audapter.tsgRecCounter; n++) {
+				if ((nwrit = fprintf(tsgWavF, "%.6f\n", audapter.tsg_wf[n])) < 0) {
 					mexPrintf("ERROR: Error occurred during writing to file: %s\n", tsgWavFN);
 					fclose(tsgWavF);
 					return;
@@ -499,10 +501,10 @@ void mexFunction( int nlhs, mxArray *plhs[],
 			break;
 
 		case 21:	//SC(2012/02/29) Write data to binary file
-			algosignal_ptr = algo.getsignal(size);	//SC size is updated in this process: size = frame_counter*p.frameLen
+			algosignal_ptr = audapter.getsignal(size);	//SC size is updated in this process: size = frame_counter*p.frameLen
 			if (size > 0){
-				//printf("Writing data to file data0.bin: size = %d (%d bytes)\n", size, size * (sizeof mytype));
-				printf("Writing data to file data0.bin: size = %d (%d bytes)\n", MAX_REC_SIZE, MAX_REC_SIZE * (sizeof mytype));
+				//printf("Writing data to file data0.bin: size = %d (%d bytes)\n", size, size * (sizeof dtype));
+				printf("Writing data to file data0.bin: size = %d (%d bytes)\n", audapter.getMaxRecSize(), audapter.getMaxRecSize() * (sizeof dtype));
 				ofstream dataFileCl ("data0.bin");
 				dataFileCl.close();
 
@@ -511,31 +513,30 @@ void mexFunction( int nlhs, mxArray *plhs[],
 					printf("WARNING: Cannot open file data0.bin\n");
 				}
 
-				dataFile.write((char *) algosignal_ptr, MAX_REC_SIZE * (sizeof mytype));
+				dataFile.write((char *) algosignal_ptr, audapter.getMaxRecSize() * (sizeof dtype));
 				dataFile.close();
 			}
 			break;
 
 		case 22:			//SC Manually get the entire recording buffer
 			// signal
-			//algosignal_ptr = algo.getsignal(size);	//SC size is updated in this process: size = frame_counter*p.frameLen
-			plhs[0] = mxCreateDoubleMatrix(MAX_REC_SIZE, 1, mxREAL);
+			//algosignal_ptr = audapter.getsignal(size);	//SC size is updated in this process: size = frame_counter*p.frameLen
+			plhs[0] = mxCreateDoubleMatrix(audapter.getMaxRecSize(), 1, mxREAL);
 			signal_ptr = mxGetPr(plhs[0]);
-			algosignal_ptr = algo.getsignal(size);
-			for(i0=0; i0 < MAX_REC_SIZE;i0++)
-			{
-				signal_ptr[i0] = algosignal_ptr[i0];
+			algosignal_ptr = audapter.getsignal(size);
+			for(int i = 0; i < audapter.getMaxRecSize(); i++) {
+				signal_ptr[i] = algosignal_ptr[i];
 			}
 				
 			break;
 
 		case 23:			// SC Manually get the entire playback buffer
-			plhs[0] = mxCreateDoubleMatrix(MAX_REC_SIZE, 1, mxREAL);
+			plhs[0] = mxCreateDoubleMatrix(audapter.getMaxRecSize(), 1, mxREAL);
 			signal_ptr = mxGetPr(plhs[0]);
-			algosignal_ptr = algo.getsignal(size);
-			for(i0=0; i0 < MAX_REC_SIZE;i0++)
+			algosignal_ptr = audapter.getsignal(size);
+			for(int i = 0; i < audapter.getMaxRecSize(); i++)
 			{
-				signal_ptr[i0] = algosignal_ptr[MAX_REC_SIZE+i0];
+				signal_ptr[i] = algosignal_ptr[audapter.getMaxRecSize() + i];
 			}
 
 				
@@ -548,8 +549,8 @@ void mexFunction( int nlhs, mxArray *plhs[],
 				return;
 			}			
 
-			sprintf_s(algo.wavFileBase, "%s", mxArrayToString(prhs[1]));
-			printf("algo.wavFileBase = %s\n", algo.wavFileBase);
+			sprintf_s(audapter.wavFileBase, "%s", mxArrayToString(prhs[1]));
+			printf("audapter.wavFileBase = %s\n", audapter.wavFileBase);
 
 			break;
 
@@ -558,7 +559,7 @@ void mexFunction( int nlhs, mxArray *plhs[],
 				printf("Usage: TransShiftMex(31);\n");
 				return;
 			}
-			algo.writeSignalsToWavFile();
+			audapter.writeSignalsToWavFile();
 			break;
 
 		case 100:
@@ -576,11 +577,11 @@ void mexFunction( int nlhs, mxArray *plhs[],
 						mexErrMsgTxt("Input deviceName is not a char string");
 					}
 					else {
-						if (mxGetString(prhs[1], algo.deviceName, inParSize[1] + 1)) {
+						if (mxGetString(prhs[1], audapter.deviceName, inParSize[1] + 1)) {
 							mexErrMsgTxt("Input deviceName is not a char string");
 						}
 						else {
-							sprintf_s(tmpMsg, sizeof(tmpMsg), "Set deviceName to: %s\n", algo.deviceName);
+							sprintf_s(tmpMsg, sizeof(tmpMsg), "Set deviceName to: %s\n", audapter.deviceName);
 							mexPrintf(tmpMsg);
 						}
 					}

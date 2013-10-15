@@ -21,12 +21,12 @@
     <ClCompile Include="mexLibrary.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="TransShift.cpp">
+    <ClCompile Include="Audapter.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="TransShift.h">
+    <ClInclude Include="Audapter.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

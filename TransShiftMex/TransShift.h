@@ -1,9 +1,10 @@
-/* 01/07/2007
+/* 
 TransShift.h
 
 Defines the interface for the [a]-->[i] transition shifting algorithm
 
 (c) 2007 Marc Boucek
+(c) 2013 Shanqing Cai
 speech communication group, RLE @MIT
 */
 

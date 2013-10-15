@@ -1,5 +1,5 @@
 /*
-TransShift.cpp
+Audaper.cpp
 
 Vowel formant shifting algorithm
 Can be used to shift formant frequencies of pure vowels or time-varying vowels (diphthongs or tripththongs) in 
@@ -26,7 +26,7 @@ Speech Laboratory, Boston University
 
 #define TRACE printf
 
-#include "TransShift.h"
+#include "Audapter.h"
 #include <math.h>
 
 //#include <iostream>
@@ -71,12 +71,12 @@ LONGLONG overhead;
 // Non-class function that is called by the audioIO routines when data becomes available
 int algoCallbackFunc(char *buffer, int buffer_size, void * data)	//SC The input is 8-bit, so char type is proper for buffer.
 {
-	TransShift *algo = (TransShift*)data;	//SC copy data to algo
+	Audapter *audapter = (Audapter*)data;	//SC copy data to audapter
 #ifdef TIME_IT
 	QueryPerformanceCounter(&time1);
 #endif
 
-	algo->handleBuffer((mytype*)buffer, (mytype*)buffer, buffer_size, false);		//SC(12/19/2007)
+	audapter->handleBuffer((dtype*)buffer, (dtype*)buffer, buffer_size, false);		//SC(12/19/2007)
 
 #ifdef TIME_IT
 	QueryPerformanceCounter(&time2);
@@ -87,12 +87,12 @@ int algoCallbackFunc(char *buffer, int buffer_size, void * data)	//SC The input 
 
 int algoCallbackFunc_zeroBuffer(char *buffer, int buffer_size, void * data)	//SC The input is 8-bit, so char type is proper for buffer.
 {
-	TransShift *algo = (TransShift*)data;	//SC copy data to algo
+	Audapter *audapter = (Audapter*)data;	//SC copy data to audapter
 #ifdef TIME_IT
 	QueryPerformanceCounter(&time1);
 #endif
 
-	/* algo->handleBuffer((mytype*)buffer, (mytype*)buffer, buffer_size, false);		//SC(12/19/2007) */
+	/* audapter->handleBuffer((dtype*)buffer, (dtype*)buffer, buffer_size, false);		//SC(12/19/2007) */
 
 
 #ifdef TIME_IT
@@ -105,12 +105,12 @@ int algoCallbackFunc_zeroBuffer(char *buffer, int buffer_size, void * data)	//SC
 // Non-class function that is called by the audioIO routines when data becomes available
 int algoCallbackFuncMono(char *buffer, int buffer_size, void * data)	//SC The input is 8-bit, so char type is proper for buffer.
 {
-	TransShift *algo = (TransShift*)data;	//SC copy data to algo
+	Audapter *audapter = (Audapter*)data;	//SC copy data to audapter
 #ifdef TIME_IT
 	QueryPerformanceCounter(&time1);
 #endif
 
-	algo->handleBuffer((mytype*)buffer, (mytype*)buffer, buffer_size, true);		//SC(12/19/2007)
+	audapter->handleBuffer((dtype*)buffer, (dtype*)buffer, buffer_size, true);		//SC(12/19/2007)
 
 #ifdef TIME_IT
 	QueryPerformanceCounter(&time2);
@@ -121,14 +121,14 @@ int algoCallbackFuncMono(char *buffer, int buffer_size, void * data)	//SC The in
 
 int algoCallbackFuncToneSeq(char *buffer, int buffer_size, void * data)	//SC Tone sequence generator
 {
-	TransShift *algo = (TransShift*)data;	//SC copy data to algo
+	Audapter *audapter = (Audapter*)data;	//SC copy data to audapter
 #ifdef TIME_IT
 	QueryPerformanceCounter(&time1);
 #endif
 	//TRACE("%d\n",buffer_size);
 	//DSPF_dp_blk_move((MY_TYPE*)buffer, (MY_TYPE*)buffer, buffer_size);
 
-	algo->handleBufferToneSeq((mytype*)buffer, (mytype*)buffer, buffer_size);
+	audapter->handleBufferToneSeq((dtype*)buffer, (dtype*)buffer, buffer_size);
 
 
 #ifdef TIME_IT
@@ -140,14 +140,14 @@ int algoCallbackFuncToneSeq(char *buffer, int buffer_size, void * data)	//SC Ton
 
 int algoCallbackFuncSineGen(char *buffer, int buffer_size, void * data)	//SC sine wave generator
 {
-	TransShift *algo = (TransShift*)data;	//SC copy data to algo
+	Audapter *audapter = (Audapter*)data;	//SC copy data to audapter
 #ifdef TIME_IT
 	QueryPerformanceCounter(&time1);
 #endif
 	//TRACE("%d\n",buffer_size);
 	//DSPF_dp_blk_move((MY_TYPE*)buffer, (MY_TYPE*)buffer, buffer_size);
 
-	algo->handleBufferSineGen((mytype*)buffer, (mytype*)buffer, buffer_size);
+	audapter->handleBufferSineGen((dtype*)buffer, (dtype*)buffer, buffer_size);
 
 
 #ifdef TIME_IT
@@ -159,12 +159,12 @@ int algoCallbackFuncSineGen(char *buffer, int buffer_size, void * data)	//SC sin
 
 int algoCallbackFuncWavePB(char *buffer, int buffer_size, void * data)	//SC sine wave generator
 {
-	TransShift *algo = (TransShift*)data;	//SC copy data to algo
+	Audapter *audapter = (Audapter*)data;	//SC copy data to audapter
 #ifdef TIME_IT
 	QueryPerformanceCounter(&time1);
 #endif
 
-	algo->handleBufferWavePB((mytype*)buffer, (mytype*)buffer, buffer_size);
+	audapter->handleBufferWavePB((dtype*)buffer, (dtype*)buffer, buffer_size);
 
 
 #ifdef TIME_IT
@@ -198,7 +198,7 @@ void init_pipCfg(PIP_CFG *pipCfg) {
 
 }
 
-TransShift::TransShift()		//SC construction function
+Audapter::Audapter()		//SC construction function
 {//modifiable parameters ( most of them can be modified externally) 
 		int		n;
 		
@@ -207,7 +207,7 @@ TransShift::TransShift()		//SC construction function
 		init_ostTab(&ostTab);
 		init_pipCfg(&pipCfg);
 		
-		p.downFact			= DOWNSAMP_FACT_DEFAULT;
+		p.downFact			= downSampFact_default;
 		
 		p.sr				= 48000 / p.downFact;				// internal samplerate (souncard samplerate = p.sr*DOWNSAMP_FACT)
 		p.nLPC				= 13;					// LPC order ... number of lpc coeefs= nLPC +1
@@ -283,16 +283,16 @@ TransShift::TransShift()		//SC construction function
 
 		//SC(2012/03/05)
 		p.bPitchShift		= 0;
-		for (n = 0; n < MAX_N_VOICES; n++)
+		for (n = 0; n < maxNVoices; n++)
 			p.pitchShiftRatio[n]   = 1.;	// 1. = no shift.
 		
 		//SC Initialize the playback data and the counter
-		for(n=0;n<MAX_PB_SIZE;n++){
+		for(n=0;n<maxPBSize;n++){
 			data_pb[n]      = 0;
 		}
 		pbCounter			= 0;
 
-		for (n = 0; n < MAX_TONESEQ_REC_LEN; n++) {
+		for (n = 0; n < maxToneSeqRecLen; n++) {
 			tsg_wf[n] = 0.0;
 		}
 		tsgRecCounter = 0;
@@ -308,7 +308,7 @@ TransShift::TransShift()		//SC construction function
 		p.LBk		= 0;		// The slope of a tilted boundary: F2 = p.LBk * F1 + p.LBb. (mel/mel)
 		p.LBb		= 0;		// The intercept of a tilted boundary (mel)
 
-		for(n=0;n<PF_NPOINTS;n++){
+		for(n=0;n<pfNPoints;n++){
 			p.pertF2[n]=0;			// Independent variable of the perturbation vectors
 			p.pertAmp[n]=0;			// Magnitude of the perturbation vectors (mel)
 			p.pertPhi[n]=0;			// Angle of the perturbation vectors (rad). 0 corresponds to the x+ axis. Increase in the countetclockwise direction. 
@@ -329,7 +329,7 @@ TransShift::TransShift()		//SC construction function
 		p.rampLen=0.05;	//sec
 
 		//SC(2012/02/28) DAF
-		for (n = 0; n < MAX_N_VOICES; n++) {
+		for (n = 0; n < maxNVoices; n++) {
 			p.delayFrames[n] = 0; // Unit: # of frames (no delay by default)
 			p.gain[n] = 1.0;
 			p.mute[n] = 0;
@@ -352,7 +352,7 @@ TransShift::TransShift()		//SC construction function
 
 		//SC(2009/12/01)
 		p.tsgNTones=0;
-		for (n=0;n<MAX_NTONES;n++){
+		for (n=0;n<maxNTones;n++){
 			p.tsgToneFreq[n]=0;
 			p.tsgToneDur[n]=0;
 			p.tsgToneAmp[n]=0;
@@ -368,7 +368,7 @@ TransShift::TransShift()		//SC construction function
 		p.pvocAmpNormTrans = 16;
 
 		rmsSlopeWin = 0.03; // Unit: s
-		rmsSlopeN = (int)(rmsSlopeWin / ((mytype)p.frameLen / (mytype)p.sr));
+		rmsSlopeN = (int)(rmsSlopeWin / ((dtype)p.frameLen / (dtype)p.sr));
 //************************************** Initialize filter coefs **************************************	
 
 	intShiftRatio = 1.0;
@@ -483,15 +483,15 @@ TransShift::TransShift()		//SC construction function
 	srfilt_a[20] = 0.000035865709068928935000;
 
 	//SC-Mod(2008/05/15) FFT related
-	gen_w_r2(fftc, NFFT);
-	gen_w_r2(fftc_ps, MAX_NFFT);
+	gen_w_r2(fftc, nFFT);
+	gen_w_r2(fftc_ps, max_nFFT);
 
 	//SC(2009/02/06) RMS level clipping protection. 
 	p.bRMSClip = 1;
 	p.rmsClipThresh = 1.0;
 
 	// Pitch and frequency shifting-related
-	for (int i0 = 0; i0 < MAX_NFFT; i0++){
+	for (int i0 = 0; i0 < max_nFFT; i0++){
 		fftc_ps0[i0] = 0;
 		fftc_ps[i0] = 0;
 	}
@@ -507,7 +507,7 @@ TransShift::TransShift()		//SC construction function
 	reset();
 }
 
-TransShift::~TransShift(){
+Audapter::~Audapter(){
 	/*delete [] data_recorder;
 	delete [] signal_recorder;
 	data_recorder=NULL;
@@ -515,7 +515,7 @@ TransShift::~TransShift(){
 }
 
 
-void TransShift::reset()
+void Audapter::reset()
 {// resets all 
 	int i0,j0;
 	bTransReset				= true;
@@ -524,27 +524,27 @@ void TransShift::reset()
 
 //*****************************************************  BUFFERS   *****************************************************
 	// Initialize input, output and filter buffers (at original sample rate!!!)
-	for(i0 = 0; i0 < MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT; i0++)
+	for(i0 = 0; i0 < maxFrameLen * downSampFact_default; i0++)
 	{
 		inFrameBuf[i0]=0;		
 		srfilt_buf[i0]=0;
 	}
 
-	for (i0 = 0; i0 < MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES; i0 ++){
+	for (i0 = 0; i0 < internalBufLen; i0 ++){
 		outFrameBuf[i0] = 0;
 
-		for (j0 = 0; j0 < MAX_N_VOICES; j0++)
+		for (j0 = 0; j0 < maxNVoices; j0++)
 			outFrameBufPS[j0][i0] = 0;
 	}
 	outFrameBuf_circPtr = 0;
 
-	for (i0 = 0; i0 < MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT; i0++) {
+	for (i0 = 0; i0 < maxFrameLen * downSampFact_default; i0++) {
 		outFrameBufSum[i0] = 0;
 		outFrameBufSum2[i0] = 0;
 	}
 
 	// Initialize internal input, output buffers  (at downsampled  rate !!!)
-	for(i0=0;i0<MAX_BUFLEN;i0++)
+	for(i0=0;i0<maxBufLen;i0++)
 	{
 		inBuf[i0] = 0;
 		outBuf[i0] = 0;
@@ -566,7 +566,7 @@ void TransShift::reset()
 
 
 	// reinitialize down - and upsampling filter states
-	for(i0=0;i0<N_COEFFS_SRFILT-1;i0++)
+	for(i0=0;i0<nCoeffsSRFilt-1;i0++)
 	{
 		srfilt_delay_up[i0]=0;
 		srfilt_delay_down[i0]=0;
@@ -579,7 +579,7 @@ void TransShift::reset()
 	// Initialize signal recorder
 	for(i0=0;i0<2;i0++)
 	{
-		for(j0=0;j0<MAX_REC_SIZE;j0++)
+		for(j0=0;j0<maxRecSize;j0++)
 		{
 			signal_recorder[i0][j0]=0;
 		}
@@ -587,22 +587,22 @@ void TransShift::reset()
 
 
 	// Initialize data recorder
-	for(i0=0;i0<MAX_DATA_VEC;i0++)
+	for(i0=0;i0<maxDataVec;i0++)
 	{
-		for(j0=0;j0<MAX_DATA_SIZE;j0++)
+		for(j0=0;j0<maxDataSize;j0++)
 		{
 			data_recorder[i0][j0]=0;
 		}
 	}
 
-	for (j0 = 0; j0 < MAX_DATA_SIZE; j0++) {
+	for (j0 = 0; j0 < maxDataSize; j0++) {
 		a_rms_o[j0] = 0;
 		a_rms_o_slp[j0] = 0;
 	}
 
 	// Initialize variables used in the pitch shifting algorithm 
 	// SC(2012/03/05)
-	for (i0 = 0; i0 < NFFT; i0++){
+	for (i0 = 0; i0 < nFFT; i0++){
 		lastPhase[0][i0] = 0.0;
 		lastPhase[1][i0] = 0.0;
 
@@ -611,7 +611,7 @@ void TransShift::reset()
 		
 		outputAccum[i0] = 0;
 
-		for (j0 = 0; j0 < MAX_N_VOICES; j0++)
+		for (j0 = 0; j0 < maxNVoices; j0++)
 			for (int i1 = 0; i1 < 2; i1++)
 				sumPhase[i1][j0][i0] = 0;
 	}
@@ -646,11 +646,11 @@ void TransShift::reset()
 //*****************************************************  getWma    *****************************************************
 
 	// initialize weight matrix and moving sum
-	for(j0=0;j0<MAX_NTRACKS;j0++)
+	for(j0=0;j0<maxNTracks;j0++)
 	{
 		sumWeiPhi[j0]=0;
 		sumWeiBw[j0]=0;
-		for(i0=0;i0<MAX_PITCHLEN;i0++)
+		for(i0=0;i0<maxPitchLen;i0++)
 		{
 			weiVec[i0]=0;
 			weiMatPhi[j0][i0]=0;
@@ -666,14 +666,14 @@ void TransShift::reset()
 
 	// Initialize hanning window
 	for(i0=0;i0<p.anaLen/2;i0++){
-		hwin[i0] = 0.5*cos(mytype(2*M_PI*(i0+1))/mytype(p.anaLen+1)); 
+		hwin[i0] = 0.5*cos(dtype(2*M_PI*(i0+1))/dtype(p.anaLen+1)); 
 		hwin[i0] = 0.5 - hwin[i0];
 		hwin[p.anaLen-i0-1] = hwin[i0];
 	}
 
 	// Initialize hanning window (for frequency / pitch shifting) SC(2012/03/05)
 	for(i0=0;i0<p.pvocFrameLen;i0++){
-		hwin2[i0] = 0.5*cos(mytype(2*M_PI*i0)/mytype(p.pvocFrameLen)); 
+		hwin2[i0] = 0.5*cos(dtype(2*M_PI*i0)/dtype(p.pvocFrameLen)); 
 		hwin2[i0] = 0.5 - hwin2[i0];
 		//hwin2[p.pvocFrameLen-i0-1] = hwin2[i0];
 	}
@@ -693,7 +693,7 @@ void TransShift::reset()
 	dataFileCnt = 0;
 
 	//SC(2012/03/13) PVOC time warp
-	for (int i0 = 0; i0 < MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES / 64; i0++){
+	for (int i0 = 0; i0 < internalBufLen / 64; i0++){
 		for (int i1 = 0; i0 < 1024 * 2; i0++){
 			pvocWarpCache[i0][i1] = 0;
 		}
@@ -710,12 +710,12 @@ void TransShift::reset()
 	phase0 = phase1 = 0.0;
 
 	/* Related to pitch shifting */
-	for (int i0 = 0; i0 < MAX_NFFT * 2; i0++)
+	for (int i0 = 0; i0 < max_nFFT * 2; i0++)
 		for (int i1 = 0; i1 < 2; i1++)
 			ftBuf2ps[i1][i0] = 0.0;
 
-	for (int j0 = 0; j0 < MAX_N_VOICES; j0++) {
-		for (int i0 = 0; i0 < MAX_NFFT; i0++) {
+	for (int j0 = 0; j0 < maxNVoices; j0++) {
+		for (int i0 = 0; i0 < max_nFFT; i0++) {
 			for (int i1 = 0; i1 < 2; i1++) {
 				sumPhase[i1][j0][i0] = 0.0;
 			}			
@@ -746,7 +746,7 @@ return 0;
 }
 
 
-int TransShift::setparams(void * name, void * value, int nPars){
+int Audapter::setparams(void * name, void * value, int nPars){
 	char *arg = (char *)name;
 	int k,n;
 	bool param_set=true;
@@ -761,106 +761,106 @@ int TransShift::setparams(void * name, void * value, int nPars){
 	//TRACE("ALGO: setting param: %s\n", arg);
 	switch (k){
 	case 1: // sample rate
-		p.sr				= (int)(*(mytype *)value);
+		p.sr				= (int)(*(dtype *)value);
 		break;
 	case 2: // frame length = ASIO IO buffer 
-		p.frameLen			= (int)(*(mytype *)value);
+		p.frameLen			= (int)(*(dtype *)value);
 		p.anaLen			= p.frameShift + 2 * (p.nDelay - 1) * p.frameLen;
 		//p.pvocFrameLen			= p.frameShift + (2 * p.nDelay - 3) * p.frameLen;
-		//for (int i0 = 0; i0 < MAX_NFFT; i0++){
+		//for (int i0 = 0; i0 < max_nFFT; i0++){
 		//	fftc_ps0[i0] = 0;
 		//}
 		//gen_w_r2(fftc_ps0, p.pvocFrameLen);
 		break;
 	case 3: // number of delayed buffers : total procesing delay = frameLen*nDelay/samprate
-		p.nDelay			= (int)(*(mytype *)value);
+		p.nDelay			= (int)(*(dtype *)value);
 		p.anaLen			= p.frameShift + 2 * (p.nDelay - 1) * p.frameLen;
 		//p.pvocFrameLen			= p.frameShift + (2 * p.nDelay - 3) * p.frameLen;
-		//for (int i0 = 0; i0 < MAX_NFFT; i0++){
+		//for (int i0 = 0; i0 < max_nFFT; i0++){
 		//	fftc_ps0[i0] = 0;
 		//}
 		//gen_w_r2(fftc_ps0, p.pvocFrameLen);
 		break;
 	case 4: // each frame can be divided in nWin windows (=mini_frames), on which the whole process will be applied 
-		p.nWin				= (int)(*(mytype *)value);
+		p.nWin				= (int)(*(dtype *)value);
 		break;
 	case 5: // LPC order ( number of coeffs = nLPC +1)
-		p.nLPC			    = (int)(*(mytype *)value);
+		p.nLPC			    = (int)(*(dtype *)value);
 		break;
 	case 6: // number of formants to be shifted
-		p.nFmts				= (int)(*(mytype *)value);
+		p.nFmts				= (int)(*(dtype *)value);
 		break;
 	case 7: // number of formants the tracking algorithm will track
-		p.nTracks			= (int)(*(mytype *)value);
+		p.nTracks			= (int)(*(dtype *)value);
 		break;
 	case 8: // weithed moving average len (should be approx one pitch period)
-		p.avgLen			= (int)(*(mytype *)value);
+		p.avgLen			= (int)(*(dtype *)value);
 		break;
 	case 9:	// Window width of low-pass liftering
-		p.cepsWinWidth		= (int)(*(mytype *)value);
+		p.cepsWinWidth		= (int)(*(dtype *)value);
 		break;
 	case 10: // Auditory feedback mode
-		p.fb				= (int)(*(mytype *)value);
+		p.fb				= (int)(*(dtype *)value);
 		break;	
 	case 11: // Minimum allowed vowel length
-		p.minVowelLen		= (int)(*(mytype *)value);
+		p.minVowelLen		= (int)(*(dtype *)value);
 		break;
 	case 12:
-		for (n = 0; n < MAX_N_VOICES && n < p.nFB; n++) {
-			p.delayFrames[n]		= (int)(*((mytype *)value + n));
+		for (n = 0; n < maxNVoices && n < p.nFB; n++) {
+			p.delayFrames[n]		= (int)(*((dtype *)value + n));
 			if (p.delayFrames[n] < 0){
 				TRACE("WARNING: delayFrames[%d] < 0. Set to 0 automatically.\n", n);
 				p.delayFrames[n] = 0;
 			}
-			if (p.delayFrames[n] > MAX_DELAY_FRAMES){
-				TRACE("WARNING: delayFrames[%d] > %d. Set to %d automatically.\n", n, MAX_DELAY_FRAMES, MAX_DELAY_FRAMES);
-				p.delayFrames[n] = MAX_DELAY_FRAMES;
+			if (p.delayFrames[n] > maxDelayFrames){
+				TRACE("WARNING: delayFrames[%d] > %d. Set to %d automatically.\n", n, maxDelayFrames, maxDelayFrames);
+				p.delayFrames[n] = maxDelayFrames;
 			}
 		}
 		break;
 	case 13:
-		p.bPitchShift		= (int)(*(mytype *)value);
+		p.bPitchShift		= (int)(*(dtype *)value);
 		break;
 	case 14:
-		p.pvocFrameLen		= (int)(*(mytype *)value);
+		p.pvocFrameLen		= (int)(*(dtype *)value);
 		for(int i0=0;i0<p.pvocFrameLen;i0++){
-			hwin2[i0] = 0.5*cos(mytype(2*M_PI*i0)/mytype(p.pvocFrameLen)); 
+			hwin2[i0] = 0.5*cos(dtype(2*M_PI*i0)/dtype(p.pvocFrameLen)); 
 			hwin2[i0] = 0.5 - hwin2[i0];
 			//hwin2[p.pvocFrameLen-i0-1] = hwin2[i0];
 		}
-		for (int i0 = 0; i0 < MAX_NFFT; i0++){
+		for (int i0 = 0; i0 < max_nFFT; i0++){
 			fftc_ps0[i0] = 0;
 		}
 		gen_w_r2(fftc_ps0, p.pvocFrameLen);
 		break;
 	case 15:
-		p.pvocHop			= (int)(*(mytype *)value);
+		p.pvocHop			= (int)(*(dtype *)value);
 		break;
 	case 16:
-		p.bDownSampFilt		= (int)(*(mytype *)value);
+		p.bDownSampFilt		= (int)(*(dtype *)value);
 		break;
 	case 17:
-		p.nFB				= (int)(*(mytype *)value);
+		p.nFB				= (int)(*(dtype *)value);
 		break;
 	case 18:
-		for (n = 0; n < MAX_N_VOICES && n < p.nFB; n++) {
-			p.mute[n]		= (int)(*((mytype *)value + n));
+		for (n = 0; n < maxNVoices && n < p.nFB; n++) {
+			p.mute[n]		= (int)(*((dtype *)value + n));
 		}
 		break;
 	case 19:
-		p.tsgNTones			= (int)(*(mytype *)value);
+		p.tsgNTones			= (int)(*(dtype *)value);
 		break;
 	case 20:
-		p.downFact			= (int)(*(mytype *)value);
+		p.downFact			= (int)(*(dtype *)value);
 		break;
 	case 21:
-		p.stereoMode		= (int)(*(mytype *)value);
+		p.stereoMode		= (int)(*(dtype *)value);
 		break;
 	case 22:
-		p.bPvocAmpNorm		= (int)(*(mytype *)value);
+		p.bPvocAmpNorm		= (int)(*(dtype *)value);
 		break;
 	case 23:
-		p.pvocAmpNormTrans	= (int)(*(mytype *)value);
+		p.pvocAmpNormTrans	= (int)(*(dtype *)value);
 		break;
 	default:
 		param_set=false;
@@ -870,7 +870,7 @@ int TransShift::setparams(void * name, void * value, int nPars){
 	{
 		p.frameShift	= p.frameLen/p.nWin;	
 		p.anaLen		= p.frameShift+2*(p.nDelay-1)*p.frameLen;
-		time_step		= (mytype)p.frameShift*1000/p.sr;	//SC Unit: ms
+		time_step		= (dtype)p.frameShift*1000/p.sr;	//SC Unit: ms
 		p.minDetected	= p.nWin;
 		return 1;	/* Return 1: integer parameter */
 	}
@@ -890,152 +890,152 @@ int TransShift::setparams(void * name, void * value, int nPars){
 	k=sw(doubleparamarray, arg, 38);
 	switch (k){
 	case 1: // scaling factor for IO output ( 1 = 0db)
-		p.dScale			= *(mytype *)value;
+		p.dScale			= *(dtype *)value;
 		break;
 	case 2: // preemphasize value
-		p.dPreemp			= *(mytype *)value;
+		p.dPreemp			= *(dtype *)value;
 		break;
 	case 3: // rms threshold value ( to detect voiced regions)
-		p.dRMSThresh		= *(mytype *)value;
+		p.dRMSThresh		= *(dtype *)value;
 		break;
 	case 4: // ratio threshold between preemphasized and original frame ( to detect fricatives)
-		p.dRMSRatioThresh 	= *(mytype *)value;
+		p.dRMSRatioThresh 	= *(dtype *)value;
 		break;
 	case 5: // rms forgetting factor (for smoothing)
-		p.rmsFF 			= *(mytype *)value;
+		p.rmsFF 			= *(dtype *)value;
 		break;
 	case 6: // fmts forgetting factor (for smoothing in trajectory detection)
-		p.dFmtsFF			= *(mytype *)value;
+		p.dFmtsFF			= *(dtype *)value;
 		break;
 	case 7: // Frequency of the sine wave (Hz)
-		p.wgFreq			= *(mytype *)value;
+		p.wgFreq			= *(dtype *)value;
 		break;
 	case 8: // Amplitude of the sine wave (wav amp)
-		p.wgAmp				= *(mytype *)value;
+		p.wgAmp				= *(dtype *)value;
 		break;
 	case 9: // Initial time of the sine wave (equivalent to the initial phase)
-		p.wgTime			= *(mytype *)value;
+		p.wgTime			= *(dtype *)value;
 		break;
 	case 10: // Wave data for playback
-		for (n=0;n<MAX_PB_SIZE;n++){
-			data_pb[n] = *((mytype *)value+n);
+		for (n=0;n<maxPBSize;n++){
+			data_pb[n] = *((dtype *)value+n);
 		}
 		pbCounter=0;
 		break;
 	case 11:
-		p.F2Min			= *(mytype *)value;
+		p.F2Min			= *(dtype *)value;
 		break;
 	case 12:
-		p.F2Max			= *(mytype *)value;
+		p.F2Max			= *(dtype *)value;
 		break;
 	case 13:
-		for (n=0;n<PF_NPOINTS;n++){
-			p.pertF2[n] = *((mytype *)value+n);
+		for (n=0;n<pfNPoints;n++){
+			p.pertF2[n] = *((dtype *)value+n);
 		}
 		break;	
 	case 14:
-		for (n=0;n<PF_NPOINTS;n++){
-			p.pertAmp[n] = *((mytype *)value+n);
+		for (n=0;n<pfNPoints;n++){
+			p.pertAmp[n] = *((dtype *)value+n);
 		}
 		break;
 	case 15:
-		for (n=0;n<PF_NPOINTS;n++){
-			p.pertPhi[n] = *((mytype *)value+n);
+		for (n=0;n<pfNPoints;n++){
+			p.pertPhi[n] = *((dtype *)value+n);
 		}
 		break;	
 	case 16:
-		p.F1Min			= *(mytype *)value;
+		p.F1Min			= *(dtype *)value;
 		break;
 	case 17:		
-		p.F1Max			= *(mytype *)value;
+		p.F1Max			= *(dtype *)value;
 		break;
 	case 18:
-		p.LBk			= *(mytype *)value;
+		p.LBk			= *(dtype *)value;
 		break;
 	case 19:
-		p.LBb			= *(mytype *)value;
+		p.LBb			= *(dtype *)value;
 		break;	
 	case 20:
-		p.trialLen			= *(mytype *)value;
+		p.trialLen			= *(dtype *)value;
 		break;
 	case 21:
-		p.rampLen			= *(mytype *)value;
+		p.rampLen			= *(dtype *)value;
 		break;
 	case 22:
-		p.aFact				= *(mytype *)value;
+		p.aFact				= *(dtype *)value;
 		break;	
 	case 23:
-		p.bFact				= *(mytype *)value;
+		p.bFact				= *(dtype *)value;
 		break;
 	case 24:
-		p.gFact				= *(mytype *)value;
+		p.gFact				= *(dtype *)value;
 		break;
 	case 25:
-		p.fn1				= *(mytype *)value;
+		p.fn1				= *(dtype *)value;
 		break;
 	case 26:
-		p.fn2				= *(mytype *)value;
+		p.fn2				= *(dtype *)value;
 		break;
 	case 27:
-		for (n = 0; n < MAX_N_VOICES && n < p.nFB; n++) {
-			p.pitchShiftRatio[n]   = *((mytype *)value + n);
+		for (n = 0; n < maxNVoices && n < p.nFB; n++) {
+			p.pitchShiftRatio[n]   = *((dtype *)value + n);
 		}
 		break;
 	case 28:
 		delete(warpCfg);
-		warpCfg = new pvocWarpAtom(*((mytype *)value), 
-								   *((mytype *)value + 1), 
-								   *((mytype *)value + 2), 
-								   *((mytype *)value + 3), 
-								   *((mytype *)value + 4));
+		warpCfg = new pvocWarpAtom(*((dtype *)value), 
+								   *((dtype *)value + 1), 
+								   *((dtype *)value + 2), 
+								   *((dtype *)value + 3), 
+								   *((dtype *)value + 4));
 		break;
 	case 29:
-		for (n = 0; n < MAX_N_VOICES && n < p.nFB; n++) {
-			p.gain[n]   = *((mytype *)value + n);
+		for (n = 0; n < maxNVoices && n < p.nFB; n++) {
+			p.gain[n]   = *((dtype *)value + n);
 		}
 		break;
 	case 30:
-		p.rmsClipThresh     = *(mytype *)value;
+		p.rmsClipThresh     = *(dtype *)value;
 		break;
 	case 31:
-		for (n=0;n<MAX_NTONES;n++){ 
-			p.tsgToneDur[n] = *((mytype *)value+n);
+		for (n=0;n<maxNTones;n++){ 
+			p.tsgToneDur[n] = *((dtype *)value+n);
 		}
 		break;
 	case 32:
-		for (n=0;n<MAX_NTONES;n++){ 
-			p.tsgToneFreq[n] = *((mytype *)value+n);
+		for (n=0;n<maxNTones;n++){ 
+			p.tsgToneFreq[n] = *((dtype *)value+n);
 		}
 		break;
 	case 33:
-		for (n=0;n<MAX_NTONES;n++){ 
-			p.tsgToneAmp[n] = *((mytype *)value+n);
+		for (n=0;n<maxNTones;n++){ 
+			p.tsgToneAmp[n] = *((dtype *)value+n);
 		}
 		break;
 	case 34:
-		for (n=0;n<MAX_NTONES;n++){ 
-			p.tsgToneRamp[n] = *((mytype *)value+n);
+		for (n=0;n<maxNTones;n++){ 
+			p.tsgToneRamp[n] = *((dtype *)value+n);
 		}
 		break;
 	case 35:
-		for (n=0;n<MAX_NTONES;n++){
-			p.tsgInt[n]		 = *((mytype *)value+n);
+		for (n=0;n<maxNTones;n++){
+			p.tsgInt[n]		 = *((dtype *)value+n);
 		}
 		tsgToneOnsets[0]=0;
-		for (n=1;n<MAX_NTONES;n++){
+		for (n=1;n<maxNTones;n++){
 			tsgToneOnsets[n]=tsgToneOnsets[n-1]+p.tsgInt[n-1];	//sec
 		}
 		break;
 	case 36:
 		if (nPars == 1) {
-			p.rmsFF_fb[0]     = *(mytype *)value;
+			p.rmsFF_fb[0]     = *(dtype *)value;
 			p.rmsFF_fb[1]	  = p.rmsFF_fb[0];
 			p.rmsFF_fb[2]     = 0.0;
 			p.rmsFF_fb[3]	  = 0.0;
 		}
 		else if (nPars == 4) {
 			for (n = 0; n < nPars; n++) {
-				p.rmsFF_fb[n] = *((mytype *)value + n);
+				p.rmsFF_fb[n] = *((dtype *)value + n);
 			}
 		}
 		else {
@@ -1046,12 +1046,12 @@ int TransShift::setparams(void * name, void * value, int nPars){
 
 		break;
 	case 37:
-		p.fb4GainDB		= *(mytype *)value;
+		p.fb4GainDB		= *(dtype *)value;
 		p.fb4Gain		= pow(10.0, p.fb4GainDB / 20);
 		break;
 
 	case 38:
-		p.fb3Gain		= *(mytype *)value;
+		p.fb3Gain		= *(dtype *)value;
 		break;
 
 	default:
@@ -1069,34 +1069,34 @@ int TransShift::setparams(void * name, void * value, int nPars){
 	
 	switch (k){
 	case 1: // 1 = do gainadaption  
-		p.bGainAdapt		=  (int)(*(mytype *)value);
+		p.bGainAdapt		=  (int)(*(dtype *)value);
 		break;
 	case 2: // If do shifting: set to 1
-		p.bShift			=  (int)(*(mytype *)value);
+		p.bShift			=  (int)(*(dtype *)value);
 		break;
 	case 3: // Should almost always be set to 1
-		p.bTrack			=  (int)(*(mytype *)value);
+		p.bTrack			=  (int)(*(dtype *)value);
 		break;
 	case 4: // If do shifting: set to 1
-		p.bDetect			=  (int)(*(mytype *)value);
+		p.bDetect			=  (int)(*(dtype *)value);
 		break;	
 	case 5: // 1 = do temporal smoothing of formant frequencies based on RMS weighted averaging
-		p.bWeight		=  (int)(*(mytype *)value);
+		p.bWeight		=  (int)(*(dtype *)value);
 		break;
 	case 6:	// 1 = do low-pass liftering
-		p.bCepsLift			=  (int)(*(mytype *)value);
+		p.bCepsLift			=  (int)(*(dtype *)value);
 		break;
 	case 7:	
-		p.bRatioShift       =  (int)(*(mytype *)value);
+		p.bRatioShift       =  (int)(*(dtype *)value);
 		break;
 	case 8:
-		p.bMelShift			=  (int)(*(mytype *)value);
+		p.bMelShift			=  (int)(*(dtype *)value);
 		break;
 	case 9:
-		p.bRMSClip			=  (int)(*(mytype *)value);
+		p.bRMSClip			=  (int)(*(dtype *)value);
 		break;
 	case 10:
-		p.bBypassFmt		=  (int)(*(mytype *)value);
+		p.bBypassFmt		=  (int)(*(dtype *)value);
 		break;
 	default:
 		param_set=false;
@@ -1110,7 +1110,7 @@ int TransShift::setparams(void * name, void * value, int nPars){
 }
 
 
-int TransShift::getparams(void * name){
+int Audapter::getparams(void * name){
 	char *arg = (char *)name;
 	int k;
 //	char *intparamarray[NPARAMS]={"srate","framelen","ndelay","nwin","nlpc","nfmts","ntracks",
@@ -1169,59 +1169,59 @@ int TransShift::getparams(void * name){
 	}
 }
 
-const mytype* TransShift::getsignal(int & size)	//SC 
+const dtype* Audapter::getsignal(int & size)	//SC 
 {
 	size = frame_counter*p.frameLen ;	//SC Update size
 	return signal_recorder[0];			//SC return the
 }
 
-const mytype* TransShift::getdata(int & size, int & vecsize)
+const dtype* Audapter::getdata(int & size, int & vecsize)
 {
 	size = data_counter;
 	vecsize = 4 +2 * p.nTracks + 2 * 2 + p.nLPC + 8;
 	return data_recorder[0];
 }
 
-const mytype* TransShift::getOutFrameBufPS()
+const dtype* Audapter::getOutFrameBufPS()
 {
 	return outFrameBufPS[0];
 }
 
-// Assumes: MAX_BUFLEN == 3*p.frameLen 
+// Assumes: maxBufLen == 3*p.frameLen 
 //		    
-int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int frame_size, bool bSingleOutputBuffer)	// Sine wave generator
+int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_size, bool bSingleOutputBuffer)	// Sine wave generator
 {
 	static bool during_trans=false;
 	static bool maintain_trans=false;
 	bool above_rms=false;
 	bool bDoFmts;
 	bool during_pitchShift = false;
-	mytype sf1m,sf2m,loc,locfrac,mphi,mamp;
+	dtype sf1m,sf2m,loc,locfrac,mphi,mamp;
 	int locint,n;
 
 	/* Temporary buffer for holding output before duplexing into stereo */
-	mytype outputBuf[MAX_FRAMELEN];
+	dtype outputBuf[maxFrameLen];
 
-	static mytype time_elapsed=0;
+	static dtype time_elapsed=0;
 
 	int fi=0,si=0,i0=0,offs=0,quit_hqr=0,indx=0,nZC=0, nZCp=0;	
-	mytype rms_o, rms_p, rms_s, rms_fb, wei;
-	int optr[MAX_N_VOICES]; //SC(2012/02/28) DAF
+	dtype rms_o, rms_p, rms_s, rms_fb, wei;
+	int optr[maxNVoices]; //SC(2012/02/28) DAF
 
 	// ====== Variables for frequency/pitch shifting (smbPitchShift) ======
 	// SC(2012/03/05)
-	mytype xFrameW[MAX_BUFLEN+MAX_NLPC];
-	mytype X_magn[MAX_NFFT];
-	mytype X_phase[MAX_NFFT];
-	mytype anaMagn[2][MAX_NFFT], anaFreq[2][MAX_NFFT]; // (Normal | nps)	
-	mytype synMagn[2][MAX_NFFT], synFreq[2][MAX_NFFT]; // (Normal | nps)	
+	dtype xFrameW[maxBufLen+maxNLPC];
+	dtype X_magn[max_nFFT];
+	dtype X_phase[max_nFFT];
+	dtype anaMagn[2][max_nFFT], anaFreq[2][max_nFFT]; // (Normal | nps)	
+	dtype synMagn[2][max_nFFT], synFreq[2][max_nFFT]; // (Normal | nps)	
 
-	/*mytype X_magn[NFFT];
-	mytype X_phase[NFFT];
-	mytype anaMagn[NFFT], anaFreq[NFFT];
-	mytype synMagn[NFFT], synFreq[NFFT];*/
-	mytype p_tmp[2], magn[2], phase[2]; // (Normal | nps)	
-	mytype expct, osamp, freqPerBin;
+	/*dtype X_magn[nFFT];
+	dtype X_phase[nFFT];
+	dtype anaMagn[nFFT], anaFreq[nFFT];
+	dtype synMagn[nFFT], synFreq[nFFT];*/
+	dtype p_tmp[2], magn[2], phase[2]; // (Normal | nps)	
+	dtype expct, osamp, freqPerBin;
 	int qpd;
 	int index[2];	// (Normal | nps)
 	
@@ -1260,12 +1260,12 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 	if (p.bDownSampFilt == 1)
 		downSampSig(&srfilt_b[0], &srfilt_a[0], inFrame_ptr, 
 				    &srfilt_buf[0], &inFrameBuf[0], &srfilt_delay_down[0], 
-					p.frameLen , N_COEFFS_SRFILT , p.downFact);
+					p.frameLen , nCoeffsSRFilt , p.downFact);
 	else
 		downSampSig_noFilt(&srfilt_b[0], &srfilt_a[0], inFrame_ptr, &srfilt_buf[0], 
 						   &inFrameBuf[0], &srfilt_delay_down[0], 
-						   p.frameLen , N_COEFFS_SRFILT , p.downFact);
-	//SC Output: algo.inFrame_ptr (length: p.frameLen)	
+						   p.frameLen , nCoeffsSRFilt , p.downFact);
+	//SC Output: audapter.inFrame_ptr (length: p.frameLen)	
 
 	if (p.bRecord)		//SC Record the downsampled original signal
 	{// recording signal in (downsampled)
@@ -1273,7 +1273,7 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 	}
 
 	// push samples in oBuf and pBuf
-	//SC algo.oBuf: (downsampled) input, algo.pBuf: preemphasized (downsampled) input
+	//SC audapter.oBuf: (downsampled) input, audapter.pBuf: preemphasized (downsampled) input
 	DSPF_dp_blk_move(&oBuf[p.frameLen], &oBuf[0], 2 * (p.nDelay - 1) * p.frameLen);	
 	DSPF_dp_blk_move(&pBuf[p.frameLen], &pBuf[0], 2 * (p.nDelay - 1) * p.frameLen);	//SC Pre-emphasized buffer shift to left
 
@@ -1300,7 +1300,7 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 		during_trans=false;
 		gtot[fi]=1;			// initialize gain factor				
 		si=fi*p.frameShift;// sample index
-		rms_s=sqrt(DSPF_dp_vecsum_sq(&oBuf[(p.nDelay-1)*p.frameLen+si],p.frameShift)/((mytype)p.frameShift)); //short time rms of current window
+		rms_s=sqrt(DSPF_dp_vecsum_sq(&oBuf[(p.nDelay-1)*p.frameLen+si],p.frameShift)/((dtype)p.frameShift)); //short time rms of current window
 		rms_o=calcRMS1(&oBuf[(p.nDelay-1)*p.frameLen+si], p.frameShift); // Smoothed RMS of original signal 
 		rms_p=calcRMS2(&pBuf[(p.nDelay-1)*p.frameLen+si], p.frameShift); // RMS preemphasized (i.e., high-pass filtered) signal 	
 
@@ -1397,11 +1397,11 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 
 			//SC(2009/02/02) Reset after each voiced interval
 			if (bLastFrameAboveRMS==1){
-				for(int jj = 0;jj < MAX_NTRACKS; jj++)
+				for(int jj = 0;jj < maxNTracks; jj++)
 				{
 					sumWeiPhi[jj]=0;
 					sumWeiBw[jj]=0;
-					for(int ii = 0; ii < MAX_PITCHLEN; ii++)
+					for(int ii = 0; ii < maxPitchLen; ii++)
 					{
 						weiVec[ii]=0;
 						weiMatPhi[jj][ii]=0;
@@ -1416,7 +1416,7 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 		}
 
 		a_rms_o[data_counter] = rms_o;
-		rmsSlopeN = (int)(rmsSlopeWin / ((mytype)p.frameLen / (mytype)p.sr));
+		rmsSlopeN = (int)(rmsSlopeWin / ((dtype)p.frameLen / (dtype)p.sr));
 		calcRMSSlope();
 
 		osTrack();
@@ -1557,7 +1557,7 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 	}
 
 	// === Frequency/pitch shifting code ===
-	mytype xBuf[MAX_NFFT];
+	dtype xBuf[max_nFFT];
 
 	//SCai (10/19/2012): determine the amount of pitch and intensity shift based on the OST stat number
 	// Note: we will override p.pitchShiftRatio[0] if pipCfg.n > 0d
@@ -1567,13 +1567,13 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 	}
 
 
-	mytype ms_in = 0.0; // DEBUG: amp
-	mytype ms_out = 0.0; // DEBUG: amp
-	mytype out_over_in = 0.0; // DEBUG: amp
-	mytype ss_inBuf = 0.0; // DEBUG: amp
-	mytype ss_outBuf = 0.0; // DEBUG: amp
-	mytype ss_anaMagn = 0.0; // DEBUG: amp
-	mytype ss_synMagn = 0.0;// DEBUG: amp
+	dtype ms_in = 0.0; // DEBUG: amp
+	dtype ms_out = 0.0; // DEBUG: amp
+	dtype out_over_in = 0.0; // DEBUG: amp
+	dtype ss_inBuf = 0.0; // DEBUG: amp
+	dtype ss_outBuf = 0.0; // DEBUG: amp
+	dtype ss_anaMagn = 0.0; // DEBUG: amp
+	dtype ss_synMagn = 0.0;// DEBUG: amp
 
 	int isPvocFrame = (((frame_counter_nowarp - (p.nDelay - 1)) % (p.pvocHop / p.frameLen) == 0) && 
 					   (frame_counter_nowarp - (p.nDelay - 1) >= p.pvocFrameLen / p.frameLen));
@@ -1597,7 +1597,7 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 				DSPF_dp_blk_move(&outFrameBuf[outFrameBuf_circPtr - p.pvocFrameLen], xBuf, p.pvocFrameLen);
 			else{ // Take care of wrapping-around
 				DSPF_dp_blk_move(&outFrameBuf[0], &xBuf[p.pvocFrameLen - outFrameBuf_circPtr], outFrameBuf_circPtr);
-				DSPF_dp_blk_move(&outFrameBuf[MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES - p.pvocFrameLen + outFrameBuf_circPtr], 
+				DSPF_dp_blk_move(&outFrameBuf[internalBufLen - p.pvocFrameLen + outFrameBuf_circPtr], 
 								    &xBuf[0], 
 									p.pvocFrameLen - outFrameBuf_circPtr);
 			}
@@ -1614,7 +1614,7 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 			for (i0 = 0; i0 < p.pvocFrameLen; i0++) {
 				ms_in += xFrameW[i0] * xFrameW[i0];
 			}
-			ms_in /= (mytype) p.pvocFrameLen;
+			ms_in /= (dtype) p.pvocFrameLen;
 
 			DSPF_dp_cfftr2(p.pvocFrameLen, ftBuf1ps, fftc_ps0, 1);
 			bit_rev(ftBuf1ps, p.pvocFrameLen);
@@ -1625,17 +1625,17 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 			}
 
 			// --- Time warping preparation ---
-			mytype t0 = (mytype)(frame_counter - (p.nDelay - 1)) * p.frameLen / p.sr;
-			mytype t1, t01;				
-			mytype cidx1_d, cidx1_f;
-			// mytype cidx0_d, cidx0_f;
-			mytype dp;
+			dtype t0 = (dtype)(frame_counter - (p.nDelay - 1)) * p.frameLen / p.sr;
+			dtype t1, t01;				
+			dtype cidx1_d, cidx1_f;
+			// dtype cidx0_d, cidx0_f;
+			dtype dp;
 			int cidx0 = (frame_counter - (p.nDelay - 1)) / (p.pvocHop / p.frameLen);
 			int cidx1;
 				
 			for (i0 = 0; i0 < p.pvocFrameLen; i0++){
-				pvocWarpCache[cidx0 % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES / 64)][i0] = X_magn[i0];
-				pvocWarpCache[cidx0 % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES / 64)][i0 + p.pvocFrameLen] = X_phase[i0];
+				pvocWarpCache[cidx0 % (internalBufLen / 64)][i0] = X_magn[i0];
+				pvocWarpCache[cidx0 % (internalBufLen / 64)][i0 + p.pvocFrameLen] = X_phase[i0];
 			}
 
 			/*if (frame_counter - (p.nDelay - 1) == p.pvocFrameLen / p.frameLen){
@@ -1656,7 +1656,7 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 					duringTimeWarp = false;
 				}
 				else {
-					t01 = t0 - ((mytype) (statOnsetIndices[warpCfg->ostInitState] - (p.nDelay - 1)) * p.frameLen / p.sr);
+					t01 = t0 - ((dtype) (statOnsetIndices[warpCfg->ostInitState] - (p.nDelay - 1)) * p.frameLen / p.sr);
 					duringTimeWarp = (t01 >= warpCfg->tBegin && t01 < warpCfg->tBegin + warpCfg->dur1 + warpCfg->durHold + warpCfg->dur2);
 					if (duringTimeWarp)
 						t0 = t01;
@@ -1674,8 +1674,8 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 				/*cidx1 = cidx0;
 
 				for (i0 = 0; i0 <= p.pvocFrameLen / 2; i0++){
-					magn = pvocWarpCache[cidx1 % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES / 64)][i0];
-					phase = pvocWarpCache[cidx1 % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES / 64)][i0 + p.pvocFrameLen];
+					magn = pvocWarpCache[cidx1 % (internalBufLen / 64)][i0];
+					phase = pvocWarpCache[cidx1 % (internalBufLen / 64)][i0 + p.pvocFrameLen];
 
 					ftBuf2ps[2 * i0] = magn * cos(phase);
 					ftBuf2ps[2 * i0 + 1] = magn * sin(phase);
@@ -1696,34 +1696,34 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 				}
 					
 				if (warpCfg->ostInitState >= 0)
-					t1 += (mytype) (statOnsetIndices[warpCfg->ostInitState] - (p.nDelay - 1)) * p.frameLen / p.sr;
+					t1 += (dtype) (statOnsetIndices[warpCfg->ostInitState] - (p.nDelay - 1)) * p.frameLen / p.sr;
 
-				cidx1_d = t1 * (mytype)p.sr / (mytype)p.pvocHop;
+				cidx1_d = t1 * (dtype)p.sr / (dtype)p.pvocHop;
 				cidx1 = (int)floor(cidx1_d);
-				cidx1_f = cidx1_d - (mytype)cidx1;
+				cidx1_f = cidx1_d - (dtype)cidx1;
 					
 				/* For no-time-warp backup */					
 
 				for (i0 = 0; i0 <= p.pvocFrameLen / 2; i0++) {
-					magn[0] = pvocWarpCache[cidx1 % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES / 64)][i0] * (1 - cidx1_f) + 
-								pvocWarpCache[(cidx1 + 1) % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES / 64)][i0] * cidx1_f;
+					magn[0] = pvocWarpCache[cidx1 % (internalBufLen / 64)][i0] * (1 - cidx1_f) + 
+								pvocWarpCache[(cidx1 + 1) % (internalBufLen / 64)][i0] * cidx1_f;
 					/* No time warp */
-					/*magn = pvocWarpCache[cidx0 % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES / 64)][i0];*/
+					/*magn = pvocWarpCache[cidx0 % (internalBufLen / 64)][i0];*/
 					
-					/*phase1 = pvocWarpCache[cidx1 % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES / 64)][i0 + p.pvocFrameLen] * (1 - cidx1_f) + 
-								pvocWarpCache[(cidx1 + 1) % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES / 64)][i0 + p.pvocFrameLen] * cidx1_f;*/
+					/*phase1 = pvocWarpCache[cidx1 % (internalBufLen / 64)][i0 + p.pvocFrameLen] * (1 - cidx1_f) + 
+								pvocWarpCache[(cidx1 + 1) % (internalBufLen / 64)][i0 + p.pvocFrameLen] * cidx1_f;*/
 
-					dp = pvocWarpCache[(cidx1 + 1) % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES / 64)][i0 + p.pvocFrameLen] - 
-							pvocWarpCache[cidx1 % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES / 64)][i0 + p.pvocFrameLen];
+					dp = pvocWarpCache[(cidx1 + 1) % (internalBufLen / 64)][i0 + p.pvocFrameLen] - 
+							pvocWarpCache[cidx1 % (internalBufLen / 64)][i0 + p.pvocFrameLen];
 					/*dp = phase1 - phase0;
 					phase0 = phase1;*/
 						
-					dp -= (mytype)i0 * expct;
+					dp -= (dtype)i0 * expct;
 						
 					qpd = (int)(dp / M_PI);
 					if (qpd >= 0) qpd += qpd & 1;
 					else qpd -= qpd & 1;
-					dp -= M_PI * (mytype)qpd;
+					dp -= M_PI * (dtype)qpd;
 
 					ftBuf2ps[0][2 * i0] = magn[0] * cos(lastPhase[0][i0]);
 					ftBuf2ps[0][2 * i0 + 1] = magn[0] * sin(lastPhase[0][i0]);
@@ -1731,7 +1731,7 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 					/* No time warp */
 					/*ftBuf2ps[2 * i0] = magn * cos(X_phase[i0]);
 					ftBuf2ps[2 * i0 + 1] = magn * sin(X_phase[i0]);*/
-					lastPhase[0][i0] += (mytype)i0 * expct + dp;
+					lastPhase[0][i0] += (dtype)i0 * expct + dp;
 
 					/* No time warp */
 					/*lastPhase[i0] = X_phase[i0];*/
@@ -1761,16 +1761,16 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 					for (int i1 = 0; i1 < 2; i1++) {
 						p_tmp[i1] = X_phase[i0] - lastPhase[i1][i0];
 
-						p_tmp[i1] -= (mytype)i0 * expct;
+						p_tmp[i1] -= (dtype)i0 * expct;
 
 						qpd = (int)(p_tmp[i1] / M_PI);
 
 						if (qpd >= 0) qpd += qpd&1;
 						else qpd -= qpd&1;
-						p_tmp[i1] -= M_PI * (mytype)qpd;
+						p_tmp[i1] -= M_PI * (dtype)qpd;
 
 						p_tmp[i1] = osamp * p_tmp[i1] / (2. * M_PI);
-						p_tmp[i1] = (mytype)i0 * freqPerBin + p_tmp[i1] * freqPerBin;
+						p_tmp[i1] = (dtype)i0 * freqPerBin + p_tmp[i1] * freqPerBin;
 
 						anaMagn[i1][i0] = X_magn[i0];
 						anaFreq[i1][i0] = p_tmp[i1];
@@ -1882,19 +1882,19 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 
 			// --- Accumulate to buffer ---
 			for (i0 = 0; i0 < p.pvocFrameLen; i0++){					
-				outFrameBufPS[ifb][(outFrameBuf_circPtr + i0) % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES)] = 
-					outFrameBufPS[ifb][(outFrameBuf_circPtr + i0) % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES)] + 
+				outFrameBufPS[ifb][(outFrameBuf_circPtr + i0) % (internalBufLen)] = 
+					outFrameBufPS[ifb][(outFrameBuf_circPtr + i0) % (internalBufLen)] + 
 					2 * ftBuf2ps[1 - duringPitchShift][2 * i0] * hwin2[i0] / (osamp / 2);
 			}			
 
 			// Front zeroing
 			for (i0 = 0; i0 < p.pvocHop; i0++) {
-				outFrameBufPS[ifb][(outFrameBuf_circPtr + p.pvocFrameLen + i0) % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES)] = 0.;
+				outFrameBufPS[ifb][(outFrameBuf_circPtr + p.pvocFrameLen + i0) % (internalBufLen)] = 0.;
 			}
 				
 			// Back Zeroing
 			for (i0 = 1; i0 <= p.pvocHop; i0++){ // Ad hoc alert!
-				outFrameBufPS[ifb][(outFrameBuf_circPtr - p.delayFrames[ifb] * p.frameLen - i0) % (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES)] = 0.;						
+				outFrameBufPS[ifb][(outFrameBuf_circPtr - p.delayFrames[ifb] * p.frameLen - i0) % (internalBufLen)] = 0.;						
 			}			
 
 		}
@@ -1937,7 +1937,7 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 		optr = outFrameBuf_circPtr - p.delayFrames[0] * p.frameLen;
 	}
 	else{
-		optr = outFrameBuf_circPtr - p.delayFrames[0] * p.frameLen + (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES);
+		optr = outFrameBuf_circPtr - p.delayFrames[0] * p.frameLen + (internalBufLen);
 	}
 	*/
 
@@ -1946,7 +1946,7 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 			optr[h0] = outFrameBuf_circPtr - p.delayFrames[h0] * p.frameLen;
 		}
 		else {
-			optr[h0] = outFrameBuf_circPtr - p.delayFrames[h0] * p.frameLen + (MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES);
+			optr[h0] = outFrameBuf_circPtr - p.delayFrames[h0] * p.frameLen + (internalBufLen);
 		}
 	}
 
@@ -1978,7 +1978,7 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 				nzCnt++;
 			}
 		}
-		ms_out /= (mytype) nzCnt;
+		ms_out /= (dtype) nzCnt;
 
 		offs++;
 		data_recorder[offs][data_counter] = ms_out;
@@ -1990,8 +1990,8 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 				amp_ratio = sqrt(out_over_in);
 		}
 
-		mytype t_amp_ratio;
-		mytype trans_n;
+		dtype t_amp_ratio;
+		dtype trans_n;
 
 		if (p.pvocAmpNormTrans <= p.frameLen)
 			trans_n = p.pvocAmpNormTrans;
@@ -2018,7 +2018,7 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 	data_recorder[offs][data_counter] = ms_out;
 
 	data_counter++;
-	circ_counter= data_counter % MAX_PITCHLEN;
+	circ_counter= data_counter % maxPitchLen;
 
 	if (p.fb == 0) {	// Mute
 		for(n = 0;n < p.frameLen; n++){
@@ -2035,8 +2035,8 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 				outFrameBufSum[n + p.pvocFrameLen - p.frameLen] = data_pb[pbCounter] * rms_fb * p.fb4Gain * p.dScale;
 
 			pbCounter += p.downFact;
-			if (pbCounter >= MAX_PB_SIZE)
-				pbCounter -= MAX_PB_SIZE;
+			if (pbCounter >= maxPBSize)
+				pbCounter -= maxPBSize;
 		}		
 	}
 
@@ -2052,15 +2052,15 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 	//SC(2012/02/28) For DAF: use a past frame for playback, if p.delayFrames > 0
 	//upSampSig(&srfilt_b[0], &srfilt_a[0], &outFrameBufPS[0][optr[0]], 
 	//	      &srfilt_buf[0], &outFrame_ptr[0], &srfilt_delay_up[0], p.frameLen * p.downFact, 
-	//		  N_COEFFS_SRFILT, p.downFact, p.dScale);
+	//		  nCoeffsSRFilt, p.downFact, p.dScale);
 	upSampSig(&srfilt_b[0], &srfilt_a[0], outFrameBufSum + p.pvocFrameLen - p.frameLen, 
 		      &srfilt_buf[0], outputBuf, &srfilt_delay_up[0], p.frameLen * p.downFact, 
-			  N_COEFFS_SRFILT ,p.downFact, p.dScale);
+			  nCoeffsSRFilt ,p.downFact, p.dScale);
 
 	
 
 	outFrameBuf_circPtr += p.frameLen;
-	if (outFrameBuf_circPtr >= MAX_FRAMELEN * DOWNSAMP_FACT_DEFAULT * MAX_DELAY_FRAMES){
+	if (outFrameBuf_circPtr >= internalBufLen){
 		//mexPrintf("outFrameBuf_circPtr = %d --> 0\n", outFrameBuf_circPtr);
 		outFrameBuf_circPtr = 0;
 	}
@@ -2070,7 +2070,7 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 		for(n=0;n<frame_size;n++){
 			outputBuf[n] = outputBuf[n]+data_pb[pbCounter];
 			pbCounter=pbCounter+1;
-			if (pbCounter==MAX_PB_SIZE){
+			if (pbCounter==maxPBSize){
 				pbCounter=0;
 			}
 		}
@@ -2079,7 +2079,7 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 		for(n=0;n<frame_size;n++){
 			outputBuf[n] = data_pb[pbCounter];
 			pbCounter=pbCounter+1;
-			if (pbCounter==MAX_PB_SIZE){
+			if (pbCounter==maxPBSize){
 				pbCounter=0;
 			}
 		}
@@ -2113,7 +2113,7 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 		else if (p.stereoMode == 2) { /* Left audio; right simulated TTL */
 			for (n = 0; n < frame_size; n++) {
 				outFrame_ptr[2 * n] = outputBuf[n];
-				outFrame_ptr[2 * n + 1] = 0.99 * (mytype) duringPitchShift;
+				outFrame_ptr[2 * n + 1] = 0.99 * (dtype) duringPitchShift;
 			}
 		}
 		else {
@@ -2122,28 +2122,28 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 	}
 
 	//SC(2008/06/22) Impose the onset and offset ramps, mainly to avoid the unpleasant "clicks" at the beginning and end
-	/* if ((mytype)frame_counter*(mytype)p.frameLen/(mytype)p.sr>p.trialLen){
+	/* if ((dtype)frame_counter*(dtype)p.frameLen/(dtype)p.sr>p.trialLen){
 		for (n=0;n<frame_size;n++)
 			outFrame_ptr[n]=0;
 	}
-	if ((mytype)frame_counter*(mytype)p.frameLen/(mytype)p.sr<=p.rampLen){
+	if ((dtype)frame_counter*(dtype)p.frameLen/(dtype)p.sr<=p.rampLen){
 		for (n=0;n<frame_size;n++)
-			outFrame_ptr[n]=outFrame_ptr[n]/p.rampLen*((mytype)((frame_counter-1)*frame_size+n)/(mytype)p.sr/DOWNSAMP_FACT);
+			outFrame_ptr[n]=outFrame_ptr[n]/p.rampLen*((dtype)((frame_counter-1)*frame_size+n)/(dtype)p.sr/DOWNSAMP_FACT);
 	}
-	if ((mytype)frame_counter*(mytype)p.frameLen/(mytype)p.sr>=p.trialLen-p.rampLen){
+	if ((dtype)frame_counter*(dtype)p.frameLen/(dtype)p.sr>=p.trialLen-p.rampLen){
 		for (n=0;n<frame_size;n++)
-	 		outFrame_ptr[n]=outFrame_ptr[n]/p.rampLen*(p.trialLen-(mytype)((frame_counter-1)*frame_size+n)/(mytype)p.sr/DOWNSAMP_FACT);
+	 		outFrame_ptr[n]=outFrame_ptr[n]/p.rampLen*(p.trialLen-(dtype)((frame_counter-1)*frame_size+n)/(dtype)p.sr/DOWNSAMP_FACT);
 	} */
 
 	frame_counter++;
 	frame_counter_nowarp++;
 
-	if (((frame_counter)*p.frameLen>=MAX_REC_SIZE) || ((data_counter+p.nWin)>=MAX_DATA_SIZE)) //avoid segmentation violation
+	if (((frame_counter)*p.frameLen>=maxRecSize) || ((data_counter+p.nWin)>=maxDataSize)) //avoid segmentation violation
 	{
 		//SC(2012/02/29) Save signal to file
 		/* char dataFileName[200];
 		sprintf(dataFileName, "data%.3d.bin", dataFileCnt);
-		printf("Writing data to file %s: size = %d (%d bytes)\n", dataFileName, MAX_REC_SIZE, MAX_REC_SIZE * (sizeof mytype));
+		printf("Writing data to file %s: size = %d (%d bytes)\n", dataFileName, maxRecSize, maxRecSize * (sizeof dtype));
 
 		ofstream dataFileCl(dataFileName);
 		dataFileCl.close();
@@ -2153,7 +2153,7 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 			printf("WARNING: Cannot open file %s\n", dataFileName);
 		}
 
-		dataFile.write((char *) signal_recorder, MAX_REC_SIZE * (sizeof mytype));
+		dataFile.write((char *) signal_recorder, maxRecSize * (sizeof dtype));
 		dataFile.close(); */
 		
 		//mexPrintf("data_counter = %d; frame_counter == %d --> 0.\n", data_counter, frame_counter);
@@ -2170,11 +2170,11 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 		thrwws.wavfn_out = wavfn_out;
 		_beginthreadex(NULL, // No security
 			0, // Let OS determine stack size
-			TransShift::thrStatEntPnt, 
+			Audapter::thrStatEntPnt, 
 			(void *)(&thrwws), 
 			0, // Running
 			NULL);
-		//_beginthread(TransShift::thrStatEntPnt, 0, (void *)(&thrwws));
+		//_beginthread(Audapter::thrStatEntPnt, 0, (void *)(&thrwws));
 		
 		//this->writeSignalsToWavFile(wavfn_in, wavfn_out);
 
@@ -2184,7 +2184,7 @@ int TransShift::handleBuffer(mytype *inFrame_ptr, mytype *outFrame_ptr, int fram
 	return 0;
 }
 
-int TransShift::handleBufferSineGen(mytype *inFrame_ptr, mytype *outFrame_ptr, int frame_size)	// Sine wave (pure tone) generator
+int Audapter::handleBufferSineGen(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_size)	// Sine wave (pure tone) generator
 {
 	int n;
 	double dt;
@@ -2200,14 +2200,14 @@ int TransShift::handleBufferSineGen(mytype *inFrame_ptr, mytype *outFrame_ptr, i
 	return 0;
 }
 
-int TransShift::handleBufferWavePB(mytype *inFrame_ptr, mytype *outFrame_ptr, int frame_size)	// Wave playback
+int Audapter::handleBufferWavePB(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_size)	// Wave playback
 {	// Wave playback
 	int n;
 
 	for(n=0;n<frame_size;n++){
 		outFrame_ptr[n]=data_pb[pbCounter];
 		pbCounter=pbCounter+1;
-		if (pbCounter==MAX_PB_SIZE){
+		if (pbCounter==maxPBSize){
 			pbCounter=0;
 		}
 
@@ -2217,14 +2217,14 @@ int TransShift::handleBufferWavePB(mytype *inFrame_ptr, mytype *outFrame_ptr, in
 }
 
 
-int TransShift::getWma(mytype *phi_ptr, mytype *bw_ptr , mytype * wmaPhi_ptr, mytype * wmaR_ptr)
+int Audapter::getWma(dtype *phi_ptr, dtype *bw_ptr , dtype * wmaPhi_ptr, dtype * wmaR_ptr)
 {// computational efficient weithed moving average 
 
 	int i0=0;
 	int circ_indx_sub=0;
 
 
-	circ_indx_sub=(data_counter-p.avgLen) % MAX_PITCHLEN; // points to the data to withdraw from sum 
+	circ_indx_sub=(data_counter-p.avgLen) % maxPitchLen; // points to the data to withdraw from sum 
 
 	sumWei+=weiVec[circ_counter]-weiVec[circ_indx_sub];  // update weighting sum
 
@@ -2241,7 +2241,7 @@ int TransShift::getWma(mytype *phi_ptr, mytype *bw_ptr , mytype * wmaPhi_ptr, my
 			if (sumWei>0.0000001)
 			{
 				wmaPhi_ptr[i0]=sumWeiPhi[i0]/sumWei;
-				wmaR_ptr[i0]=pow(10.0, (-(sumWeiBw[i0]/sumWei)*M_PI/(mytype(p.sr))));
+				wmaR_ptr[i0]=pow(10.0, (-(sumWeiBw[i0]/sumWei)*M_PI/(dtype(p.sr))));
 			}
 			else
 				return 1;
@@ -2250,7 +2250,7 @@ int TransShift::getWma(mytype *phi_ptr, mytype *bw_ptr , mytype * wmaPhi_ptr, my
 
 	return 0;
 }
-int TransShift::getDFmt(mytype *fmt_ptr,mytype *dFmt_ptr, mytype time)
+int Audapter::getDFmt(dtype *fmt_ptr,dtype *dFmt_ptr, dtype time)
 {// calculates the formant derivatives [Hz/ms] smoothed with forgetting factor 
 	int i0=0;
 
@@ -2263,7 +2263,7 @@ int TransShift::getDFmt(mytype *fmt_ptr,mytype *dFmt_ptr, mytype time)
 			deltaFmt[i0]=(fmt_ptr[i0]-lastFmt[i0])/time_step;//0.5625;
 
 		if (fabs(deltaFmt[i0])>p.maxDelta)
-			deltaFmt[i0]=p.maxDelta*(mytype)sign(deltaFmt[i0]);
+			deltaFmt[i0]=p.maxDelta*(dtype)sign(deltaFmt[i0]);
 
 		deltaMaFmt[i0]=(1-p.dFmtsFF)*deltaFmt[i0]+p.dFmtsFF*deltaMaFmt[i0];
 		dFmt_ptr[i0]=deltaMaFmt[i0];
@@ -2275,7 +2275,7 @@ int TransShift::getDFmt(mytype *fmt_ptr,mytype *dFmt_ptr, mytype time)
 }
 
 
-bool TransShift::detectTrans(mytype *fmt_ptr, mytype *dFmt_ptr,int datcnt, mytype time)
+bool Audapter::detectTrans(dtype *fmt_ptr, dtype *dFmt_ptr,int datcnt, dtype time)
 { // detects a-i transition using f1 and f2 derivatives in time	
 	static bool btransition=false;		//SC Note these are static addresses. Output argument: btransition.
 	//static bool bIsTrans=false;			//SC bIsTrans is used as an internal state variable.
@@ -2311,7 +2311,7 @@ bool TransShift::detectTrans(mytype *fmt_ptr, mytype *dFmt_ptr,int datcnt, mytyp
 
 
 
-void TransShift::getAi(mytype* xx, mytype* aa,const int size,const int nlpc)	// Autocorrelation-based LPC analysis
+void Audapter::getAi(dtype* xx, dtype* aa,const int size,const int nlpc)	// Autocorrelation-based LPC analysis
 //SC Input arguments
 //SC	xx: input buffer pointer
 //SC	aa: LPC coefficients pointer
@@ -2322,10 +2322,10 @@ void TransShift::getAi(mytype* xx, mytype* aa,const int size,const int nlpc)	// 
 
 	int i0, nlpcplus1;
 	int	size1;	//Debug
-	mytype temp_frame[MAX_BUFLEN+MAX_NLPC];	// Utility buffer for various filtering operations
-	mytype R[MAX_NLPC];					// lpc fit Autocorrelation estimate
+	dtype temp_frame[maxBufLen+maxNLPC];	// Utility buffer for various filtering operations
+	dtype R[maxNLPC];					// lpc fit Autocorrelation estimate
 	
-	mytype a[16]={0,0,1,0,2,0,3,0,4,0,5,0,6,0,7,0};
+	dtype a[16]={0,0,1,0,2,0,3,0,4,0,5,0,6,0,7,0};
 
 	nlpcplus1 = nlpc+1;		//SC nlpc: order of LPC
 
@@ -2339,7 +2339,7 @@ void TransShift::getAi(mytype* xx, mytype* aa,const int size,const int nlpc)	// 
 	////////////////////////////////////////////////////
 	//SC(2008/05/07) ----- Cepstral lifting -----
 	if (p.bCepsLift){
-		for (i0=0;i0<NFFT;i0++){
+		for (i0=0;i0<nFFT;i0++){
 			if (i0<size){
 				ftBuf1[i0*2]=temp_frame[nlpcplus1+i0];
 				ftBuf1[i0*2+1]=0;
@@ -2349,25 +2349,25 @@ void TransShift::getAi(mytype* xx, mytype* aa,const int size,const int nlpc)	// 
 				ftBuf1[i0*2+1]=0;
 			}
 		}
-		DSPF_dp_cfftr2(NFFT,ftBuf1,fftc,1);	
-		bit_rev(ftBuf1,NFFT);
+		DSPF_dp_cfftr2(nFFT,ftBuf1,fftc,1);	
+		bit_rev(ftBuf1,nFFT);
 		// Now ftBuf1 is X
-		for (i0=0;i0<NFFT;i0++){
-			if (i0<=NFFT/2){
+		for (i0=0;i0<nFFT;i0++){
+			if (i0<=nFFT/2){
 				ftBuf2[i0*2]=log(sqrt(ftBuf1[i0*2]*ftBuf1[i0*2]+ftBuf1[i0*2+1]*ftBuf1[i0*2+1]));	// Optimize
 				ftBuf2[i0*2+1]=0;
 			}
 			else{
-				ftBuf2[i0*2]=ftBuf2[(NFFT-i0)*2];
+				ftBuf2[i0*2]=ftBuf2[(nFFT-i0)*2];
 				ftBuf2[i0*2+1]=0;
 			}
 		}
-		DSPF_dp_icfftr2(NFFT,ftBuf2,fftc,1);
-		bit_rev(ftBuf2,NFFT);
+		DSPF_dp_icfftr2(nFFT,ftBuf2,fftc,1);
+		bit_rev(ftBuf2,nFFT);
 		// Now ftBuf2 is Xceps: the cepstrum
-		for (i0=0;i0<NFFT;i0++){
-			if (i0<p.cepsWinWidth || i0>NFFT-p.cepsWinWidth){			// Adjust! 
-				ftBuf1[i0*2]=ftBuf2[i0*2]/NFFT;		// Normlize the result of the previous IFFT
+		for (i0=0;i0<nFFT;i0++){
+			if (i0<p.cepsWinWidth || i0>nFFT-p.cepsWinWidth){			// Adjust! 
+				ftBuf1[i0*2]=ftBuf2[i0*2]/nFFT;		// Normlize the result of the previous IFFT
 				ftBuf1[i0*2+1]=0;
 			}
 			else{
@@ -2376,27 +2376,27 @@ void TransShift::getAi(mytype* xx, mytype* aa,const int size,const int nlpc)	// 
 			}
 		}
 		// Now ftBuf1 is Xcepw: the windowed cepstrum
-		DSPF_dp_cfftr2(NFFT,ftBuf1,fftc,1);
-		bit_rev(ftBuf1,NFFT);
-		for (i0=0;i0<NFFT;i0++){
-			if (i0<=NFFT/2){
+		DSPF_dp_cfftr2(nFFT,ftBuf1,fftc,1);
+		bit_rev(ftBuf1,nFFT);
+		for (i0=0;i0<nFFT;i0++){
+			if (i0<=nFFT/2){
 				ftBuf2[i0*2]=exp(ftBuf1[i0*2]);
 				ftBuf2[i0*2+1]=0;
 			}
 			else{
-				ftBuf2[i0*2]=ftBuf2[(NFFT-i0)*2];
+				ftBuf2[i0*2]=ftBuf2[(nFFT-i0)*2];
 				ftBuf2[i0*2+1]=0;
 			}
 		}
-		DSPF_dp_icfftr2(NFFT,ftBuf2,fftc,1);	// Need normalization
-		bit_rev(ftBuf2,NFFT);
+		DSPF_dp_icfftr2(nFFT,ftBuf2,fftc,1);	// Need normalization
+		bit_rev(ftBuf2,nFFT);
 		
 		size1=size;
 		for (i0=0;i0<size1/2;i0++){
-			temp_frame[nlpcplus1+size1/2+i0]=ftBuf2[i0*2]/NFFT;
+			temp_frame[nlpcplus1+size1/2+i0]=ftBuf2[i0*2]/nFFT;
 		}
 		for (i0=1;i0<size1/2;i0++){
-			temp_frame[nlpcplus1+size1/2-i0]=ftBuf2[i0*2]/NFFT;
+			temp_frame[nlpcplus1+size1/2-i0]=ftBuf2[i0*2]/nFFT;
 		}
 		temp_frame[nlpcplus1]=0;
 	}
@@ -2415,11 +2415,11 @@ void TransShift::getAi(mytype* xx, mytype* aa,const int size,const int nlpc)	// 
 }
 
 
-mytype TransShift::getGain(mytype * r, mytype * ophi,mytype * sphi, int nfmts)
+dtype Audapter::getGain(dtype * r, dtype * ophi,dtype * sphi, int nfmts)
 {// this routine calculates the gain factor used by the routine gainAdapt to compensate the formant shift
 //SC-Mod(2008/01/05) arguments xiff0 and xiff1: for intensity correction during formant shifts
 	int i0;
-	mytype prod=1;
+	dtype prod=1;
 	
 	for (i0 = 0; i0 < nfmts; i0++)
 		prod  *= (1-2*r[i0]*cos(sphi[i0])+pow(r[i0],2.0))/(1-2*r[i0]*cos(ophi[i0]) + pow(r[i0],2.0));
@@ -2427,7 +2427,7 @@ mytype TransShift::getGain(mytype * r, mytype * ophi,mytype * sphi, int nfmts)
 	return prod;
 }
 
-int TransShift::gainAdapt(mytype *buffer,mytype *gtot_ptr,int framelen, int frameshift)
+int Audapter::gainAdapt(dtype *buffer,dtype *gtot_ptr,int framelen, int frameshift)
 {// this routine applies the gain factors collected in the vector gTot to the signal
  // for each window (nwin windows in one frame) the function finds the first zerocrossing
  // and updates the gain factor used to scale this window
@@ -2438,8 +2438,8 @@ int TransShift::gainAdapt(mytype *buffer,mytype *gtot_ptr,int framelen, int fram
  // assumtpion: zerocrossing is present in nearly each window (can be verified : the value returned by this fuction should equal nWin)
  // gain factor only changes slowely
 	int i,index=0,updated=0;
-	static mytype gain=1;// 1=no gain adaption =0dB
-	static mytype lastSample=buffer[0];// used for continuous zero-crossing finding	
+	static dtype gain=1;// 1=no gain adaption =0dB
+	static dtype lastSample=buffer[0];// used for continuous zero-crossing finding	
 
 	bool armed=true;
 
@@ -2478,10 +2478,10 @@ int TransShift::gainAdapt(mytype *buffer,mytype *gtot_ptr,int framelen, int fram
 	
 }
 
-void TransShift::levinson(mytype *R, mytype* aa, int size)
+void Audapter::levinson(dtype *R, dtype* aa, int size)
 {// Levinson recursion, used in the LPC analysis
-	mytype ki, t;
-    mytype E = R[0]; 
+	dtype ki, t;
+    dtype E = R[0]; 
     int   i0, j0; 
 
 	if (R[0] == 0.0)
@@ -2527,14 +2527,14 @@ void TransShift::levinson(mytype *R, mytype* aa, int size)
 	It forms a companion matrix, then uses the hqr algorithm 
 	VV 19 June 2003 */
 
-int TransShift::hqr_roots (	mytype *c, 	mytype *wr, mytype *wi,	mytype *Acompanion, const int nLPC)
+int Audapter::hqr_roots (	dtype *c, 	dtype *wr, dtype *wi,	dtype *Acompanion, const int nLPC)
 {
 	int nn,m,l,k,j,i,its,mmin,nLPC_SQR=nLPC*nLPC;
-    mytype AHess[MAX_NLPC_SQR];   
-    mytype z,y,x,w,v,u,t,s,r,q,p,anorm = 0.0F;
+    dtype AHess[maxNLPC_squared];   
+    dtype z,y,x,w,v,u,t,s,r,q,p,anorm = 0.0F;
         
 /*  generate companion matrix, starting off with an intialized version */
-//	memcpy (&AHess[0],&Acompanion[0], (LPC_ORDER_SQR)*sizeof(mytype)); 
+//	memcpy (&AHess[0],&Acompanion[0], (LPC_ORDER_SQR)*sizeof(dtype)); 
 	
 	DSPF_dp_blk_move(&Acompanion[0],&AHess[0],nLPC_SQR);
 
@@ -2561,7 +2561,7 @@ int TransShift::hqr_roots (	mytype *c, 	mytype *wr, mytype *wi,	mytype *Acompani
            for (l=nn;l>=2;l--) {
                s=fabs(aMat(l-1,l-1))+fabs(aMat(l,l));
                if (s == 0.0) s=anorm;
-               if ((mytype)(fabs(aMat(l,l-1)) + s) == s) break;
+               if ((dtype)(fabs(aMat(l,l-1)) + s) == s) break;
            }
          x=aMat(nn,nn);
          if (l == nn) {
@@ -2608,7 +2608,7 @@ int TransShift::hqr_roots (	mytype *c, 	mytype *wr, mytype *wi,	mytype *Acompani
                              if (m == l) break;
                              u=fabs(aMat(m,m-1))*(fabs(q)+fabs(r));
                              v=fabs(p)*(fabs(aMat(m-1,m-1))+fabs(z)+fabs(aMat(m+1,m+1)));
-                             if ((mytype)(u+v) == v) break;
+                             if ((dtype)(u+v) == v) break;
                         }
                         for (i=m+2;i<=nn;i++) {
                              aMat(i,i-2)=0.0F;
@@ -2668,12 +2668,12 @@ int TransShift::hqr_roots (	mytype *c, 	mytype *wr, mytype *wi,	mytype *Acompani
 }
 
 
-void TransShift::getRPhiBw (mytype *wr,  mytype *wi, mytype *radius,  mytype *phi ,mytype *bandwith)
+void Audapter::getRPhiBw (dtype *wr,  dtype *wi, dtype *radius,  dtype *phi ,dtype *bandwith)
 {// 
 
   /* The following sorts the roots in wr and wi.  It is adapted from a matlab script that Reiner wrote */
-  mytype	arc[MAX_NLPC], arc2[MAX_NLPC], wr2[MAX_NLPC], wi2[MAX_NLPC];
-  mytype	wreal, wimag, warc, wmag, mag[MAX_NLPC], mag2[MAX_NLPC];
+  dtype	arc[maxNLPC], arc2[maxNLPC], wr2[maxNLPC], wi2[maxNLPC];
+  dtype	wreal, wimag, warc, wmag, mag[maxNLPC], mag2[maxNLPC];
   int		numroots, i0, j0, nmark;
   
   /* calculate angles for all defined roots */
@@ -2722,27 +2722,27 @@ void TransShift::getRPhiBw (mytype *wr,  mytype *wi, mytype *radius,  mytype *ph
   for (i0=0; i0<numroots; i0++)
   {
 	  radius[i0]=mag2[i0];
-	  bandwith[i0]=-log(mag2[i0])*mytype(p.sr)/M_PI;
+	  bandwith[i0]=-log(mag2[i0])*dtype(p.sr)/M_PI;
 	  phi[i0]=arc2[i0];
   }
 }
 
-void TransShift::trackPhi(mytype *r_ptr,mytype *phi_ptr,mytype time)
+void Audapter::trackPhi(dtype *r_ptr,dtype *phi_ptr,dtype time)
 {// Dynamic programming based formant tracking (c.f., Xia and Espy-Wilson, 2000, ICSLP)
-	mytype cum_Mat[MAX_FMT_TRACK_JUMP][MAX_NTRACKS];// cumulative cost matrix
-	mytype cost_Mat[MAX_FMT_TRACK_JUMP][MAX_NTRACKS];// local cost Mat // just for debugging
-	mytype fmts_min[MAX_NTRACKS]={0,350,1200,2000,3000}; // defines minimal value for each formant
-	mytype fmts_max[MAX_NTRACKS]={1500,3500,4500,5000,7000};// defines maximal value for each formant
-	mytype fn[MAX_NTRACKS]={500,1500,2500,3500,4500};// neutral formant values (start formants : here vowel [a])
-	static mytype last_f[MAX_NTRACKS]={500,1500,2500,3500,4500};// last moving average estimated formants 
-	int f_list[MAX_NTRACKS]={0,0,0,0,0};
-	const int tri[MAX_NTRACKS]={0,1,2,3,4};
-	mytype this_fmt,this_bw,this_cost, this_cum_cost, low_cost,min_cost,inf_cost=10000000;
+	dtype cum_Mat[maxFmtTrackJump][maxNTracks];// cumulative cost matrix
+	dtype cost_Mat[maxFmtTrackJump][maxNTracks];// local cost Mat // just for debugging
+	dtype fmts_min[maxNTracks]={0,350,1200,2000,3000}; // defines minimal value for each formant
+	dtype fmts_max[maxNTracks]={1500,3500,4500,5000,7000};// defines maximal value for each formant
+	dtype fn[maxNTracks]={500,1500,2500,3500,4500};// neutral formant values (start formants : here vowel [a])
+	static dtype last_f[maxNTracks]={500,1500,2500,3500,4500};// last moving average estimated formants 
+	int f_list[maxNTracks]={0,0,0,0,0};
+	const int tri[maxNTracks]={0,1,2,3,4};
+	dtype this_fmt,this_bw,this_cost, this_cum_cost, low_cost,min_cost,inf_cost=10000000;
 	bool in_range=false;
 	int k=0,i0=0,j0;
 	int bound,indx=0,new_indx;
 
-	mytype a_fact, g_fact, b_fact;
+	dtype a_fact, g_fact, b_fact;
 
 	k=0;
 	i0=0;
@@ -2827,7 +2827,7 @@ void TransShift::trackPhi(mytype *r_ptr,mytype *phi_ptr,mytype time)
 	
 }
 
-void TransShift::myFilt (mytype *xin_ptr, mytype* xout_ptr,mytype *oldPhi_ptr,mytype *newPhi_ptr,mytype *r_ptr,const int size)
+void Audapter::myFilt (dtype *xin_ptr, dtype* xout_ptr,dtype *oldPhi_ptr,dtype *newPhi_ptr,dtype *r_ptr,const int size)
 	{// filter cascading two biquad IIR filters 
 
 	// coefficients for the first filter (f1 shift) NOTE: b_filt1[0]=1 (see initilization)
@@ -2851,25 +2851,25 @@ void TransShift::myFilt (mytype *xin_ptr, mytype* xout_ptr,mytype *oldPhi_ptr,my
 
 
 // Calculate rms of buffer
-mytype TransShift::calcRMS1(const mytype *xin_ptr, int size)
+dtype Audapter::calcRMS1(const dtype *xin_ptr, int size)
 {
 	//SC rmsFF: RMF forgetting factor, by default equals 0.9.
-	ma_rms1=(1-p.rmsFF)*sqrt(DSPF_dp_vecsum_sq(xin_ptr,size)/(mytype)size)+p.rmsFF*ma_rms1;
+	ma_rms1=(1-p.rmsFF)*sqrt(DSPF_dp_vecsum_sq(xin_ptr,size)/(dtype)size)+p.rmsFF*ma_rms1;
 	return ma_rms1 ;
 }
 
-mytype TransShift::calcRMS2(const mytype *xin_ptr, int size)
+dtype Audapter::calcRMS2(const dtype *xin_ptr, int size)
 {
-	ma_rms2=(1-p.rmsFF)*sqrt(DSPF_dp_vecsum_sq(xin_ptr,size)/(mytype)size)+p.rmsFF*ma_rms2;
+	ma_rms2=(1-p.rmsFF)*sqrt(DSPF_dp_vecsum_sq(xin_ptr,size)/(dtype)size)+p.rmsFF*ma_rms2;
 	return ma_rms2 ;
 }
 
-mytype TransShift::calcRMS_fb(const mytype *xin_ptr, int size, bool above_rms)
+dtype Audapter::calcRMS_fb(const dtype *xin_ptr, int size, bool above_rms)
 {
 	//SC rmsFF: RMF forgetting factor, by default equals 0.9.
-	const mytype frameDur = (float)p.frameLen / (float)p.sr;
+	const dtype frameDur = (float)p.frameLen / (float)p.sr;
 	int cntThresh;
-	mytype ff_inc, ff_dec;
+	dtype ff_inc, ff_dec;
 	
 	if (p.rmsFF_fb[2] > 0.0) {
 		ff_inc = (p.rmsFF_fb[1] - p.rmsFF_fb[0]) / (int) (p.rmsFF_fb[2] / frameDur);
@@ -2938,11 +2938,11 @@ mytype TransShift::calcRMS_fb(const mytype *xin_ptr, int size, bool above_rms)
 	//printf("fb4_status = %d\n", fb4_status);
 	//fflush(stdout);
 
-	ma_rms_fb = (1 - rmsFF_fb_now) * sqrt(DSPF_dp_vecsum_sq(xin_ptr,size) / (mytype)size) + rmsFF_fb_now * ma_rms_fb;
+	ma_rms_fb = (1 - rmsFF_fb_now) * sqrt(DSPF_dp_vecsum_sq(xin_ptr,size) / (dtype)size) + rmsFF_fb_now * ma_rms_fb;
 	return ma_rms_fb;
 }
 
-int TransShift::sign(mytype x)
+int Audapter::sign(dtype x)
 {
 	if (x>0)
 		return 1;
@@ -2953,7 +2953,7 @@ int TransShift::sign(mytype x)
 }
 
 
-void TransShift::downSampSig(mytype *b,mytype *a, mytype *x, mytype *buffer, mytype *r,mytype  *d,const int nr, const int n_coeffs, const int downfact)
+void Audapter::downSampSig(dtype *b,dtype *a, dtype *x, dtype *buffer, dtype *r,dtype  *d,const int nr, const int n_coeffs, const int downfact)
 //SC Input parameters: 
 //SC	b: IIR numerators;
 //SC	a: IIR denominators; 
@@ -2968,7 +2968,7 @@ void TransShift::downSampSig(mytype *b,mytype *a, mytype *x, mytype *buffer, myt
 
 	// filtering
 	//SC implem: downSampSig(&srfilt_b[0], &srfilt_a[0],inFrame_ptr,&srfilt_buf[0], 
-	//SC	&inFrameBuf[0],&srfilt_delay_down[0], p.frameLen , N_COEFFS_SRFILT , DOWNSAMP_FACT);
+	//SC	&inFrameBuf[0],&srfilt_delay_down[0], p.frameLen , nCoeffsSRFilt , DOWNSAMP_FACT);
 	iir_filt(b, a, x, buffer,d,nr*downfact, n_coeffs, 1);	//SC gain (g) is 1 here
 
 
@@ -2982,7 +2982,7 @@ void TransShift::downSampSig(mytype *b,mytype *a, mytype *x, mytype *buffer, myt
 	}
 }
 
-void TransShift::downSampSig_noFilt(mytype *b,mytype *a, mytype *x, mytype *buffer, mytype *r,mytype  *d,const int nr, const int n_coeffs, const int downfact)
+void Audapter::downSampSig_noFilt(dtype *b,dtype *a, dtype *x, dtype *buffer, dtype *r,dtype  *d,const int nr, const int n_coeffs, const int downfact)
 //SC Input parameters: 
 //SC	b: IIR numerators;
 //SC	a: IIR denominators; 
@@ -2997,9 +2997,8 @@ void TransShift::downSampSig_noFilt(mytype *b,mytype *a, mytype *x, mytype *buff
 
 	// filtering
 	//SC implem: downSampSig(&srfilt_b[0], &srfilt_a[0],inFrame_ptr,&srfilt_buf[0], 
-	//SC	&inFrameBuf[0],&srfilt_delay_down[0], p.frameLen , N_COEFFS_SRFILT , DOWNSAMP_FACT);
+	//SC	&inFrameBuf[0],&srfilt_delay_down[0], p.frameLen , nCoeffsSRFilt , DOWNSAMP_FACT);
 	//iir_filt(b, a, x, buffer,d,nr*downfact, n_coeffs, 1);	//SC gain (g) is 1 here
-
 
 	// decimation
 
@@ -3012,7 +3011,7 @@ void TransShift::downSampSig_noFilt(mytype *b,mytype *a, mytype *x, mytype *buff
 }
 
 
-void TransShift::upSampSig (mytype  *b, mytype *a, mytype *x, mytype *buffer, mytype *r,mytype  *d,const int nr, const int n_coeffs, const int upfact,const mytype scalefact)
+void Audapter::upSampSig (dtype  *b, dtype *a, dtype *x, dtype *buffer, dtype *r,dtype  *d,const int nr, const int n_coeffs, const int upfact,const dtype scalefact)
 {//  interpolation and filtering
 
 // interpolation
@@ -3031,7 +3030,7 @@ void TransShift::upSampSig (mytype  *b, mytype *a, mytype *x, mytype *buffer, my
 	iir_filt(b, a,buffer,r, d,nr, n_coeffs, upfact*scalefact);
 }
 
-void TransShift::iir_filt (mytype *b, mytype *a,  mytype *x, mytype *r,mytype  *d,const int nr, const int n_coeffs,  mytype g)
+void Audapter::iir_filt (dtype *b, dtype *a,  dtype *x, dtype *r,dtype  *d,const int nr, const int n_coeffs,  dtype g)
 {// iir transposed II form
 	// b : Numerator coeffs
 	// a : Denominator coeffs
@@ -3058,39 +3057,39 @@ void TransShift::iir_filt (mytype *b, mytype *a,  mytype *x, mytype *r,mytype  *
 
 }
 
-mytype TransShift::hz2mel(mytype hz){	// Convert frequency from Hz to mel
-	mytype mel;
+dtype Audapter::hz2mel(dtype hz){	// Convert frequency from Hz to mel
+	dtype mel;
 	mel=1127.01048*log(1+hz/700);
 	return mel;
 }
 
-mytype TransShift::mel2hz(mytype mel){	// Convert frequency from mel to Hz
-	mytype hz;
+dtype Audapter::mel2hz(dtype mel){	// Convert frequency from mel to Hz
+	dtype hz;
 	hz=(exp(mel/1127.01048)-1)*700;
 	return hz;
 }
 
-mytype TransShift::locateF2(mytype f2){	
+dtype Audapter::locateF2(dtype f2){	
 //SC Locate the value of f2 in the pertF2 table, through a binary search.
 //SC Usef for subsequent interpolation. 
-	mytype loc;
-	int k=1<<(PF_NBIT-1),n;
+	dtype loc;
+	int k=1<<(pfNBit-1),n;
 
-	for(n=0;n<PF_NBIT-1;n++){
+	for(n=0;n<pfNBit-1;n++){
 		if (f2>=p.pertF2[k])
-			k=k+(1<<(PF_NBIT-n-2));
+			k=k+(1<<(pfNBit-n-2));
 		else
-			k=k-(1<<(PF_NBIT-n-2));
+			k=k-(1<<(pfNBit-n-2));
 	}	
 	if (f2<p.pertF2[k])
 		k--;
 
-	loc=(mytype)k;
+	loc=(dtype)k;
 
 	loc+=(f2-p.pertF2[k])/(p.pertF2[k+1]-p.pertF2[k]);
 
-	if (loc>=PF_NPOINTS-1){	//PF_NPOINTS=257, so locint not be greater than 255 (PF_NPOINTS-2)
-		loc=PF_NPOINTS-1-0.000000000001;
+	if (loc>=pfNPoints-1){	//pfNPoints=257, so locint not be greater than 255 (pfNPoints-2)
+		loc=pfNPoints-1-0.000000000001;
 	}
 	if (loc<0){
 		loc=0;
@@ -3098,10 +3097,10 @@ mytype TransShift::locateF2(mytype f2){
 	return loc;
 }
 
-void TransShift::DSPF_dp_cfftr2(int n, mytype * x, mytype * w, int n_min)	//SC Fast Fourier transform on complex numbers
+void Audapter::DSPF_dp_cfftr2(int n, dtype * x, dtype * w, int n_min)	//SC Fast Fourier transform on complex numbers
 {
 	int n2, ie, ia, i, j, k, m;
-	mytype rtemp, itemp, c, s;
+	dtype rtemp, itemp, c, s;
 	n2 = n;
 
 	ie = 1;
@@ -3132,7 +3131,7 @@ void TransShift::DSPF_dp_cfftr2(int n, mytype * x, mytype * w, int n_min)	//SC F
 	}
 }
 
-void TransShift::DSPF_dp_icfftr2(int n, double * x, double * w, int n_min)	//SC Inverse Fast Fourier transform on complex numbers
+void Audapter::DSPF_dp_icfftr2(int n, double * x, double * w, int n_min)	//SC Inverse Fast Fourier transform on complex numbers
 {
 	int n2, ie, ia, i, j, k, m;
 	double rtemp, itemp, c, s;
@@ -3164,7 +3163,7 @@ void TransShift::DSPF_dp_icfftr2(int n, double * x, double * w, int n_min)	//SC 
 	}
 }
 
-void TransShift::gen_w_r2(double* w, int n)		//SC An FFT subroutine
+void Audapter::gen_w_r2(double* w, int n)		//SC An FFT subroutine
 {
 	int i, j=1;
 	double pi = 4.0*atan(1.0);
@@ -3179,7 +3178,7 @@ void TransShift::gen_w_r2(double* w, int n)		//SC An FFT subroutine
 }
 }
 
-void TransShift::bit_rev(double* x, int n)	//SC Bit reversal: an FFT subroutine
+void Audapter::bit_rev(double* x, int n)	//SC Bit reversal: an FFT subroutine
 {
 	int i, j, k;
 	double rtemp, itemp;
@@ -3206,7 +3205,7 @@ void TransShift::bit_rev(double* x, int n)	//SC Bit reversal: an FFT subroutine
 	}
 }
 
-void TransShift::smbFft(mytype *fftBuffer, double fftFrame_Size, int sign)
+void Audapter::smbFft(dtype *fftBuffer, double fftFrame_Size, int sign)
 /* 
 	
  * FFT routine, (C)1996 S.M.Bernsee. Sign = -1 is FFT, 1 is iFFT (inverse)
@@ -3220,8 +3219,8 @@ void TransShift::smbFft(mytype *fftBuffer, double fftFrame_Size, int sign)
 	of the frequencies of interest is in fftBuffer[0...fftFrameSize].
 */
 {
-	mytype wr, wi, arg,  *p1, *p2, temp;
-	mytype tr, ti, ur, ui, *p1r, *p1i, *p2r, *p2i;
+	dtype wr, wi, arg,  *p1, *p2, temp;
+	dtype tr, ti, ur, ui, *p1r, *p1i, *p2r, *p2i;
 	long i, bitm, j, k, le, le2, logN;
 	
 	logN = (long)(log(fftFrame_Size)/log(2.)+0.5);
@@ -3280,20 +3279,20 @@ void TransShift::smbFft(mytype *fftBuffer, double fftFrame_Size, int sign)
 
 }
 
-//void TransShift::writeSignalsToWavFile(char *wavfn_input, char *wavfn_output) {
-void TransShift::writeSignalsToWavFile() {
+//void Audapter::writeSignalsToWavFile(char *wavfn_input, char *wavfn_output) {
+void Audapter::writeSignalsToWavFile() {
 	char str0[256];
 	//char *wavfn;
 	char wavfn[256];
 	int j0;
-	int numSamples = MAX_REC_SIZE;			
+	int numSamples = maxRecSize;			
 	int chunkSize, subChunkSize1 = 16, subChunkSize2;
 	short audioFormat = 1;
 	int wavSampRate, byteRate;
 	short blockAlign;
 	signed short wavx;
-	//const mytype *algosignal_ptr;
-	mytype *algosignal_ptr;
+	//const dtype *algosignal_ptr;
+	dtype *algosignal_ptr;
 	int i0;
 	ofstream wavFileCl;
 	fstream wavF;
@@ -3369,9 +3368,9 @@ void TransShift::writeSignalsToWavFile() {
 		wavF.write((char *)str0, sizeof(char) * 4);
 		wavF.write((char *)(&subChunkSize2), sizeof(int) * 1);
 
-		for (i0 = 0; i0 < MAX_REC_SIZE; i0++) {
-			wavx = (signed short)(32767. * algosignal_ptr[j0 * MAX_REC_SIZE + i0]);
-			//wavx = (signed short)(32767. * 0.99 * sin(2 * M_PI * (mytype)(i0) / wavSampRate * 1000));
+		for (i0 = 0; i0 < maxRecSize; i0++) {
+			wavx = (signed short)(32767. * algosignal_ptr[j0 * maxRecSize + i0]);
+			//wavx = (signed short)(32767. * 0.99 * sin(2 * M_PI * (dtype)(i0) / wavSampRate * 1000));
 
 			if (wavx > 32767)
 				wavx = 32727;
@@ -3387,7 +3386,7 @@ void TransShift::writeSignalsToWavFile() {
 	dataFileCnt++;
 }
 
-void TransShift::readOSTTab(int bVerbose) {
+void Audapter::readOSTTab(int bVerbose) {
 	FILE *fp;
 	int i0, n;
 	static int maxStatesPerLine = 4;
@@ -3462,11 +3461,11 @@ void TransShift::readOSTTab(int bVerbose) {
 		printf("ERROR: failed to allocate memor for ostTab.mode");
 		return;
 	}
-	if ((ostTab.prm1 = (mytype *)calloc(ostTab.n, sizeof(mytype))) == NULL) {
+	if ((ostTab.prm1 = (dtype *)calloc(ostTab.n, sizeof(dtype))) == NULL) {
 		printf("ERROR: failed to allocate memor for ostTab.prm1");
 		return;
 	}
-	if ((ostTab.prm2 = (mytype *)calloc(ostTab.n, sizeof(mytype))) == NULL) {
+	if ((ostTab.prm2 = (dtype *)calloc(ostTab.n, sizeof(dtype))) == NULL) {
 		printf("ERROR: failed to allocate memor for ostTab.prm2");
 		return;
 	}
@@ -3539,7 +3538,7 @@ void TransShift::readOSTTab(int bVerbose) {
 			fclose(fp);
 			return;
 		}
-		if ((ostTab.maxIOICfg.maxInterval = (mytype *)calloc(ostTab.maxIOICfg.n, sizeof(mytype))) == NULL) {
+		if ((ostTab.maxIOICfg.maxInterval = (dtype *)calloc(ostTab.maxIOICfg.n, sizeof(dtype))) == NULL) {
 			printf("ERROR: failed to allocate memor for ostTab.maxIOICfg.maxInterval");
 			fclose(fp);
 			return;
@@ -3630,7 +3629,7 @@ int string_count_char(char *str, char c) {
 	return cnt;
 }
 
-int sscanf_floatArray(char *str, mytype *xs, int nx) {
+int sscanf_floatArray(char *str, dtype *xs, int nx) {
 	int xc = 0, j;
 	unsigned int i;
 	bool tBreak = false;
@@ -3661,15 +3660,15 @@ int sscanf_floatArray(char *str, mytype *xs, int nx) {
 	return xc;
 }
 
-void TransShift::readPIPCfg(int bVerbose) {
+void Audapter::readPIPCfg(int bVerbose) {
 	FILE *fp;
 	int i0;
 	int lineWidth;
 	int nTimeWarpAtoms = -1; /* SCai: currently a dummy variable. TODO: implement multiple time warping atoms */
 	char line[512];
-	mytype tmpx[16];
+	dtype tmpx[16];
 	int t_ostInitState;
-	mytype t_tBegin, t_rate1, t_dur1, t_durHold, t_rate2;
+	dtype t_tBegin, t_rate1, t_dur1, t_durHold, t_rate2;
 
 	// Free previously existing fields of ostTab
 	if (pipCfg.pitchShift) {
@@ -3848,11 +3847,11 @@ void TransShift::readPIPCfg(int bVerbose) {
 	fclose(fp);
 }
 
-void TransShift::calcRMSSlope() {
+void Audapter::calcRMSSlope() {
 	int i0;
-	mytype nom = 0, den = 0;
-	mytype mn_x = (rmsSlopeN - 1) / 2;
-	mytype mn_y = 0;
+	dtype nom = 0, den = 0;
+	dtype mn_x = (rmsSlopeN - 1) / 2;
+	dtype mn_y = 0;
 
 	if (data_counter < rmsSlopeN - 1) {
 		a_rms_o_slp[data_counter] = 0;
@@ -3870,10 +3869,10 @@ void TransShift::calcRMSSlope() {
 		}
 	}
 
-	a_rms_o_slp[data_counter] = nom / den / (p.frameLen / (mytype)p.sr);	
+	a_rms_o_slp[data_counter] = nom / den / (p.frameLen / (dtype)p.sr);	
 }
 
-void TransShift::osTrack() {
+void Audapter::osTrack() {
 	int k, i, j;
 	int stat0, mode;
 	int bIsGOET;
@@ -3882,7 +3881,7 @@ void TransShift::osTrack() {
 	/*float elapTime;*/
 	float frameDur;
 
-	const mytype rmsLBDelay = 5 * 0.002;
+	const dtype rmsLBDelay = 5 * 0.002;
 
 	frameDur = (float)p.frameLen / (float)p.sr;
 	nLBDelay = (int)(floor(rmsLBDelay / frameDur + 0.5));
@@ -4115,7 +4114,7 @@ void TransShift::osTrack() {
 }
 
 
-int TransShift::gainPerturb(mytype *buffer,mytype *gtot_ptr,int framelen, int frameshift)
+int Audapter::gainPerturb(dtype *buffer,dtype *gtot_ptr,int framelen, int frameshift)
 {// this routine applies the gain factors collected in the vector gTot to the signal
  // for each window (nwin windows in one frame) the function finds the first zerocrossing
  // and updates the gain factor used to scale this window
@@ -4126,10 +4125,10 @@ int TransShift::gainPerturb(mytype *buffer,mytype *gtot_ptr,int framelen, int fr
  // assumtpion: zerocrossing is present in nearly each window (can be verified : the value returned by this fuction should equal nWin)
  // gain factor only changes slowely
 	int i,index=0,updated=0;
-	static mytype gain=1;// 1=no gain adaption =0dB
-	static mytype lastSample=buffer[0];// used for continuous zero-crossing finding
+	static dtype gain=1;// 1=no gain adaption =0dB
+	static dtype lastSample=buffer[0];// used for continuous zero-crossing finding
 	int bGainPert;
-	mytype gain_new = intShiftRatio; //SCai(2012/10/19): PIP
+	dtype gain_new = intShiftRatio; //SCai(2012/10/19): PIP
 	bool armed=true;
 
 	bGainPert = (pipCfg.n > 0);
@@ -4171,7 +4170,7 @@ int TransShift::gainPerturb(mytype *buffer,mytype *gtot_ptr,int framelen, int fr
 	return updated;
 }
 
-int TransShift::handleBufferToneSeq(mytype *inFrame_ptr, mytype *outFrame_ptr, int frame_size)	// Tone sequence generator
+int Audapter::handleBufferToneSeq(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_size)	// Tone sequence generator
 {
 	int n,m;
 	double dt=0.00002083333333333333;

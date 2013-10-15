@@ -1200,18 +1200,18 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Audapter.cpp" />
     <ClCompile Include="DSPF.cpp" />
     <ClCompile Include="mexLibrary.cpp" />
-    <ClCompile Include="TransShift.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="TransShift.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\audioIO\audioIO.vcxproj">
       <Project>{c4a1c4a9-1308-45ed-9377-551141d6e565}</Project>
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
     </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Audapter.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
