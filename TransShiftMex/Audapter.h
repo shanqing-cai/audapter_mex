@@ -13,48 +13,12 @@ speech communication group, RLE @MIT
 //#include "pvocWarpAtom.h"
 #include <windows.h>
 #include <process.h>
+#include <vector>
 #include "mex.h"
 
 typedef double dtype;
 
-//#define N_COEFFS_SRFILT 21
-//#define DOWNSAMP_FACT_DEFAULT 3
-//#define maxFrameLen (768 / DOWNSAMP_FACT)
-//#define MAX_FRAMELEN (1152 / DOWNSAMP_FACT_DEFAULT)
-//#define MAX_BUFLEN (15 * MAX_FRAMELEN)  // max ndelay< 8
-//#define MAX_NWIN   16
-//#define M_1_SQRTPI 0.564189583547756
 #define M_PI       3.14159265358979323846
-//#define MAX_NFMTS 5
-//#define MAX_NLPC	20
-//#define MAX_NPOLES (MAX_NLPC / 2 + 2)
-//#define MAX_NLPC_SQR (MAX_NLPC * MAX_NLPC)
-//#define MAX_FMT_TRACK_JUMP MAX_NPOLES
-//#define MAX_NTRACKS 5
-//#define MAX_PITCHLEN 100	//100
-//#define MAX_NTRANS	10		//SC How many dipthong transitions are allowed at most? In practice, only one is used.
-//#define PF_NPOINTS	257
-//#define PF_NBIT	8
-//
-//#define MAX_NTONES 64
-//#define MAX_TONESEQ_REC_LEN 230400
-//
-//#define	MAX_ITER	10		//SC Maximum number of iteractions for the polynomial perpendicular foot finding
-//
-//#define NFFT 1024			//SC(2008/05/06)
-//#define MAX_NFFT 4096		//SC(2012/03/05): for frequency/pitch shifting
-//
-//#define MAX_DATA_VEC (2 * MAX_NTRACKS + 10 + MAX_NLPC + 5)
-//#define MAX_REC_SIZE  230400 // 10 sec recording at p.sr = 48kHz/4 
-//#define MAX_DATA_SIZE 230400 // 10 sec data p.sr = 48kHz/4 and frameshift>=1
-//
-//#define MAX_PB_SIZE   230400 // 2.5 sec, playback rate = 48 kHz.
-//
-//#define MAX_DELAY_FRAMES  600 // The maximum number of added frame delays
-//
-//#define MAX_N_VOICES 4
-//
-//#define MAX_RMS_SLOPE_N 100
 
 // subfunction roots specific definitions
 #define SIGN(a,b) ((b)>=0.0 ? fabs((a)) : -fabs((a)))
@@ -159,6 +123,36 @@ public:
 	}
 };
 
+class Parameter {
+public:
+	typedef enum {
+		TYPE_BOOL, 
+		TYPE_INT, 
+		TYPE_DOUBLE, 
+		TYPE_INT_ARRAY, 
+		TYPE_DOUBLE_ARRAY, 
+		TYPE_PVOC_WARP
+	} paramType;
+
+private:
+	std::vector<const char *> names;
+	std::vector<const char *> helpMsgs;	
+	std::vector<paramType> types;
+	int nParams;
+
+public:
+
+	Parameter() { nParams = 0; };
+	void addParam(const char *name, const char * helpMsg, const paramType type) {
+		names.push_back(name);
+		helpMsgs.push_back(helpMsg);
+		types.push_back(type);
+
+		nParams = names.size();
+	};
+
+};
+
 // Class Audapter
 // Implements the audio input - process - output queue
 class Audapter {
@@ -201,6 +195,9 @@ private:
 	static const int maxNVoices = 4;			/* Maximum number of blended voices */
 	
 	static const int internalBufLen = maxFrameLen * downSampFact_default * maxDelayFrames;
+
+	/* Parameter names and help info */
+	Parameter params;
 
 	//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  VARIABLES & COUNTERS  *****************************************************%%%%%%%		
 	// Variables
@@ -264,7 +261,6 @@ private:
 	dtype fakeBuf[maxFrameLen];							// trash buffer to flush filter states
 	dtype zeros[maxFrameLen];						    // utility buffer for filtering
 
-
 	//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  VARIOUS EXTRACTED DATA  *****************************************************%%%%%%%%%%%	
 
 
@@ -319,7 +315,6 @@ private:
 	dtype b_filt1[3];								// numerator coefficients
 	dtype filt_delay1[2];							// filter delays
 
-
 	// second filter (f2 shift)
 	dtype a_filt2[2];								// denominator coefficients 
 	dtype b_filt2[3];								// numerator coefficients
@@ -346,8 +341,6 @@ private:
 	dtype phase0, phase1;
 
 	//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  DATA   RECORDING  *****************************************************%%%%%%%%%%%	
-
-
 	//recorded data is stored here
 	dtype signal_recorder[2][maxRecSize];				// downsampled input signal and downsampled output signal
 	dtype data_recorder[maxDataVec][maxDataSize];		// stores other data
