@@ -1,19 +1,32 @@
 /*
 Audaper.cpp
 
-Vowel formant shifting algorithm
-Can be used to shift formant frequencies of pure vowels or time-varying vowels (diphthongs or tripththongs) in 
-	static or time-varying fashion. 
+Speech auditory feedback manipulation program capable of the following types 
+of perturbations:
+	1) Formants frequencies (F1 and F2)
+	2) Pitch
+	3) Fine-scale timing (time warping)
+	4) Global time delay (DAF)
+	5) Local intensity
+	6) Global intensity
 
-Incorporated 
+Heuristics-based online utterance status tracking (OST) is incorporated
+
+Requires ASIO compatible sound cards.
+
+Also incorporated 
 	1) Cepstral liftering (optional)
-	2) Dynamic programming style formant tracking (Xia and Espy-Wilson, 2000, ICSLP)
+	2) Dynamic programming style formant tracking 
+		(Xia and Espy-Wilson, 2000, ICSLP)
 	3) Gain adaptation after shifting (optional)
-	4) RMS-based formant smoothing (to reduce the influence of subglottal coupling on formant estimates) (optional)
+	4) RMS-based formant smoothing (to reduce the influence of subglottal 
+		coupling on formant estimates) (optional)
 
-(c) 2007 Marc Boucek
-(c) 2008-2013 Shanqing Cai (shanqing.cai@gmail.com)
+Authors:
+2007 Marc Boucek, Satrajit Ghosh
+2008-2013 Shanqing Cai (shanqing.cai@gmail.com)
 
+Developed at:
 Speech Communication Group, RLE, MIT
 Speech Laboratory, Boston University
 */
@@ -23,6 +36,7 @@ Speech Laboratory, Boston University
 #include <stdlib.h>
 #include <windows.h>
 #include <process.h>
+#include <ctype.h>
 
 #define TRACE printf
 
@@ -32,36 +46,14 @@ Speech Laboratory, Boston University
 //#include <iostream>
 #include <fstream>
 #include <string>
+#include <sstream>
+#include <algorithm>
 #include "mex.h"
 
 using namespace std;
 
 #define RSL(INTEGER,SHIFT) (int)( ( (unsigned)INTEGER ) >> SHIFT )
-#define NPARAMS 38
-char *intparamarray[NPARAMS]={"srate","framelen","ndelay","nwin","nlpc","nfmts","ntracks",
-//								 1		   2		3		4				5		6		7								
-	"avglen","cepswinwidth","fb","minvowellen", "delayframes", "bpitchshift", "pvocframelen", "pvochop", "bdownsampfilt", "nfb", "mute",
-//		8			9		 10		11				12				13				14			15			16				17	   18
-	"tsgntones", "downfact", "stereomode", "bpvocampnorm", "pvocampnormtrans"};
-//		19			20			21				22				23
 
-char *doubleparamarray[NPARAMS]={"scale","preemp","rmsthr","rmsratio","rmsff","dfmtsff",
-//									  1        2         3       4        5        6
- "wgfreq","wgamp","wgtime","datapb",
-//	  7		  8		   9		10
- "f2min","f2max","pertf2","pertamp","pertphi","f1min","f1max","lbk","lbb","triallen","ramplen",
-//   11		  12      13       14       15        16      17	  18   19     20          21
- "afact","bfact","gfact","fn1","fn2", "pitchshiftratio", "pvocwarp", "gain", "rmsclipthresh",
-//   22	     23      24     25    26		27				28	       29			30
- "tsgtonedur","tsgtonefreq","tsgtoneamp","tsgtoneramp","tsgint", "rmsff_fb", "fb4gaindb", "fb3gain"};
- //	31				32			33			34			35			36			37			38
-
-char *boolparamarray[NPARAMS]={"bgainadapt","bshift","btrack","bdetect","bweight","bcepslift","bratioshift","bmelshift","brmsclip",
-//									1          2         3         4          5           6			7			8			9
- "bbypassfmt"};
-// 10
-
-char *vectarray[NPARAMS]={"trajectory"};
 //                             1 
 #ifdef TIME_IT      
 LARGE_INTEGER freq, time1, time2;
@@ -198,6 +190,26 @@ void init_pipCfg(PIP_CFG *pipCfg) {
 
 }
 
+Parameter::paramType Parameter::checkParam(const char *name) {
+	string inputNameStr = string(name);
+	transform(inputNameStr.begin(), inputNameStr.end(), inputNameStr.begin(), ::tolower);
+
+	int i;
+	for (i = 0; i < names.size(); i++) {
+		string nameStr = string(names[i]);
+		if (nameStr == inputNameStr)
+			break;
+	}
+
+	if (i >= names.size()) {
+		return Parameter::TYPE_NULL;
+	}
+	else {
+		return types[i];
+	}
+
+}
+
 Audapter::Audapter()		//SC construction function
 {//modifiable parameters ( most of them can be modified externally) 
 	/* Parameters configuration */
@@ -214,7 +226,7 @@ Audapter::Audapter()		//SC construction function
 	params.addParam("bbypassfmt",	"Switch for bypassing formant tracking (for use in pitch shifting and time warping", Parameter::TYPE_BOOL);
 	params.addParam("bpitchshift",	"Pitch shifting switch", Parameter::TYPE_BOOL);	 //TODO: Fix
 	params.addParam("bdownsamplfilt", "Down-sampling filter switch", Parameter::TYPE_BOOL);	// TODO: Fix
-	params.addParam("mute",			"Global mute switch", Parameter::TYPE_BOOL);	// TODO: Fix
+	params.addParam("mute",			"Global mute switch", Parameter::TYPE_BOOL_ARRAY);	// TODO: Fix
 	params.addParam("bpvocmpnorm",	"Phase vocoder amplitude normalization switch", Parameter::TYPE_BOOL); // TODO: Fix
 
 	/* Integer parameters */
@@ -271,7 +283,7 @@ Audapter::Audapter()		//SC construction function
 
 	params.addParam("pitchshiftratio", "Pitch-shifting: ratio (1.0 = no shift)", Parameter::TYPE_DOUBLE);
 
-	params.addParam("rmsff_fb",		"Speech-modulated noise feedback: RMS forgetting factor", Parameter::TYPE_DOUBLE);
+	params.addParam("rmsff_fb",		"Speech-modulated noise feedback: RMS forgetting factor", Parameter::TYPE_SMN_RMS_FF);
 	params.addParam("fb4gaindb",	"Speech-modulated noise feedback: intensity gain factor", Parameter::TYPE_DOUBLE);
 	params.addParam("fb3gain",		"Noise gain factor for speech+noise feedback mode", Parameter::TYPE_DOUBLE);
 	
@@ -599,6 +611,10 @@ Audapter::Audapter()		//SC construction function
 }
 
 Audapter::~Audapter(){
+	if (warpCfg) {
+		delete warpCfg;
+		warpCfg = NULL;
+	}
 	/*delete [] data_recorder;
 	delete [] signal_recorder;
 	data_recorder=NULL;
@@ -816,7 +832,7 @@ void Audapter::reset()
 	/* Feedback mode 4 */
 	rmsFF_fb_now = p.rmsFF_fb[0];
 	fb4_status = 0;
-	fb4_counter = 0;	
+	fb4_counter = 0;
 
 	duringPitchShift = false;
 	duringPitchShift_prev = false;
@@ -824,457 +840,526 @@ void Audapter::reset()
 	amp_ratio = 1.0;
 }
 
-int sw(char *table[], const char *str, const int &entries)
-{
-	char **bp;
-	int i;
-	for(i=0,bp=&table[0]; i<entries; ++i,++bp) // scan all test strings
-	{
-		if(*str != **bp)continue; // 1st char's must match
-		if(strcmp(str,*bp)==0)return i+1; // match whole string
-	}
-return 0;
-}
-
-
-int Audapter::setparams(void * name, void * value, int nPars){
-	char *arg = (char *)name;
-	int k,n;
-	bool param_set=true;
-
-//	char *intparamarray[NPARAMS]={"srate","framelen","ndelay","nwin","nlpc","nfmts","ntracks",
-//									1		   2		3		4		5		6		7								
-//	"avglen","cepswinwidth","fb","minvowellen", "delayframes", "bpitchshift", "pvocframelen", "pvochop", "bdownsampfilt", "nfb", "mute", 
-//		8			9		 10		11             12				13				14			15				16			17	   18
-//	"tsgntones", "downfact", "stereomode", "bpvocampnorm", "pvocampnormtrans"};
-//		19			20				21			22				23
-	k=sw(intparamarray, arg, 23);
-	//TRACE("ALGO: setting param: %s\n", arg);
-	switch (k){
-	case 1: // sample rate
-		p.sr				= (int)(*(dtype *)value);
-		break;
-	case 2: // frame length = ASIO IO buffer 
-		p.frameLen			= (int)(*(dtype *)value);
-		p.anaLen			= p.frameShift + 2 * (p.nDelay - 1) * p.frameLen;
-		//p.pvocFrameLen			= p.frameShift + (2 * p.nDelay - 3) * p.frameLen;
-		//for (int i0 = 0; i0 < max_nFFT; i0++){
-		//	fftc_ps0[i0] = 0;
-		//}
-		//gen_w_r2(fftc_ps0, p.pvocFrameLen);
-		break;
-	case 3: // number of delayed buffers : total procesing delay = frameLen*nDelay/samprate
-		p.nDelay			= (int)(*(dtype *)value);
-		p.anaLen			= p.frameShift + 2 * (p.nDelay - 1) * p.frameLen;
-		//p.pvocFrameLen			= p.frameShift + (2 * p.nDelay - 3) * p.frameLen;
-		//for (int i0 = 0; i0 < max_nFFT; i0++){
-		//	fftc_ps0[i0] = 0;
-		//}
-		//gen_w_r2(fftc_ps0, p.pvocFrameLen);
-		break;
-	case 4: // each frame can be divided in nWin windows (=mini_frames), on which the whole process will be applied 
-		p.nWin				= (int)(*(dtype *)value);
-		break;
-	case 5: // LPC order ( number of coeffs = nLPC +1)
-		p.nLPC			    = (int)(*(dtype *)value);
-		break;
-	case 6: // number of formants to be shifted
-		p.nFmts				= (int)(*(dtype *)value);
-		break;
-	case 7: // number of formants the tracking algorithm will track
-		p.nTracks			= (int)(*(dtype *)value);
-		break;
-	case 8: // weithed moving average len (should be approx one pitch period)
-		p.avgLen			= (int)(*(dtype *)value);
-		break;
-	case 9:	// Window width of low-pass liftering
-		p.cepsWinWidth		= (int)(*(dtype *)value);
-		break;
-	case 10: // Auditory feedback mode
-		p.fb				= (int)(*(dtype *)value);
-		break;	
-	case 11: // Minimum allowed vowel length
-		p.minVowelLen		= (int)(*(dtype *)value);
-		break;
-	case 12:
-		for (n = 0; n < maxNVoices && n < p.nFB; n++) {
-			p.delayFrames[n]		= (int)(*((dtype *)value + n));
-			if (p.delayFrames[n] < 0){
-				TRACE("WARNING: delayFrames[%d] < 0. Set to 0 automatically.\n", n);
-				p.delayFrames[n] = 0;
-			}
-			if (p.delayFrames[n] > maxDelayFrames){
-				TRACE("WARNING: delayFrames[%d] > %d. Set to %d automatically.\n", n, maxDelayFrames, maxDelayFrames);
-				p.delayFrames[n] = maxDelayFrames;
-			}
-		}
-		break;
-	case 13:
-		p.bPitchShift		= (int)(*(dtype *)value);
-		break;
-	case 14:
-		p.pvocFrameLen		= (int)(*(dtype *)value);
-		for(int i0=0;i0<p.pvocFrameLen;i0++){
-			hwin2[i0] = 0.5*cos(dtype(2*M_PI*i0)/dtype(p.pvocFrameLen)); 
-			hwin2[i0] = 0.5 - hwin2[i0];
-			//hwin2[p.pvocFrameLen-i0-1] = hwin2[i0];
-		}
-		for (int i0 = 0; i0 < max_nFFT; i0++){
-			fftc_ps0[i0] = 0;
-		}
-		gen_w_r2(fftc_ps0, p.pvocFrameLen);
-		break;
-	case 15:
-		p.pvocHop			= (int)(*(dtype *)value);
-		break;
-	case 16:
-		p.bDownSampFilt		= (int)(*(dtype *)value);
-		break;
-	case 17:
-		p.nFB				= (int)(*(dtype *)value);
-		break;
-	case 18:
-		for (n = 0; n < maxNVoices && n < p.nFB; n++) {
-			p.mute[n]		= (int)(*((dtype *)value + n));
-		}
-		break;
-	case 19:
-		p.tsgNTones			= (int)(*(dtype *)value);
-		break;
-	case 20:
-		p.downFact			= (int)(*(dtype *)value);
-		break;
-	case 21:
-		p.stereoMode		= (int)(*(dtype *)value);
-		break;
-	case 22:
-		p.bPvocAmpNorm		= (int)(*(dtype *)value);
-		break;
-	case 23:
-		p.pvocAmpNormTrans	= (int)(*(dtype *)value);
-		break;
-	default:
-		param_set=false;
+void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars, bool bVerbose, int *length) {
+	Parameter::paramType pType = params.checkParam(name);
+	if (pType == Parameter::TYPE_NULL) {
+		string errStr("Unknown parameter name: ");
+		errStr += string(name);
+		mexErrMsgTxt(errStr.c_str());
 	}
 
-	if (param_set)
-	{
-		p.frameShift	= p.frameLen/p.nWin;	
-		p.anaLen		= p.frameShift+2*(p.nDelay-1)*p.frameLen;
-		time_step		= (dtype)p.frameShift*1000/p.sr;	//SC Unit: ms
-		p.minDetected	= p.nWin;
-		return 1;	/* Return 1: integer parameter */
-	}
-	else
-		param_set=true;
+	string ns = string(name);
+	transform(ns.begin(), ns.end(), ns.begin(), ::tolower);
 
-//char *doubleparamarray[NPARAMS]={"scale","preemp","rmsthr","rmsratio","rmsff","dfmtsff",
-//									  1        2         3       4        5        6
-//"wgfreq","wgamp","wgtime","datapb",
-//	  7		  8		   9		10
-//"f2min","f2max","pertf2","pertamp","pertphi","f1min","f1max","lbk","lbb","triallen","ramplen",
-//   11		  12      13       14       15        16      17	  18   19     20          21
-//"afact","bfact","gfact","fn1","fn2", "pitchshiftratio", "pvocwarp", "gain", "rmsclipthresh"};
-//   22	     23      24     25    26		27				28	       29			30		28			29
-//"tsgtonedur","tsgtonefreq","tsgtoneamp","tsgtoneramp","tsgint", "rmsff_fb"};
-//	31				32			33			34			35
-	k=sw(doubleparamarray, arg, 38);
-	switch (k){
-	case 1: // scaling factor for IO output ( 1 = 0db)
-		p.dScale			= *(dtype *)value;
-		break;
-	case 2: // preemphasize value
-		p.dPreemp			= *(dtype *)value;
-		break;
-	case 3: // rms threshold value ( to detect voiced regions)
-		p.dRMSThresh		= *(dtype *)value;
-		break;
-	case 4: // ratio threshold between preemphasized and original frame ( to detect fricatives)
-		p.dRMSRatioThresh 	= *(dtype *)value;
-		break;
-	case 5: // rms forgetting factor (for smoothing)
-		p.rmsFF 			= *(dtype *)value;
-		break;
-	case 6: // fmts forgetting factor (for smoothing in trajectory detection)
-		p.dFmtsFF			= *(dtype *)value;
-		break;
-	case 7: // Frequency of the sine wave (Hz)
-		p.wgFreq			= *(dtype *)value;
-		break;
-	case 8: // Amplitude of the sine wave (wav amp)
-		p.wgAmp				= *(dtype *)value;
-		break;
-	case 9: // Initial time of the sine wave (equivalent to the initial phase)
-		p.wgTime			= *(dtype *)value;
-		break;
-	case 10: // Wave data for playback
-		for (n=0;n<maxPBSize;n++){
-			data_pb[n] = *((dtype *)value+n);
+	void *ptr;
+	int len = 1;
+
+	if (ns == string("bgainadapt")) {
+		ptr = (void *)&p.bGainAdapt;
+	}
+	else if (ns == string("bshift")) {
+		ptr = (void *)&p.bShift;
+	}
+	else if (ns == string("btrack")) {
+		ptr = (void *)&p.bTrack;
+	}
+	else if (ns == string("bdetect")) {
+		ptr = (void *)&p.bDetect;
+	}
+	else if (ns == string("bweight")) {
+		ptr = (void *)&p.bWeight;
+	}
+	else if (ns == string("bcepslift")) {
+		ptr = (void *)&p.bCepsLift;
+	}
+	else if (ns == string("bratioshift")) {
+		ptr = (void *)&p.bRatioShift;
+	}
+	else if (ns == string("bmelshift")) {
+		ptr = (void *)&p.bMelShift;
+	}
+	else if (ns == string("brmsclip")) {
+		ptr = (void *)&p.bRMSClip;
+	}
+	else if (ns == string("bbypassfmt")) {
+		ptr = (void *)&p.bBypassFmt;
+	}
+	else if (ns == string("srate")) {
+		ptr = (void *)&p.sr;
+	}
+	else if (ns == string("framelen")) {
+		ptr = (void *)&p.frameLen;
+	}
+	else if (ns == string("ndelay")) {
+		ptr = (void *)&p.nDelay;
+	}
+	else if (ns == string("nwin")) {
+		ptr = (void *)&p.nWin;
+	}
+	else if (ns == string("nlpc")) {
+		ptr = (void *)&p.nLPC;
+	}
+	else if (ns == string("nfmts")) {
+		ptr = (void *)&p.nFmts;
+	}
+	else if (ns == string("ntracks")) {
+		ptr = (void *)&p.nTracks;
+	}
+	else if (ns == string("avglen")) {
+		ptr = (void *)&p.avgLen;
+	}
+	else if (ns == string("cepswinwidth")) {
+		ptr = (void *)&p.cepsWinWidth;
+	}
+	else if (ns == string("fb")) {
+		ptr = (void *)&p.fb;
+	}
+	else if (ns == string("minvowellen")) {
+		ptr = (void *)&p.minVowelLen;
+	}
+	else if (ns == string("delayframes")) {
+		ptr = (void *)p.delayFrames;
+		len = maxNVoices;
+		if (len > p.nFB)
+			len = p.nFB;
+	}
+	else if (ns == string("bpitchshift")) {
+		ptr = (void *)&p.bPitchShift;
+	}
+	else if (ns == string("pvocframelen")) {
+		ptr = (void *)&p.pvocFrameLen;
+	}
+	else if (ns == string("pvochop")) {
+		ptr = (void *)&p.pvocHop;
+	}
+	else if (ns == string("bdownsampfilt")) {
+		ptr = (void *)&p.bDownSampFilt;
+	}
+	else if (ns == string("nfb")) {
+		ptr = (void *)&p.nFB;
+	}
+	else if (ns == string("mute")) {
+		ptr = (void *)p.mute;
+		len = maxNVoices;
+		if (len > p.nFB)
+			len = p.nFB;
+	}
+	else if (ns == string("tsgntones")) {
+		ptr = (void *)&p.tsgNTones;
+	}
+	else if (ns == string("downfact")) {
+		ptr = (void *)&p.downFact;
+	}
+	else if (ns == string("stereomode")) {
+		ptr = (void *)&p.stereoMode;
+	}
+	else if (ns == string("bpvocampnorm")) {
+		ptr = (void *)&p.bPvocAmpNorm;
+	}
+	else if (ns == string("pvocampnormtrans")) {
+		ptr = (void *)&p.pvocAmpNormTrans;
+	}
+	else if (ns == string("scale")) {
+		ptr = (void *)&p.dScale;
+	}
+	else if (ns == string("preemp")) {
+		ptr = (void *)&p.dPreemp;
+	}
+	else if (ns == string("rmsthr")) {
+		ptr = (void *)&p.dRMSThresh;
+	}
+	else if (ns == string("rmsratio")) {
+		ptr = (void *)&p.dRMSRatioThresh;
+	}
+	else if (ns == string("rmsff")) {
+		ptr = (void *)&p.rmsFF;
+	}
+	else if (ns == string("dfmtsff")) {
+		ptr = (void *)&p.dFmtsFF;
+	}
+	else if (ns == string("wgfreq")) {
+		ptr = (void *)&p.wgFreq;
+	}
+	else if (ns == string("wgamp")) {
+		ptr = (void *)&p.wgAmp;
+	}
+	else if (ns == string("wgtime")) {
+		ptr = (void *)&p.wgTime;
+	}
+	else if (ns == string("datapb")) {
+		ptr = (void *)data_pb;
+		len = maxPBSize;
+	}
+	else if (ns == string("f2min")) {
+		ptr = (void *)&p.F2Min;
+	}
+	else if (ns == string("f2max")) {
+		ptr = (void *)&p.F2Max;
+	}
+	else if (ns == string("pertf2")) {
+		ptr = (void *)p.pertF2;
+		len = pfNPoints;
+	}
+	else if (ns == string("pertamp")) {
+		ptr = (void *)p.pertAmp;
+		len = pfNPoints;
+	}
+	else if (ns == string("pertphi")) {
+		ptr = (void *)p.pertPhi;
+		len = pfNPoints;
+	}
+	else if (ns == string("f1min")) {
+		ptr = (void *)&p.F1Min;
+	}
+	else if (ns == string("f1max")) {
+		ptr = (void *)&p.F1Max;
+	}
+	else if (ns == string("lbk")) {
+		ptr = (void *)&p.LBk;
+	}
+	else if (ns == string("lbb")) {
+		ptr = (void *)&p.LBb;
+	}
+	else if (ns == string("triallen")) {
+		ptr = (void *)&p.trialLen;
+	}
+	else if (ns == string("ramplen")) {
+		ptr = (void *)&p.rampLen;
+	}
+	else if (ns == string("afact")) {
+		ptr = (void *)&p.aFact;
+	}
+	else if (ns == string("bfact")) {
+		ptr = (void *)&p.bFact;
+	}
+	else if (ns == string("gfact")) {
+		ptr = (void *)&p.gFact;
+	}
+	else if (ns == string("fn1")) {
+		ptr = (void *)&p.fn1;
+	}
+	else if (ns == string("fn2")) {
+		ptr = (void *)&p.fn2;
+	}
+	else if (ns == string("pitchshiftratio")) {
+		ptr = (void *)p.pitchShiftRatio;
+		len = maxNVoices;
+		if (len > p.nFB)
+			len = p.nFB;
+	}
+	else if (ns == string("pvocwarp")) {
+		ptr = (void *)warpCfg;
+	}
+	else if (ns == string("gain")) {
+		ptr = (void *)p.gain;
+		len = maxNVoices;
+		if (len > p.nFB)
+			len = p.nFB;
+	}
+	else if (ns == string("rmsclipthresh")) {
+		ptr = (void *)&p.rmsClipThresh;
+	}
+	else if (ns == string("tsgtonedur")) {
+		ptr = (void *)p.tsgToneDur;
+		len = maxNTones;
+	}
+	else if (ns == string("tsgntonefreq")) {
+		ptr = (void *)p.tsgToneFreq;
+		len = maxNTones;
+	}
+	else if (ns == string("tsgtoneamp")) {
+		ptr = (void *)p.tsgToneAmp;
+		len = maxNTones;		
+	}
+	else if (ns == string("tsgtoneramp")) {
+		ptr = (void *)p.tsgToneRamp;
+		len = maxNTones;
+	}
+	else if (ns == string("tsgint")) {
+		ptr = (void *)p.tsgInt;
+		len = maxNTones;
+	}
+	else if (ns == string("rmsff_fb")) {
+		ptr = (void *)p.rmsFF_fb;
+	}
+	else if (ns == string("fb4gaindb")) {
+		ptr = (void *)&p.fb4GainDB;
+	}
+	else if (ns == string("fb3gain")) {
+		ptr = (void *)&p.fb4Gain;
+	}
+	else {		
+		string errStr("Unknown parameter name: ");
+		errStr += string(name);
+		mexErrMsgTxt(errStr.c_str());
+		return NULL;
+	}
+
+	if (!bSet) {
+		/* Get value */
+		if (length)
+			*length = len;
+		return ptr;
+	}
+	else {
+		/* Set value(s) */
+		if (pType == Parameter::TYPE_BOOL) {
+			*((int *)ptr) = (int)(*((dtype *)value));
 		}
-		pbCounter=0;
-		break;
-	case 11:
-		p.F2Min			= *(dtype *)value;
-		break;
-	case 12:
-		p.F2Max			= *(dtype *)value;
-		break;
-	case 13:
-		for (n=0;n<pfNPoints;n++){
-			p.pertF2[n] = *((dtype *)value+n);
+		else if (pType == Parameter::TYPE_INT) {
+			*((int *)ptr) = (int)(*((dtype *)value));
 		}
-		break;	
-	case 14:
-		for (n=0;n<pfNPoints;n++){
-			p.pertAmp[n] = *((dtype *)value+n);
+		else if (pType == Parameter::TYPE_DOUBLE) {
+			*((dtype *)ptr) = *((dtype *)value);
 		}
-		break;
-	case 15:
-		for (n=0;n<pfNPoints;n++){
-			p.pertPhi[n] = *((dtype *)value+n);
-		}
-		break;	
-	case 16:
-		p.F1Min			= *(dtype *)value;
-		break;
-	case 17:		
-		p.F1Max			= *(dtype *)value;
-		break;
-	case 18:
-		p.LBk			= *(dtype *)value;
-		break;
-	case 19:
-		p.LBb			= *(dtype *)value;
-		break;	
-	case 20:
-		p.trialLen			= *(dtype *)value;
-		break;
-	case 21:
-		p.rampLen			= *(dtype *)value;
-		break;
-	case 22:
-		p.aFact				= *(dtype *)value;
-		break;	
-	case 23:
-		p.bFact				= *(dtype *)value;
-		break;
-	case 24:
-		p.gFact				= *(dtype *)value;
-		break;
-	case 25:
-		p.fn1				= *(dtype *)value;
-		break;
-	case 26:
-		p.fn2				= *(dtype *)value;
-		break;
-	case 27:
-		for (n = 0; n < maxNVoices && n < p.nFB; n++) {
-			p.pitchShiftRatio[n]   = *((dtype *)value + n);
-		}
-		break;
-	case 28:
-		delete(warpCfg);
-		warpCfg = new pvocWarpAtom(*((dtype *)value), 
-								   *((dtype *)value + 1), 
-								   *((dtype *)value + 2), 
-								   *((dtype *)value + 3), 
-								   *((dtype *)value + 4));
-		break;
-	case 29:
-		for (n = 0; n < maxNVoices && n < p.nFB; n++) {
-			p.gain[n]   = *((dtype *)value + n);
-		}
-		break;
-	case 30:
-		p.rmsClipThresh     = *(dtype *)value;
-		break;
-	case 31:
-		for (n=0;n<maxNTones;n++){ 
-			p.tsgToneDur[n] = *((dtype *)value+n);
-		}
-		break;
-	case 32:
-		for (n=0;n<maxNTones;n++){ 
-			p.tsgToneFreq[n] = *((dtype *)value+n);
-		}
-		break;
-	case 33:
-		for (n=0;n<maxNTones;n++){ 
-			p.tsgToneAmp[n] = *((dtype *)value+n);
-		}
-		break;
-	case 34:
-		for (n=0;n<maxNTones;n++){ 
-			p.tsgToneRamp[n] = *((dtype *)value+n);
-		}
-		break;
-	case 35:
-		for (n=0;n<maxNTones;n++){
-			p.tsgInt[n]		 = *((dtype *)value+n);
-		}
-		tsgToneOnsets[0]=0;
-		for (n=1;n<maxNTones;n++){
-			tsgToneOnsets[n]=tsgToneOnsets[n-1]+p.tsgInt[n-1];	//sec
-		}
-		break;
-	case 36:
-		if (nPars == 1) {
-			p.rmsFF_fb[0]     = *(dtype *)value;
-			p.rmsFF_fb[1]	  = p.rmsFF_fb[0];
-			p.rmsFF_fb[2]     = 0.0;
-			p.rmsFF_fb[3]	  = 0.0;
-		}
-		else if (nPars == 4) {
-			for (n = 0; n < nPars; n++) {
-				p.rmsFF_fb[n] = *((dtype *)value + n);
+		else if (pType == Parameter::TYPE_BOOL_ARRAY) {
+			for (int i = 0; i < len; i++) {
+				*((int *)ptr + i) = (int)(*((dtype *)value + i));
 			}
 		}
-		else {
-			mexErrMsgTxt("ERROR: unexpected number of inputs for p.rmsFF_fb");
+		else if (pType == Parameter::TYPE_INT_ARRAY) {
+			for (int i = 0; i < len; i++) {
+				*((int *)ptr + i) = (int)(*((dtype *)value + i));
+			}
 		}
+		else if (pType == Parameter::TYPE_DOUBLE_ARRAY) {
+			for (int i = 0; i < len; i++) {
+				*((dtype *)ptr + i) = (dtype)(*((dtype *)value + i));
+			}
+		}
+		else if (pType == Parameter::TYPE_PVOC_WARP) {
+			if (warpCfg) {
+				delete warpCfg;
+				warpCfg = NULL;
+			}
+			warpCfg = new pvocWarpAtom(*((dtype *)value), 
+										*((dtype *)value + 1), 
+										*((dtype *)value + 2), 
+										*((dtype *)value + 3), 
+										*((dtype *)value + 4));
+		}
+		else if (pType == Parameter::TYPE_SMN_RMS_FF) {
+			if (nPars == 1) {
+				p.rmsFF_fb[0]     = *(dtype *)value;
+				p.rmsFF_fb[1]	  = p.rmsFF_fb[0];
+				p.rmsFF_fb[2]     = 0.0;
+				p.rmsFF_fb[3]	  = 0.0;
+			}
+			else if (nPars == 4) {
+				for (int n = 0; n < nPars; n++) {
+					p.rmsFF_fb[n] = *((dtype *)value + n);
+				}
+			}
+			else {
+				mexErrMsgTxt("ERROR: unexpected number of inputs for p.rmsFF_fb");
+			}
 
-		rmsFF_fb_now = p.rmsFF_fb[0];
-
-		break;
-	case 37:
-		p.fb4GainDB		= *(dtype *)value;
-		p.fb4Gain		= pow(10.0, p.fb4GainDB / 20);
-		break;
-
-	case 38:
-		p.fb3Gain		= *(dtype *)value;
-		break;
-
-	default:
-		param_set=false;
-	}
-
-	if (param_set)
-		return 2;		/* Return 2: float / double parameters */
-	else
-		param_set=true;
-
-//char *boolparamarray[NPARAMS]={"bgainadapt","bshift","btrack","bdetect","bweight","bcepslift","bratioshift","bmelshift","brmsclip"};
-//									1          2         3         4          5           6			7				8			9
-	k=sw(boolparamarray, arg, 10);
+			rmsFF_fb_now = p.rmsFF_fb[0];
+		}
 	
-	switch (k){
-	case 1: // 1 = do gainadaption  
-		p.bGainAdapt		=  (int)(*(dtype *)value);
-		break;
-	case 2: // If do shifting: set to 1
-		p.bShift			=  (int)(*(dtype *)value);
-		break;
-	case 3: // Should almost always be set to 1
-		p.bTrack			=  (int)(*(dtype *)value);
-		break;
-	case 4: // If do shifting: set to 1
-		p.bDetect			=  (int)(*(dtype *)value);
-		break;	
-	case 5: // 1 = do temporal smoothing of formant frequencies based on RMS weighted averaging
-		p.bWeight		=  (int)(*(dtype *)value);
-		break;
-	case 6:	// 1 = do low-pass liftering
-		p.bCepsLift			=  (int)(*(dtype *)value);
-		break;
-	case 7:	
-		p.bRatioShift       =  (int)(*(dtype *)value);
-		break;
-	case 8:
-		p.bMelShift			=  (int)(*(dtype *)value);
-		break;
-	case 9:
-		p.bRMSClip			=  (int)(*(dtype *)value);
-		break;
-	case 10:
-		p.bBypassFmt		=  (int)(*(dtype *)value);
-		break;
-	default:
-		param_set=false;
+		/* Additional internal parameter changes */
+		if (ns == string("nfb")) {
+			if (p.nFB > maxNVoices)
+				p.nFB = maxNVoices;
+		}
+		else if (ns == string("framelen") || ns == string("ndelay")) {
+			p.anaLen = p.frameShift + 2 * (p.nDelay - 1) * p.frameLen;
+		}
+		else if (ns == string("delayframes")) {
+			for (int n = 0; n < maxNVoices && n < p.nFB; n++) {
+				p.delayFrames[n]		= (int)(*((dtype *)value + n));
+				if (p.delayFrames[n] < 0){
+					TRACE("WARNING: delayFrames[%d] < 0. Set to 0 automatically.\n", n);
+					p.delayFrames[n] = 0;
+				}
+				if (p.delayFrames[n] > maxDelayFrames){
+					TRACE("WARNING: delayFrames[%d] > %d. Set to %d automatically.\n", n, maxDelayFrames, maxDelayFrames);
+					p.delayFrames[n] = maxDelayFrames;
+				}
+			}
+		}
+		else if (ns == string("pvocframelen")) {
+			for(int i0=0;i0<p.pvocFrameLen;i0++){
+				hwin2[i0] = 0.5*cos(dtype(2*M_PI*i0)/dtype(p.pvocFrameLen)); 
+				hwin2[i0] = 0.5 - hwin2[i0];
+				//hwin2[p.pvocFrameLen-i0-1] = hwin2[i0];
+			}
+			for (int i0 = 0; i0 < max_nFFT; i0++){
+				fftc_ps0[i0] = 0;
+			}
+			gen_w_r2(fftc_ps0, p.pvocFrameLen);
+		}
+		else if (ns == string("datapb")) {
+			pbCounter = 0;
+		}
+		else if (ns == string("tsgint")) {
+			tsgToneOnsets[0]=0;
+			for (int n = 1; n < maxNTones; n++){
+				tsgToneOnsets[n] = tsgToneOnsets[n - 1] + p.tsgInt[n-1];	//sec
+			}
+		}
+		else if (ns == string("fb4gaindb")) {
+			p.fb4Gain		= pow(10.0, p.fb4GainDB / 20);
+		}
+
+		p.frameShift	= p.frameLen / p.nWin;
+		p.anaLen		= p.frameShift + 2 * (p.nDelay - 1) * p.frameLen;
+		time_step		= (dtype)p.frameShift * 1000 / p.sr;	//SC Unit: ms
+		p.minDetected	= p.nWin;
+
+		/* Verbose mode */
+		if (bVerbose) {
+			ostringstream oss;
+
+			oss << "Set parameter " << ns << " to: ";
+		
+			string valStr;
+			if (pType == Parameter::TYPE_BOOL) {
+				string tBoolStr;
+				if (*((int *)ptr) > 0) {
+					tBoolStr = "true";
+				}
+				else {
+					tBoolStr = "false";
+				}
+				oss << tBoolStr;
+			}
+			else if (pType == Parameter::TYPE_INT || pType == Parameter::TYPE_INT_ARRAY) {
+				if (len > 1)	oss << "[";
+
+				for (int i = 0; i < len; i++) {
+					if (len > maxDisplayElem && i == 3) {
+						oss << "...";
+						i = len - 2;
+					}
+					else {
+						oss << *((int *)ptr + i);
+					}
+
+					if (len > 1) {
+						if (i < len - 1)	oss << ", ";
+						else				oss << "]";
+					}
+				}
+			}
+			else if (pType == Parameter::TYPE_DOUBLE || pType == Parameter::TYPE_DOUBLE_ARRAY) {
+				if (len > 1)	oss << "[";
+				for (int i = 0; i < len; i++) {
+					if (len > maxDisplayElem && i == 3) {
+						oss << "...";
+						i = len - 2;
+					}
+					else {
+						oss << *((dtype *)ptr + i);
+					}
+
+					if (i < len - 1)	oss << ", ";
+					else				oss << "]";
+				}
+			}
+			oss << endl;
+
+			string promptStr = oss.str();
+			mexPrintf(promptStr.c_str());
+		}
+
+		return NULL;
 	}
-
-	if (param_set)
-		return 3;			/* Return 3: boolean parameters */
-	else
-		return 0;			/* Return 0: error */
-
 }
 
-
-int Audapter::getparams(void * name){
-	char *arg = (char *)name;
-	int k;
-//	char *intparamarray[NPARAMS]={"srate","framelen","ndelay","nwin","nlpc","nfmts","ntracks",
-//									1		   2		3		4		5		6		7								
-//	"avglen","cepswinwidth","fb","minvowellen", "delayframes", "bpitchshift", "pvocframelen", "pvochop", "bdownsampfilt", "nfb", "mute", 
-//		8			9		 10		11             12				13				14			15				16			17	   18
-//	"tsgntones", "downfact"};
-//		19			20
-	k=sw(intparamarray, arg, 20);
-	//TRACE("ALGO: Getting param: %s\n", arg);
-	switch (k){
-		case 1: // sample rate
-			return p.sr;
-		case 2: //
-			return p.frameLen;
-		case 3: // 
-			return p.nDelay;
-		case 4: // 
-			return p.nWin;
-		case 5: // LPC order ( number of coeffs = nLPC +1)
-			return p.nLPC;
-		case 6: // number of formants to be shifted
-			return p.nFmts;
-		case 7: // 
-			return p.nTracks;
-		case 8: // transition length	
-			return p.avgLen;			
-		case 9: // avglen
-			return p.cepsWinWidth;			
-		case 10: // downsample factor
-			return  p.fb;
-		case 11:
-			break;
-		case 12:
-			return p.delayFrames[0];
-		case 13:
-			return p.bPitchShift;
-		case 14:
-			return p.pvocFrameLen;
-		case 15:
-			return p.pvocHop;
-		case 16:
-			return p.bDownSampFilt;
-		case 17:
-			return p.nFB;
-		case 18:
-			return p.mute[0];
-		case 19:
-			return p.tsgNTones;
-		case 20:
-			return p.downFact;
-
-		default:
-			TRACE("ALGO: Unknown parameter: %s\n", arg);
-			return 0;
-	}
+void Audapter::setParam(const char *name, void * value, int nPars, bool bVerbose) {
+	setGetParam(true, name, value, nPars, bVerbose, NULL);
 }
 
-const dtype* Audapter::getsignal(int & size)	//SC 
-{
-	size = frame_counter*p.frameLen ;	//SC Update size
+void *Audapter::getParam(const char *name) {
+	return setGetParam(false, name, NULL, 0, false, NULL);
+}
+
+void Audapter::queryParam(const char *name, mxArray **output) {
+	int length;
+	Parameter::paramType pType = params.checkParam(name);
+
+	if (pType == Parameter::TYPE_NULL) {
+		string errStr = "Unrecognized parameter: ";
+		errStr += name;
+		mexErrMsgTxt(errStr.c_str());
+	}
+
+	void *val;
+	val = setGetParam(false, name, NULL, 0, false, &length);
+
+	if (pType == Parameter::TYPE_BOOL || pType == Parameter::TYPE_BOOL_ARRAY
+		|| pType == Parameter::TYPE_INT || pType == Parameter::TYPE_INT_ARRAY
+		|| pType == Parameter::TYPE_DOUBLE || pType == Parameter::TYPE_DOUBLE_ARRAY) {
+		
+		*output = mxCreateDoubleMatrix(1, length, mxREAL);
+		double *output_ptr = mxGetPr(*output);
+
+		for (int i = 0; i < length; i++) {
+			if (pType == Parameter::TYPE_BOOL || pType == Parameter::TYPE_BOOL_ARRAY) {
+				output_ptr[i] = (double)(*(int *) val);
+			}
+			else if (pType == Parameter::TYPE_INT || pType == Parameter::TYPE_INT_ARRAY) {
+				output_ptr[i] = (double)(*(int *) val);
+			}
+			else if (pType == Parameter::TYPE_DOUBLE || pType == Parameter::TYPE_DOUBLE_ARRAY) {
+				output_ptr[i] = (double)(*(double *) val);
+			}
+		}
+	}
+	else if (pType == Parameter::TYPE_PVOC_WARP) {
+		*output = mxCreateDoubleMatrix(0, 0, mxREAL);
+		// TODO
+
+		/*const int nFields = 6;
+		pvocWarpAtom tWarpCfg = *((pvocWarpAtom *) val);
+
+		const char *fields[nFields] = {"tBegin", "rate1", "dur1", "durHold", "rate2", "dur2"};
+		mwSize nDims[2] = {1, 1};
+
+		*output = mxCreateStructArray(2, nDims, nFields, fields);
+		
+		mxArray *ma;
+		double *ma_ptr;
+		for (int i = 0; i < nFields; i++) {
+			ma = mxCreateDoubleMatrix(1, 1, mxREAL);
+			ma_ptr = mxGetPr(ma);
+
+			if (i == 0)
+				ma_ptr[0] = tWarpCfg.tBegin;
+			else if (i == 1)
+				ma_ptr[0] = tWarpCfg.rate1;
+			else if (i == 2)
+				ma_ptr[0] = tWarpCfg.dur1;
+			else if (i == 3)
+				ma_ptr[0] = tWarpCfg.durHold;
+			else if (i == 4)
+				ma_ptr[0] = tWarpCfg.rate2;
+			else if (i == 5)
+				ma_ptr[0] = tWarpCfg.dur2;
+			
+			mxSetField(*output, i, fields[i], ma);
+		}*/
+	}
+	else if (pType == Parameter::TYPE_SMN_RMS_FF) {
+		*output = mxCreateDoubleMatrix(0, 0, mxREAL);
+		//TODO
+	}
+	
+}
+
+const dtype* Audapter::getSignal(int & size) const {
+	size = frame_counter*p.frameLen;	//SC Update size
 	return signal_recorder[0];			//SC return the
 }
 
-const dtype* Audapter::getdata(int & size, int & vecsize)
-{
+const dtype* Audapter::getData(int & size, int & vecsize) const {
 	size = data_counter;
 	vecsize = 4 +2 * p.nTracks + 2 * 2 + p.nLPC + 8;
 	return data_recorder[0];
 }
 
-const dtype* Audapter::getOutFrameBufPS()
-{
+const dtype* Audapter::getOutFrameBufPS() const {
 	return outFrameBufPS[0];
 }
 
@@ -1403,10 +1488,10 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 		//SC Notice that the identification of a voiced frame requires, 1) RMS of the orignal signal is large enough,
 		//SC	2) RMS ratio between the orignal and preemphasized signals is large enough
 		if (rms_o >= p.dRMSThresh*2){			
-			above_rms=(ISABOVE(rms_o,p.dRMSThresh) && ISABOVE(rms_ratio,p.dRMSRatioThresh/1.3));
+			above_rms=(isabove(rms_o,p.dRMSThresh) && isabove(rms_ratio,p.dRMSRatioThresh/1.3));
 		}
 		else{
-			above_rms=(ISABOVE(rms_o,p.dRMSThresh) && ISABOVE(rms_ratio,p.dRMSRatioThresh));
+			above_rms=(isabove(rms_o,p.dRMSThresh) && isabove(rms_ratio,p.dRMSRatioThresh));
 		}
 
 		/* TODO: Implement bDoFmts */
@@ -2642,7 +2727,7 @@ int Audapter::hqr_roots (	dtype *c, 	dtype *wr, dtype *wi,	dtype *Acompanion, co
        VV 19 June 2003 */
 
     for (i=1;i<(nLPC+1);i++)
-        for (j=IMAX(i-1,1);j<(nLPC+1);j++)
+        for (j=imax(i-1,1);j<(nLPC+1);j++)
             anorm += fabs(aMat(i,j));
     nn = nLPC;
     t=0.0;
@@ -2667,7 +2752,7 @@ int Audapter::hqr_roots (	dtype *c, 	dtype *wr, dtype *wi,	dtype *Acompanion, co
                         z=sqrt(fabs(q));
                         x += t;
                         if (q >= 0.0) {
-                              z=p+SIGN(z,p);
+                              z=p+mul_sign(z,p);
                               wr[(-1) + nn-1]=wr[(-1)+ nn]=x+z;
                               if (z) wr[(-1) + nn]=x-w/z;
                               wi[(-1) + nn-1]=wi[(-1) + nn]=0.0;
@@ -2717,7 +2802,7 @@ int Audapter::hqr_roots (	dtype *c, 	dtype *wr, dtype *wi,	dtype *Acompanion, co
                                    r /= x;
                                 }
                              }
-                             if ((s=SIGN(sqrt(p*p+q*q+r*r),p)) != 0.0) {
+                             if ((s=mul_sign(sqrt(p*p+q*q+r*r),p)) != 0.0) {
                                  if (k == m) {
                                      if (l != m)
                                      aMat(k,k-1) = -aMat(k,k-1);
@@ -3033,15 +3118,6 @@ dtype Audapter::calcRMS_fb(const dtype *xin_ptr, int size, bool above_rms)
 	return ma_rms_fb;
 }
 
-int Audapter::sign(dtype x)
-{
-	if (x>0)
-		return 1;
-	else if (x<0)
-		return -1;
-	else
-		return 0;
-}
 
 
 void Audapter::downSampSig(dtype *b,dtype *a, dtype *x, dtype *buffer, dtype *r,dtype  *d,const int nr, const int n_coeffs, const int downfact)
@@ -3392,7 +3468,7 @@ void Audapter::writeSignalsToWavFile() {
 	const int bytesPerSample = bitsPerSample / 8;
 	const short numChannels = 1;
 
-	//algosignal_ptr = getsignal(size);
+	//algosignal_ptr = getSignal(size);
 	algosignal_ptr = this->signal_recorder[0];
 
 	for (j0 = 0; j0 < 2; j0++) {
@@ -3440,7 +3516,7 @@ void Audapter::writeSignalsToWavFile() {
 		wavF.write((char *)(&audioFormat), sizeof(short) * 1);
 		wavF.write((char *)(&numChannels), sizeof(short) * 1);
 
-		//wavSampRate = getparams((void *)"srate");
+		//wavSampRate = getParam((void *)"srate");
 		wavSampRate = this->p.sr;
 		//printf("wavSampRate = %d\n", wavSampRate);
 		wavF.write((char *)(&wavSampRate), sizeof(int) * 1);
@@ -3803,8 +3879,10 @@ void Audapter::readPIPCfg(int bVerbose) {
 
 		/*sscanf(line, "%f, %f, %f, %f, %f", 
 			   &t_tBegin, &t_rate1, &t_dur1, &t_durHold, &t_rate2);*/
-		if (warpCfg)
-			delete(warpCfg);
+		if (warpCfg) {
+			delete warpCfg;
+			warpCfg = NULL;
+		}
 
 		if (string_count_char(line, ',') == 4) {
 			sscanf_floatArray(line, tmpx, 5);

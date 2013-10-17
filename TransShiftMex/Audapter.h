@@ -1,32 +1,73 @@
 /* 
-Audapter.h
+Audaper.cpp
 
-Defines the interface for the [a]-->[i] transition shifting algorithm
+Speech auditory feedback manipulation program capable of the following types 
+of perturbations:
+	1) Formants frequencies (F1 and F2)
+	2) Pitch
+	3) Fine-scale timing (time warping)
+	4) Global time delay (DAF)
+	5) Local intensity
+	6) Global intensity
 
-(c) 2007 Marc Boucek
-(c) 2013 Shanqing Cai
-speech communication group, RLE @MIT
+Heuristics-based online utterance status tracking (OST) is incorporated
+
+Requires ASIO compatible sound cards
+
+Also incorporated 
+	1) Cepstral liftering (optional)
+	2) Dynamic programming style formant tracking 
+		(Xia and Espy-Wilson, 2000, ICSLP)
+	3) Gain adaptation after shifting (optional)
+	4) RMS-based formant smoothing (to reduce the influence of subglottal 
+		coupling on formant estimates) (optional)
+
+Authors:
+2007 Marc Boucek, Satrajit Ghosh
+2008-2013 Shanqing Cai (shanqing.cai@gmail.com)
+
+Developed at:
+Speech Communication Group, RLE, MIT
+Speech Laboratory, Boston University
 */
 
 #pragma once
 
-//#include "pvocWarpAtom.h"
 #include <windows.h>
 #include <process.h>
+#include <math.h>
 #include <vector>
+
 #include "mex.h"
 
 typedef double dtype;
 
 #define M_PI       3.14159265358979323846
-
-// subfunction roots specific definitions
-#define SIGN(a,b) ((b)>=0.0 ? fabs((a)) : -fabs((a)))
-#define IMAX(k,j) ((k)<=(j) ? (j) : (k))
 #define aMat(k,j) AHess[((j)-1)*nLPC+(k)-1]
-#define ISABOVE(a,b)((a)>=(b) ? true : false)
-#define ZEROIFABOVE(a,b) ((a)>=(b) ? 0 : (a))
 
+/* Utility inline functions */
+inline dtype mul_sign(const dtype &a, const dtype &b) {
+	return (b >= 0.0 ? fabs(a) : -fabs(a));
+}
+
+inline int sign(const dtype &x) {
+	if (x>0)
+		return 1;
+	else if (x<0)
+		return -1;
+	else
+		return 0;
+}
+
+inline int imax(const int &k, const int &j) {
+	return (k <= j ? j : k);
+}
+
+inline bool isabove(const dtype &a, const dtype &b) {
+	return (a >= b);
+}
+
+/* Callback function declarations */
 int algoCallbackFunc(char *buffer, int buffer_size, void * data); // algorithm callback function: stereo: for online runs
 int algoCallbackFuncMono(char *buffer, int buffer_size, void * data); // algorithm callback function: mono: for offline simulations only
 int algoCallbackFuncSineGen(char *buffer, int buffer_size, void * data); //SC algorithm sine wave generator
@@ -34,7 +75,7 @@ int algoCallbackFuncWavePB(char *buffer, int buffer_size, void * data); //SC alg
 
 int algoCallbackFuncToneSeq(char *buffer, int buffer_size, void * data); //SC(2009/12/01) algorithm tone sequence generation
 
-// DSPLib routines - in case we have to go back to the TI board
+/* DSPLib routines - in case we have to go back to the TI board */
 void	DSPF_dp_blk_move(const dtype * x, dtype * r, const int nx);
 dtype	DSPF_dp_vecsum_sq(const dtype *x,int n);                           
 void	DSPF_dp_biquad(dtype * x, dtype * b, dtype * a, dtype * delay, dtype * r, int nx);
@@ -126,12 +167,15 @@ public:
 class Parameter {
 public:
 	typedef enum {
+		TYPE_NULL = 0,
 		TYPE_BOOL, 
 		TYPE_INT, 
 		TYPE_DOUBLE, 
+		TYPE_BOOL_ARRAY,
 		TYPE_INT_ARRAY, 
 		TYPE_DOUBLE_ARRAY, 
-		TYPE_PVOC_WARP
+		TYPE_PVOC_WARP, 
+		TYPE_SMN_RMS_FF
 	} paramType;
 
 private:
@@ -141,7 +185,6 @@ private:
 	int nParams;
 
 public:
-
 	Parameter() { nParams = 0; };
 	void addParam(const char *name, const char * helpMsg, const paramType type) {
 		names.push_back(name);
@@ -151,6 +194,7 @@ public:
 		nParams = names.size();
 	};
 
+	paramType checkParam(const char *name);
 };
 
 // Class Audapter
@@ -198,6 +242,9 @@ private:
 
 	/* Parameter names and help info */
 	Parameter params;
+
+	/* Display related */
+	static const int maxDisplayElem = 6;
 
 	//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  VARIABLES & COUNTERS  *****************************************************%%%%%%%		
 	// Variables
@@ -564,7 +611,6 @@ private:
 	int gainAdapt(dtype *buffer,dtype *gtot_ptr,int framelen, int frameshift);
 	int gainPerturb(dtype *buffer,dtype *gtot_ptr,int framelen, int frameshift);
 
-	int sign(dtype x);
 	bool  detectTrans(dtype *fmt_ptr, dtype *dFmt_ptr,int datcnt, dtype time);
 	int getDFmt(dtype *fmt_ptr,dtype *dFmt_ptr, dtype time);	
 	void upSampSig (dtype *b, dtype *a, dtype *x, dtype *buffer, dtype *r,dtype  *d,const int nr, const int n_coeffs, const int upfact,const dtype scalefact);
@@ -585,6 +631,7 @@ private:
 	void	Audapter::calcRMSSlope();
 	void	Audapter::osTrack();
 
+	void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars, bool bVerbose, int *length);
 
 public:
 	// Constructor initializes all variables
@@ -592,6 +639,9 @@ public:
 
 	// Destructor 
 	~Audapter();
+
+	/* Functions for parameter query */
+	void queryParam(char const *name, mxArray **output);
 
 	// The Reset function reinitializes all internal buffers
 	void reset();
@@ -604,11 +654,12 @@ public:
 	int handleBufferToneSeq(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_size);	//SC(2009/12/01) Tone sequence generator
 
 	// Allows external entities to set / get various parameters of the process
-	int setparams(void * name, void * value, int nPars);
-	int getparams(void * name);
-	const dtype* getsignal(int & size);
-	const dtype* getdata(int & size,int & vecsize);	
-	const dtype* getOutFrameBufPS();
+	void setParam(const char *name, void * value, int nPars, bool bVerbose=false);
+	void *getParam(const char *name);
+
+	const dtype* getSignal(int & size) const;
+	const dtype* getData(int & size,int & vecsize) const;
+	const dtype* getOutFrameBufPS() const;
 
 	int pbCounter;	//SC The integer counter used in wave playback 
 
