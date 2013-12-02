@@ -43,7 +43,6 @@ Speech Laboratory, Boston University
 typedef double dtype;
 
 #define M_PI       3.14159265358979323846
-#define aMat(k,j) AHess[((j)-1)*nLPC+(k)-1]
 
 /* Utility inline functions */
 inline dtype mul_sign(const dtype &a, const dtype &b) {
@@ -75,12 +74,17 @@ int algoCallbackFuncWavePB(char *buffer, int buffer_size, void * data); //SC alg
 
 int algoCallbackFuncToneSeq(char *buffer, int buffer_size, void * data); //SC(2009/12/01) algorithm tone sequence generation
 
-/* DSPLib routines - in case we have to go back to the TI board */
+/* DSP routines (some of which are from TI DSPLib) */
 void	DSPF_dp_blk_move(const dtype * x, dtype * r, const int nx);
 dtype	DSPF_dp_vecsum_sq(const dtype *x,int n);                           
-void	DSPF_dp_biquad(dtype * x, dtype * b, dtype * a, dtype * delay, dtype * r, int nx);
-void	DSPF_dp_vecmul(const dtype * x, const dtype * y, dtype * r, int n);
-void	DSPF_dp_autocor(dtype * r, dtype * x, int nx, int nr);
+//void	DSPF_dp_biquad(dtype * x, dtype * b, dtype * a, dtype * delay, dtype * r, int nx);
+void	DSPF_dp_biquad(double *x, double *b, double *a, double *delay, double *r, const int &nx);
+void	DSPF_dp_vecmul(const dtype * x, const dtype * y, dtype * r, const int &n);
+void	DSPF_dp_autocor(dtype * r, dtype * x, const int & nx, const int & nr);
+
+int		hqr_roots(dtype *c, dtype *wr, dtype *wi, dtype *Acompanion, dtype *AHess, const int & nLPC);
+void	getRPhiBw(dtype *wr,  dtype *wi, dtype *radius,  dtype *phi ,dtype *bandwith, const dtype & sr, const int & nLPC);
+void    levinson(dtype * R, dtype * aa, const int & size);
 
 typedef struct tag_thrWriteWavStruct {
 	void *pThis;
@@ -317,7 +321,10 @@ private:
 	dtype hwin2[maxBufLen];						// Hanning window for frequency/pitch shifting
 	dtype realRoots[maxNLPC];						// real part of roots
 	dtype imagRoots[maxNLPC];						// imag part of roots
-	dtype Acompanion[maxNLPC_squared];				// companion matrix for (eigenvalue ---> )roots calculation
+	
+	dtype Acompanion[maxNLPC_squared];			// companion matrix for (eigenvalue ---> )roots calculation
+	dtype AHess[maxNLPC_squared];				// companion matrix for (eigenvalue ---> )roots calculation
+
 	dtype amps[maxNPoles];						// radius of poles
 	dtype orgPhis[maxNPoles];						// angle of original poles
 	dtype bw[maxNPoles];							// bandwith of poles
@@ -349,18 +356,18 @@ private:
 	// preemphasis 
 	dtype a_preemp[2];								// denominator coefficients 
 	dtype b_preemp[2];								// numerator coefficients
-	dtype preemp_delay[1];							// filter delay
+	dtype preemp_delay[1];							// IIR filter delay buffer for pre-emphasis
 
 	// deemphasis
 	dtype a_deemp[2];								// denominator coefficients 
 	dtype b_deemp[2];								// numerator coefficients
-	dtype deemp_delay[1];								// filter delay
+	dtype deemp_delay[1];							// IIR filter delay buffer for de-emphasis
 
 
 	// first filter (f1 shift)
 	dtype a_filt1[2];								// denominator coefficients 
 	dtype b_filt1[3];								// numerator coefficients
-	dtype filt_delay1[2];							// filter delays
+	dtype filt_delay1[2];							// IIR filter delay buffer
 
 	// second filter (f2 shift)
 	dtype a_filt2[2];								// denominator coefficients 
@@ -524,7 +531,6 @@ private:
 
 		
 		//SC-Mod(2008/01/05). Arrays: for intensity correction during formant shifting (mainly for the use of parallel shifts)		
-		
 		dtype wgFreq;										//SC Wave generator frequency (Hz)
 		dtype wgAmp;										//SC Wave generator amplitude (digitized peak amplitude)
 		dtype wgTime;										//SC Wave generator current phase (rad)
@@ -597,17 +603,16 @@ private:
 
 	//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  FUNCTIONS  *****************************************************%%%%%%%%%%%
 
-	void     getAi(dtype* xx, dtype* aa, const int size, const int nlpc);
+	void   getAi(dtype* xx, dtype* aa, const int & size, const int & nlpc);
 	dtype  getGain(dtype * r, dtype * ophi,dtype * sphi, int nfmts);
-	int     hqr_roots (	dtype *c, 	dtype *wr, dtype *wi,	dtype *Acompanion, const int nLPC);
-	void    getRPhiBw (dtype *wr,  dtype *wi, dtype *radius,  dtype *phi ,dtype *bandwith);
+	
 	void trackPhi(dtype *r_ptr,dtype *phi_ptr,dtype time);
 	void myFilt (dtype *xin_ptr, dtype* xout_ptr,dtype *oldPhi_ptr,dtype *newPhi_ptr,dtype *r_ptr,const int size);
 	dtype calcRMS1(const dtype *xin_ptr, int size);	
 	dtype calcRMS2(const dtype *xin_ptr, int size);
 	dtype calcRMS_fb(const dtype *xin_ptr, int size, bool above_rms);
 	int getWma(dtype *phi_ptr, dtype *bw_ptr , dtype * wmaPhi_ptr, dtype * wmaR_ptr);
-	void    levinson(dtype *R, dtype* aa, int size);
+	
 	int gainAdapt(dtype *buffer,dtype *gtot_ptr,int framelen, int frameshift);
 	int gainPerturb(dtype *buffer,dtype *gtot_ptr,int framelen, int frameshift);
 
@@ -617,7 +622,7 @@ private:
 	void downSampSig(dtype *b, dtype *a, dtype *x, dtype *buffer, dtype *r,dtype  *d,const int nr, const int n_coeffs, const int downfact);
 	void downSampSig_noFilt(dtype *b, dtype *a, dtype *x, dtype *buffer, dtype *r,dtype  *d,const int nr, const int n_coeffs, const int downfact);
 	void iir_filt (dtype *b, dtype *a,  dtype *x, dtype *r,dtype  *d,const int nr, const int n_coeffs,  dtype g);
-			
+
 	dtype Audapter::hz2mel(dtype hz);
 	dtype Audapter::mel2hz(dtype hz);
 	dtype Audapter::locateF2(dtype f2);

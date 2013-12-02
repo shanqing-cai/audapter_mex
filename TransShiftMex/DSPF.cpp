@@ -1,3 +1,11 @@
+/* DSPF.cpp 
+
+DSP functions
+
+*/
+
+#include <cmath>
+
 void DSPF_dp_blk_move(const double * x, double * r, const int nx)	//SC copy a block of data from one address x to r
 {
 	//memmove((void*)r,(void*)x,nx*sizeof(double));
@@ -31,34 +39,40 @@ double sum;
   }
 }
 
-void DSPF_dp_biquad(double * x, double * b, double * a, double * delay, double * r, int nx)	//SC biquadratic implementation of an IIR
+void DSPF_dp_biquad(double *x, double *b, double *a, double *delay, double *r, const int &nx)	//SC biquadratic IIR: b
 {
+// x: input
+// b: forward coefficients
+// a: reverse coefficients
+// delay: delay buffer
+// r: output
+// nx: number of time points
+	int i;
+	double a1, a2, b0, b1, b2, d0, d1;// x_i;
 
-int i;
-double a1, a2, b0, b1, b2, d0, d1, x_i;
+	a1 = a[0];
+	a2 = a[1];
+	b0 = b[0];
+	b1 = b[1];
+	b2 = b[2];
+	d0 = delay[0];
+	d1 = delay[1];
 
- a1 = a[0];
- a2 = a[1];
- b0 = b[0];
- b1 = b[1];
- b2 = b[2];
- d0 = delay[0];
- d1 = delay[1];
+	for (i = 0; i < nx; i++) {
+	    //x_i = x[i];
+		r[i] = b0 * x[i] + d0;
+	    d0 = b1 * x[i] - a1 * r[i] + d1;
+	    d1 = b2 * x[i] - a2 * r[i];
+	}
 
- for (i = 0; i < nx; i++)
- {
-    x_i = x[i];
-    r[i] = b0 * x_i + d0;
-    d0 = b1 * x_i - a1 * r[i] + d1;
-    d1 = b2 * x_i - a2 * r[i];
-  }
-
- delay[0] = d0;
- delay[1] = d1;
+	delay[0] = d0;
+	delay[1] = d1;
 }
 
-double DSPF_dp_maxval(const    double* x, int nx)		//SC maximum of a vector
+double DSPF_dp_maxval(const double* x, const int &nx)		//SC maximum of a vector
 {
+// x: input array
+// nx: size of input array
 
 int i;
 double max;
@@ -75,7 +89,7 @@ max = x[i];
 return max;
 }
 
-void DSPF_dp_vecmul(const double * x, const double * y, double * r, int n)		//SC vector multiplication
+void DSPF_dp_vecmul(const double * x, const double * y, double * r, const int &n)		//SC vector multiplication
 //SC Input arguments
 //SC	x: vector 1 pointer
 //SC	y: vecotr 2 poniter
@@ -88,20 +102,22 @@ void DSPF_dp_vecmul(const double * x, const double * y, double * r, int n)		//SC
         r[i] = x[i] * y[i];
 }
 
-void DSPF_dp_autocor(double * r, double * x, int nx, int nr)			//SC autocorrelation
+void DSPF_dp_autocor(double * r, double * x, const int & nx, const int & nr)			//SC autocorrelation
 //SC Input arguments
 //SC	r: output pointer
 //SC	x: input signal pointer
-//SC	nx: length of ??
-//SC	nr: length of ??
+//SC	nx: length of input signal (x)
+//SC	nr: number of delays
 {
-int i,k;
-double sum;
-for (i = 0; i < nr; i++)
- {
-    sum = 0;
-    for (k = nr; k < nx+nr; k++)
-        sum += x[k] * x[k-i];
-    r[i] = sum ;
-  }
+	int i, k;
+	double sum;
+
+	for (i = 0; i < nr; i++) {
+	    sum = 0.0;
+		for (k = nr; k < nx + nr; k++)
+			sum += x[k] * x[k - i];
+
+		r[i] = sum;
+	}
 }
+
