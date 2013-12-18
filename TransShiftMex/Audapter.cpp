@@ -225,7 +225,7 @@ Audapter::Audapter()		//SC construction function
 	params.addParam("brmsclip",		"Switch for auto RMS intensity clipping (loudness protection)", Parameter::TYPE_BOOL);
 	params.addParam("bbypassfmt",	"Switch for bypassing formant tracking (for use in pitch shifting and time warping", Parameter::TYPE_BOOL);
 	params.addParam("bpitchshift",	"Pitch shifting switch", Parameter::TYPE_BOOL);	 //TODO: Fix
-	params.addParam("bdownsamplfilt", "Down-sampling filter switch", Parameter::TYPE_BOOL);	// TODO: Fix
+	params.addParam("bdownsampfilt", "Down-sampling filter switch", Parameter::TYPE_BOOL);	// TODO: Fix
 	params.addParam("mute",			"Global mute switch", Parameter::TYPE_BOOL_ARRAY);	// TODO: Fix
 	params.addParam("bpvocmpnorm",	"Phase vocoder amplitude normalization switch", Parameter::TYPE_BOOL); // TODO: Fix
 
