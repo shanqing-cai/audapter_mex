@@ -210,7 +210,9 @@ Parameter::paramType Parameter::checkParam(const char *name) {
 
 }
 
-Audapter::Audapter()		//SC construction function
+Audapter::Audapter() 
+	: downSampFilter(nCoeffsSRFilt, maxFrameLen * downSampFact_default), 
+	  upSampFilter(nCoeffsSRFilt, maxFrameLen * downSampFact_default)
 {//modifiable parameters ( most of them can be modified externally) 
 	/* Parameters configuration */
 	/* Boolean parameters */
@@ -490,100 +492,26 @@ Audapter::Audapter()		//SC construction function
 	b_deemp[0] = 1;
 	b_deemp[1] = 0;
 
-
     // shift filter
 	b_filt1[0] = 1;
 	b_filt2[0] = 1;
 
-	/*
-	srfilt_b[0] = 0.003207504864776675100000;
-	srfilt_b[1] = -0.015051748179863501000000;
-	srfilt_b[2] = 0.045149574027758405000000;
-	srfilt_b[3] = -0.090740842850500311000000;
-	srfilt_b[4] = 0.144017161473200290000000;
-	srfilt_b[5] = -0.177763639685871390000000;
-	srfilt_b[6] = 0.185429987362228570000000;
-	srfilt_b[7] = -0.156965404667578690000000;
-	srfilt_b[8] = 0.120750787331069550000000;
-	srfilt_b[9] = -0.082508106409673099000000;
-	srfilt_b[10] = 0.073479882151955889000000;
-	srfilt_b[11] = -0.082508106409664439000000;
-	srfilt_b[12] = 0.120750787331029840000000;
-	srfilt_b[13] = -0.156965404667645190000000;
-	srfilt_b[14] = 0.185429987362568880000000;
-	srfilt_b[15] = -0.177763639686368770000000;
-	srfilt_b[16] = 0.144017161473438790000000;
-	srfilt_b[17] = -0.090740842850170200000000;
-	srfilt_b[18] = 0.045149574027470510000000;
-	srfilt_b[19] = -0.015051748179931381000000;
-	srfilt_b[20] = 0.003207504864907421600000;
+	/* Filters */
+	const dtype t_srfilt_a[nCoeffsSRFilt] = {1.000000000000000000000000, -4.137689759094149300000000, 11.417342955970334000000000, -21.230389508442666000000000, 
+											 31.507204607241498000000000, -36.677292780605917000000000, 36.042584528469732000000000, -28.996821243768743000000000, 
+											 20.262367357856544000000000, -11.637468104552259000000000, 5.968975493498319000000000, -2.417954280896708500000000, 
+											 0.941027354810217260000000, -0.241109659478893040000000, 0.083935453370180629000000, -0.005511361553189712100000, 
+											 0.006142808678570149300000, 0.001292100725808184000000, 0.000588047191250507470000, 0.000146757274221299580000, 
+											 0.000035865709068928935000};
+	const dtype t_srfilt_b[nCoeffsSRFilt] = {0.005985366448016847400000, -0.000000000068663473436596, 0.029926833561855812000000, 0.014963399494903253000000, 
+											 0.072946803942075492000000, 0.066399110082245749000000, 0.128831523706446540000000, 0.141307195958322970000000, 
+											 0.183515087779119460000000, 0.196038702055692930000000, 0.207578586483177310000000, 0.196038702055692630000000, 
+											 0.183515087779119760000000, 0.141307195958322280000000, 0.128831523706446790000000, 0.066399110082245277000000, 
+											 0.072946803942075533000000, 0.014963399494903067000000, 0.029926833561855826000000, -0.000000000068663525932820, 
+											 0.005985366448016846500000};
 
-	srfilt_a[0] = 1.000000000000000000000000;
-	srfilt_a[1] = -8.054528775835033000000000;
-	srfilt_a[2] = 33.086573089411893000000000;
-	srfilt_a[3] = -90.193446136595213000000000;
-	srfilt_a[4] = 181.256203524881440000000000;
-	srfilt_a[5] = -283.571375474201600000000000;
-	srfilt_a[6] = 356.755781218958760000000000;
-	srfilt_a[7] = -368.305783722966910000000000;
-	srfilt_a[8] = 316.054159733307870000000000;
-	srfilt_a[9] = -227.162501157152780000000000;
-	srfilt_a[10] = 137.260014043998750000000000;
-	srfilt_a[11] = -69.738296640133896000000000;
-	srfilt_a[12] = 29.705121931131252000000000;
-	srfilt_a[13] = -10.537214215529730000000000;
-	srfilt_a[14] = 3.080153549165016300000000;
-	srfilt_a[15] = -0.729595107204623840000000;
-	srfilt_a[16] = 0.136881161697956440000000;
-	srfilt_a[17] = -0.019547624983513916000000;
-	srfilt_a[18] = 0.002060528139489559900000;
-	srfilt_a[19] = -0.000143860211730633450000;
-	srfilt_a[20] = 0.000014362805789346628000;
-	*/
-
-	srfilt_b[0] = 0.005985366448016847400000;
-	srfilt_b[1] = -0.000000000068663473436596;
-	srfilt_b[2] = 0.029926833561855812000000;
-	srfilt_b[3] = 0.014963399494903253000000;
-	srfilt_b[4] = 0.072946803942075492000000;
-	srfilt_b[5] = 0.066399110082245749000000;
-	srfilt_b[6] = 0.128831523706446540000000;
-	srfilt_b[7] = 0.141307195958322970000000;
-	srfilt_b[8] = 0.183515087779119460000000;
-	srfilt_b[9] = 0.196038702055692930000000;
-	srfilt_b[10] = 0.207578586483177310000000;
-	srfilt_b[11] = 0.196038702055692630000000;
-	srfilt_b[12] = 0.183515087779119760000000;
-	srfilt_b[13] = 0.141307195958322280000000;
-	srfilt_b[14] = 0.128831523706446790000000;
-	srfilt_b[15] = 0.066399110082245277000000;
-	srfilt_b[16] = 0.072946803942075533000000;
-	srfilt_b[17] = 0.014963399494903067000000;
-	srfilt_b[18] = 0.029926833561855826000000;
-	srfilt_b[19] = -0.000000000068663525932820;
-	srfilt_b[20] = 0.005985366448016846500000;
-
-	srfilt_a[0] = 1.000000000000000000000000;
-	srfilt_a[1] = -4.137689759094149300000000;
-	srfilt_a[2] = 11.417342955970334000000000;
-	srfilt_a[3] = -21.230389508442666000000000;
-	srfilt_a[4] = 31.507204607241498000000000;
-	srfilt_a[5] = -36.677292780605917000000000;
-	srfilt_a[6] = 36.042584528469732000000000;
-	srfilt_a[7] = -28.996821243768743000000000;
-	srfilt_a[8] = 20.262367357856544000000000;
-	srfilt_a[9] = -11.637468104552259000000000;
-	srfilt_a[10] = 5.968975493498319000000000;
-	srfilt_a[11] = -2.417954280896708500000000;
-	srfilt_a[12] = 0.941027354810217260000000;
-	srfilt_a[13] = -0.241109659478893040000000;
-	srfilt_a[14] = 0.083935453370180629000000;
-	srfilt_a[15] = -0.005511361553189712100000;
-	srfilt_a[16] = 0.006142808678570149300000;
-	srfilt_a[17] = 0.001292100725808184000000;
-	srfilt_a[18] = 0.000588047191250507470000;
-	srfilt_a[19] = 0.000146757274221299580000;
-	srfilt_a[20] = 0.000035865709068928935000;
+	downSampFilter.setCoeff(nCoeffsSRFilt, t_srfilt_a, nCoeffsSRFilt, t_srfilt_b);
+	upSampFilter.setCoeff(nCoeffsSRFilt, t_srfilt_a, nCoeffsSRFilt, t_srfilt_b);
 
 	//SC-Mod(2008/05/15) FFT related
 	gen_w_r2(fftc, nFFT);
@@ -633,9 +561,12 @@ void Audapter::reset()
 	// Initialize input, output and filter buffers (at original sample rate!!!)
 	for(i0 = 0; i0 < maxFrameLen * downSampFact_default; i0++)
 	{
-		inFrameBuf[i0]=0;		
-		srfilt_buf[i0]=0;
+		inFrameBuf[i0] = 0.0;
+		upSampBuffer[i0] = 0.0;
 	}
+
+	downSampFilter.resetBuffer();
+	upSampFilter.resetBuffer();
 
 	for (i0 = 0; i0 < internalBufLen; i0 ++){
 		outFrameBuf[i0] = 0;
@@ -672,14 +603,12 @@ void Audapter::reset()
 	preemp_delay[0]=0;
 
 	// reinitialize down - and upsampling filter states
-	for(i0=0;i0<nCoeffsSRFilt-1;i0++)
+	/*for(i0=0;i0<nCoeffsSRFilt-1;i0++)
 	{
 		srfilt_delay_up[i0]=0;
 		srfilt_delay_down[i0]=0;
-	}
+	}*/
 	
-	
-
 //*****************************************************  RECORDING  *****************************************************
 
 	// Initialize signal recorder
@@ -1421,17 +1350,8 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 		lpcAi[i0] = 0;
 	}
 
-	// downsample signal provided by soundcard
-	//SC Notice that inFrame_ptr is the pointer to input, and inFrameBuf is the pointer to the output.
-	if (p.bDownSampFilt == 1)
-		downSampSig(&srfilt_b[0], &srfilt_a[0], inFrame_ptr, 
-				    &srfilt_buf[0], &inFrameBuf[0], &srfilt_delay_down[0], 
-					p.frameLen , nCoeffsSRFilt , p.downFact);
-	else
-		downSampSig_noFilt(&srfilt_b[0], &srfilt_a[0], inFrame_ptr, &srfilt_buf[0], 
-						   &inFrameBuf[0], &srfilt_delay_down[0], 
-						   p.frameLen , nCoeffsSRFilt , p.downFact);
-	//SC Output: audapter.inFrame_ptr (length: p.frameLen)	
+	/* downsample signal provided by soundcard */
+	downSampSig(inFrame_ptr, inFrameBuf, p.frameLen, p.downFact, p.bDownSampFilt == 1);
 
 	if (p.bRecord)		//SC Record the downsampled original signal
 	{// recording signal in (downsampled)
@@ -2219,14 +2139,12 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 
 	// Upsample signal, scale and send to sound card buffer
 	//SC(2012/02/28) For DAF: use a past frame for playback, if p.delayFrames > 0
-	//upSampSig(&srfilt_b[0], &srfilt_a[0], &outFrameBufPS[0][optr[0]], 
-	//	      &srfilt_buf[0], &outFrame_ptr[0], &srfilt_delay_up[0], p.frameLen * p.downFact, 
-	//		  nCoeffsSRFilt, p.downFact, p.dScale);
-	upSampSig(&srfilt_b[0], &srfilt_a[0], outFrameBufSum + p.pvocFrameLen - p.frameLen, 
-		      &srfilt_buf[0], outputBuf, &srfilt_delay_up[0], p.frameLen * p.downFact, 
-			  nCoeffsSRFilt ,p.downFact, p.dScale);
-
-	
+	/*upSampSig(upSampFilter.b, upSampFilter.a, outFrameBufSum + p.pvocFrameLen - p.frameLen, 
+			  upSampFilter.buff, outputBuf, upSampFilter.delay, p.frameLen * p.downFact, 
+			  upSampFilter.filtLen, p.downFact, p.dScale);*/
+	upSampSig(upSampFilter, outFrameBufSum + p.pvocFrameLen - p.frameLen, 
+			  outputBuf, p.frameLen * p.downFact, 
+			  p.downFact, p.dScale);
 
 	outFrameBuf_circPtr += p.frameLen;
 	if (outFrameBuf_circPtr >= internalBufLen){
@@ -2900,83 +2818,49 @@ dtype Audapter::calcRMS_fb(const dtype *xin_ptr, int size, bool above_rms)
 	return ma_rms_fb;
 }
 
-
-
-void Audapter::downSampSig(dtype *b,dtype *a, dtype *x, dtype *buffer, dtype *r,dtype  *d,const int nr, const int n_coeffs, const int downfact)
-//SC Input parameters: 
-//SC	b: IIR numerators;
-//SC	a: IIR denominators; 
-//SC	x: input frame;
-//SC	buffer: filter buffer
-//SC	r: final output
-//SC	d: filter delay for downsampling
-//SC	nr: frameLength after the downsampling
-//SC	n_coeffs: number of coefficients
-//SC	downfact: downsampling factor
-{// filtering and decimation
-
-	// filtering
-	//SC implem: downSampSig(&srfilt_b[0], &srfilt_a[0],inFrame_ptr,&srfilt_buf[0], 
-	//SC	&inFrameBuf[0],&srfilt_delay_down[0], p.frameLen , nCoeffsSRFilt , DOWNSAMP_FACT);
-	iir_filt(b, a, x, buffer,d,nr*downfact, n_coeffs, 1);	//SC gain (g) is 1 here
-
+void Audapter::downSampSig(dtype *x, dtype *r, const int nr, const int downfact, const bool bFilt)
+// Input parameters:
+//	 dsFilt: IIR filter for down-sampling
+//	 x: input frame;
+//	 r: final output
+//	 nr: frameLength after the downsampling
+//	 downfact: down-sampling factor
+{// filtering and decimation	
+	/* filtering */
+	if (bFilt)
+		downSampFilter.filter(x, nr * downfact, 1.0);
+		//iir_filt(dsFilt.b, dsFilt.a, x, dsFilt.buff, dsFilt.delay, nr * downfact, dsFilt.filtLen, 1);	//SC gain (g) is 1 here
 
 	// decimation
-
-	int i0;
-
-	for(i0=0; i0 < nr; i0++)
+	for(int i0 = 0; i0 < nr; i0++)
 	{
-		r[i0] = buffer[downfact*i0]; 
-	}
-}
-
-void Audapter::downSampSig_noFilt(dtype *b,dtype *a, dtype *x, dtype *buffer, dtype *r,dtype  *d,const int nr, const int n_coeffs, const int downfact)
-//SC Input parameters: 
-//SC	b: IIR numerators;
-//SC	a: IIR denominators; 
-//SC	x: input frame;
-//SC	buffer: filter buffer
-//SC	r: final output
-//SC	d: filter delay for downsampling
-//SC	nr: frameLength after the downsampling
-//SC	n_coeffs: number of coefficients
-//SC	downfact: downsampling factor
-{// filtering and decimation
-
-	// filtering
-	//SC implem: downSampSig(&srfilt_b[0], &srfilt_a[0],inFrame_ptr,&srfilt_buf[0], 
-	//SC	&inFrameBuf[0],&srfilt_delay_down[0], p.frameLen , nCoeffsSRFilt , DOWNSAMP_FACT);
-	//iir_filt(b, a, x, buffer,d,nr*downfact, n_coeffs, 1);	//SC gain (g) is 1 here
-
-	// decimation
-
-	int i0;
-
-	for(i0=0; i0 < nr; i0++)
-	{
-		r[i0] = x[downfact*i0]; 
+		r[i0] = downSampFilter.buff[downfact *i0];
 	}
 }
 
 
-void Audapter::upSampSig (dtype  *b, dtype *a, dtype *x, dtype *buffer, dtype *r,dtype  *d,const int nr, const int n_coeffs, const int upfact,const dtype scalefact)
-{//  interpolation and filtering
-
+void Audapter::upSampSig(IIR_Filter<dtype> & usFilt, dtype *x, dtype *r, const int nr, const int upfact, const dtype scalefact)
+// Input parameters:
+//	 usFilt: IIR filter for up-sampling
+//	 x: input frame;
+//	 r: final output
+//	 nr: frameLength after the downsampling
+//	 upfact: up-sampling factor
+//   scalefact: output scaling factor
+{
 // interpolation
-	int i0;
-
- for(i0=0; i0 < nr; i0++)
-  {
-	  buffer[i0]=0;
-	if (i0 % upfact ==0)
-	{
-			buffer[i0]= x[int(i0/upfact)];
-	}
-  }
+	for(int i0 = 0; i0 < nr; i0++)
+		if (i0 % upfact == 0)
+			upSampBuffer[i0] = x[i0 / upfact];
+		else
+			upSampBuffer[i0] = 0.0;
 
 	// filtering
-	iir_filt(b, a,buffer,r, d,nr, n_coeffs, upfact*scalefact);
+	usFilt.filter(upSampBuffer, nr, upfact * scalefact);
+
+	for (int i = 0; i < nr; ++i)
+		r[i] = usFilt.buff[i];
+	//iir_filt(usFilt.b, usFilt.a, usFilt.buff, r, usFilt.delay, nr, usFilt.filtLen, upfact * scalefact);
 }
 
 void Audapter::iir_filt (dtype *b, dtype *a,  dtype *x, dtype *r, dtype *d, 
@@ -2999,10 +2883,9 @@ void Audapter::iir_filt (dtype *b, dtype *a,  dtype *x, dtype *r, dtype *d,
 		r[m] = g * b[0] * x[m] + d[0];
 		for(k = 0; k < n_coeffs - 2; k++) {// start delay recursion
 			d[k] = g * b[k + 1] * x[m] + d[k + 1] - a[k + 1] * r[m];
-		}	
+		}
 		d[n_coeffs - 2] = g * b[n_coeffs - 1] * x[m] - a[n_coeffs - 1] * r[m]; 
 	}
-
 }
 
 dtype Audapter::hz2mel(dtype hz){	// Convert frequency from Hz to mel

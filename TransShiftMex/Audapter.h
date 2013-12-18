@@ -40,6 +40,8 @@ Speech Laboratory, Boston University
 
 #include "mex.h"
 
+#include "filter.h"
+
 typedef double dtype;
 
 #define M_PI       3.14159265358979323846
@@ -353,6 +355,11 @@ private:
 
 	//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  FILTER COEEFS AND DELAYS  *****************************************************	
 
+	/* Filters */
+	IIR_Filter<dtype> downSampFilter;
+	IIR_Filter<dtype> upSampFilter;
+	dtype upSampBuffer[maxFrameLen * downSampFact_default];
+
 	// preemphasis 
 	dtype a_preemp[2];								// denominator coefficients 
 	dtype b_preemp[2];								// numerator coefficients
@@ -375,10 +382,7 @@ private:
 	dtype filt_delay2[2];							// filter delays
 
 	// sample rate conversion filter 
-	dtype srfilt_a[nCoeffsSRFilt];				// denominator coefficients
-	dtype srfilt_b[nCoeffsSRFilt];				// numerator coefficients
-	dtype srfilt_delay_up[nCoeffsSRFilt-1];		// filter delays for upsampling
-	dtype srfilt_delay_down[nCoeffsSRFilt-1];    // filter delays for downsampling
+	dtype srfilt_delay_up[nCoeffsSRFilt-1];		// filter delays for upsampling 	Marked
 
 	//SC(2008/05/07)
 	dtype ftBuf1[nFFT*2];
@@ -618,9 +622,11 @@ private:
 
 	bool  detectTrans(dtype *fmt_ptr, dtype *dFmt_ptr,int datcnt, dtype time);
 	int getDFmt(dtype *fmt_ptr,dtype *dFmt_ptr, dtype time);	
-	void upSampSig (dtype *b, dtype *a, dtype *x, dtype *buffer, dtype *r,dtype  *d,const int nr, const int n_coeffs, const int upfact,const dtype scalefact);
-	void downSampSig(dtype *b, dtype *a, dtype *x, dtype *buffer, dtype *r,dtype  *d,const int nr, const int n_coeffs, const int downfact);
-	void downSampSig_noFilt(dtype *b, dtype *a, dtype *x, dtype *buffer, dtype *r,dtype  *d,const int nr, const int n_coeffs, const int downfact);
+	/*void upSampSig (dtype *b, dtype *a, dtype *x, dtype *buffer, dtype *r,dtype  *d,const int nr, const int n_coeffs, const int upfact,const dtype scalefact);*/
+	void upSampSig(IIR_Filter<dtype> & usFilt, dtype *x, dtype *r, const int nr, const int upfact, const dtype scalefact);
+	/*void downSampSig(dtype *b, dtype *a, dtype *x, dtype *buffer, dtype *r,dtype  *d,const int nr, const int n_coeffs, const int downfact);*/
+	void downSampSig(dtype *x, dtype *r, const int nr, const int downfact, const bool bFilt);
+	/*void downSampSig_noFilt(dtype *b, dtype *a, dtype *x, dtype *buffer, dtype *r,dtype  *d,const int nr, const int n_coeffs, const int downfact);*/
 	void iir_filt (dtype *b, dtype *a,  dtype *x, dtype *r,dtype  *d,const int nr, const int n_coeffs,  dtype g);
 
 	dtype Audapter::hz2mel(dtype hz);
