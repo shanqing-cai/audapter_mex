@@ -356,20 +356,22 @@ private:
 	//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  FILTER COEEFS AND DELAYS  *****************************************************	
 
 	/* Filters */
+	IIR_Filter<dtype> preEmpFilter; /* Pre-emphasis filter */
+	IIR_Filter<dtype> deEmpFilter; /* De-emphasis filter */
 	IIR_Filter<dtype> downSampFilter;
 	IIR_Filter<dtype> upSampFilter;
+	dtype downSampBuffer[maxFrameLen * downSampFact_default];
 	dtype upSampBuffer[maxFrameLen * downSampFact_default];
 
 	// preemphasis 
 	dtype a_preemp[2];								// denominator coefficients 
 	dtype b_preemp[2];								// numerator coefficients
-	dtype preemp_delay[1];							// IIR filter delay buffer for pre-emphasis
+	dtype preemp_delay[1];							// IIR filter delay buffer for pre-emphasis Marked
 
 	// deemphasis
 	dtype a_deemp[2];								// denominator coefficients 
 	dtype b_deemp[2];								// numerator coefficients
-	dtype deemp_delay[1];							// IIR filter delay buffer for de-emphasis
-
+	dtype deemp_delay[1];							// IIR filter delay buffer for de-emphasis Marked
 
 	// first filter (f1 shift)
 	dtype a_filt1[2];								// denominator coefficients 
@@ -382,7 +384,6 @@ private:
 	dtype filt_delay2[2];							// filter delays
 
 	// sample rate conversion filter 
-	dtype srfilt_delay_up[nCoeffsSRFilt-1];		// filter delays for upsampling 	Marked
 
 	//SC(2008/05/07)
 	dtype ftBuf1[nFFT*2];
@@ -627,8 +628,7 @@ private:
 	/*void downSampSig(dtype *b, dtype *a, dtype *x, dtype *buffer, dtype *r,dtype  *d,const int nr, const int n_coeffs, const int downfact);*/
 	void downSampSig(dtype *x, dtype *r, const int nr, const int downfact, const bool bFilt);
 	/*void downSampSig_noFilt(dtype *b, dtype *a, dtype *x, dtype *buffer, dtype *r,dtype  *d,const int nr, const int n_coeffs, const int downfact);*/
-	void iir_filt (dtype *b, dtype *a,  dtype *x, dtype *r,dtype  *d,const int nr, const int n_coeffs,  dtype g);
-
+	
 	dtype Audapter::hz2mel(dtype hz);
 	dtype Audapter::mel2hz(dtype hz);
 	dtype Audapter::locateF2(dtype f2);

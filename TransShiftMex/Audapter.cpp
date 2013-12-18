@@ -210,9 +210,9 @@ Parameter::paramType Parameter::checkParam(const char *name) {
 
 }
 
-Audapter::Audapter() 
-	: downSampFilter(nCoeffsSRFilt, maxFrameLen * downSampFact_default), 
-	  upSampFilter(nCoeffsSRFilt, maxFrameLen * downSampFact_default)
+Audapter::Audapter()
+	: downSampFilter(nCoeffsSRFilt), upSampFilter(nCoeffsSRFilt), 
+	  preEmpFilter(2), deEmpFilter(2)
 {//modifiable parameters ( most of them can be modified externally) 
 	/* Parameters configuration */
 	/* Boolean parameters */
@@ -481,12 +481,22 @@ Audapter::Audapter()
 	amp_ratio_prev = 1.0;
 
 	// preemphasis filter
+	const dtype t_preemp_a[2] = {1.0, 0.0};
+	const dtype t_preemp_b[2] = {1, -p.dPreemp};
+	preEmpFilter.setCoeff(2, t_preemp_a, 2, t_preemp_b);
+
+	/* Marked */
 	a_preemp[0] = 1;
 	a_preemp[1] = 0;
 	b_preemp[0] = 1;
 	b_preemp[1] = -p.dPreemp;
 
 	// deemphasis filter
+	const dtype t_deemp_a[2] = {1, -p.dPreemp};
+	const dtype t_deemp_b[2] = {1.0, 0.0};
+	deEmpFilter.setCoeff(2, t_deemp_a, 2, t_deemp_b);
+
+	/* Marked */
 	a_deemp[0] = 1;
 	a_deemp[1] = -p.dPreemp;
 	b_deemp[0] = 1;
@@ -562,6 +572,8 @@ void Audapter::reset()
 	for(i0 = 0; i0 < maxFrameLen * downSampFact_default; i0++)
 	{
 		inFrameBuf[i0] = 0.0;
+
+		downSampBuffer[i0] = 0.0;
 		upSampBuffer[i0] = 0.0;
 	}
 
@@ -599,8 +611,11 @@ void Audapter::reset()
 	}
 
 	// reinitialize preempahsis and deemphasis filter states
-	deemp_delay[0]=0;
-	preemp_delay[0]=0;
+	deemp_delay[0]=0; /* Marked */
+	preemp_delay[0]=0; /* Marked */
+
+	preEmpFilter.resetBuffer();
+	deEmpFilter.resetBuffer();
 
 	// reinitialize down - and upsampling filter states
 	/*for(i0=0;i0<nCoeffsSRFilt-1;i0++)
@@ -1368,10 +1383,8 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 
 	// preemphasize inFrame and move to pBuf
 	//SC Preemphasis amounts to an high-pass iir filtering, the output is pBuf
-	//SC(2008/05/07)
-	iir_filt(&b_preemp[0], &a_preemp[0], &inFrameBuf[0], 
-			 &pBuf[2 * (p.nDelay - 1) * p.frameLen], 
-			 &preemp_delay[0], p.frameLen, 2, 1);
+	//SC(2008/05/07)	
+	preEmpFilter.filter(inFrameBuf, &pBuf[2 * (p.nDelay - 1) * p.frameLen], p.frameLen, 1.0);
 
 	// load inBuf with p.frameLen samples of pBuf
 	//SC Copy pBuf to inBuf. pBuf is the signal based on which LPC and other
@@ -1630,9 +1643,7 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 	if (!p.bBypassFmt) { /* Not bypassing LP formant tracking and shifting */
 		// deemphasize last processed frame and send to outframe buffer
 		//SC(2008/05/07)
-		iir_filt(&b_deemp[0], &a_deemp[0], &outBuf[0], 
-				 &outFrameBuf[outFrameBuf_circPtr], 
-				 &deemp_delay[0], p.frameLen , 2, 1);
+		deEmpFilter.filter(outBuf, &outFrameBuf[outFrameBuf_circPtr], p.frameLen, 1.0);
 		//DSPF_dp_blk_move(&outBuf[0],&outFrameBuf[0],p.frameLen);
 
 		if (rms_o > p.rmsClipThresh && p.bRMSClip == 1){	//SC(2009/02/06) RMS clipping protection
@@ -2828,13 +2839,12 @@ void Audapter::downSampSig(dtype *x, dtype *r, const int nr, const int downfact,
 {// filtering and decimation	
 	/* filtering */
 	if (bFilt)
-		downSampFilter.filter(x, nr * downfact, 1.0);
-		//iir_filt(dsFilt.b, dsFilt.a, x, dsFilt.buff, dsFilt.delay, nr * downfact, dsFilt.filtLen, 1);	//SC gain (g) is 1 here
+		downSampFilter.filter(x, downSampBuffer, nr * downfact, 1.0);		
 
 	// decimation
 	for(int i0 = 0; i0 < nr; i0++)
 	{
-		r[i0] = downSampFilter.buff[downfact *i0];
+		r[i0] = downSampBuffer[downfact *i0];
 	}
 }
 
@@ -2856,36 +2866,7 @@ void Audapter::upSampSig(IIR_Filter<dtype> & usFilt, dtype *x, dtype *r, const i
 			upSampBuffer[i0] = 0.0;
 
 	// filtering
-	usFilt.filter(upSampBuffer, nr, upfact * scalefact);
-
-	for (int i = 0; i < nr; ++i)
-		r[i] = usFilt.buff[i];
-	//iir_filt(usFilt.b, usFilt.a, usFilt.buff, r, usFilt.delay, nr, usFilt.filtLen, upfact * scalefact);
-}
-
-void Audapter::iir_filt (dtype *b, dtype *a,  dtype *x, dtype *r, dtype *d, 
-						 const int nr, const int n_coeffs, dtype g)
-{// IIR Direct II transposed form
-	// b : Numerator coeffs
-	// a : Denominator coeffs
-	// x : input frame
-	// r : output frame
-	// d : filter delays
-	// nr: length of output frame
-	// n_coeeffs : number of filter coeffs
-	// !!! a and b must both!!! be of length (n_coeffs)
-	// if you want a ~= b, fill with zeros
-	// g : additional gain
-
-	int m, k;
-
-	for(m = 0; m < nr; m++) {
-		r[m] = g * b[0] * x[m] + d[0];
-		for(k = 0; k < n_coeffs - 2; k++) {// start delay recursion
-			d[k] = g * b[k + 1] * x[m] + d[k + 1] - a[k + 1] * r[m];
-		}
-		d[n_coeffs - 2] = g * b[n_coeffs - 1] * x[m] - a[n_coeffs - 1] * r[m]; 
-	}
+	usFilt.filter(upSampBuffer, r, nr, upfact * scalefact);
 }
 
 dtype Audapter::hz2mel(dtype hz){	// Convert frequency from Hz to mel
