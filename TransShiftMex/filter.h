@@ -39,7 +39,7 @@ public:
 	}	
 
 	/* Reset buffer */
-	void resetBuffer() {		
+	void reset() {		
 		for (int i = 0; i < filtLen - 1; ++i) {
 			delay[i] = 0.0;
 		}
@@ -52,7 +52,7 @@ public:
 		//		nr: length of output frame
 		//		g : additional gain
 		// Output: 
-		//		y (public member)
+		//		y
 		int m, k;
 
 		for(m = 0; m < nr; m++) {

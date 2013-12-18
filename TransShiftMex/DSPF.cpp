@@ -39,36 +39,6 @@ double sum;
   }
 }
 
-void DSPF_dp_biquad(double *x, double *b, double *a, double *delay, double *r, const int &nx)	//SC biquadratic IIR: b
-{
-// x: input
-// b: forward coefficients
-// a: reverse coefficients
-// delay: delay buffer
-// r: output
-// nx: number of time points
-	int i;
-	double a1, a2, b0, b1, b2, d0, d1;// x_i;
-
-	a1 = a[0];
-	a2 = a[1];
-	b0 = b[0];
-	b1 = b[1];
-	b2 = b[2];
-	d0 = delay[0];
-	d1 = delay[1];
-
-	for (i = 0; i < nx; i++) {
-	    //x_i = x[i];
-		r[i] = b0 * x[i] + d0;
-	    d0 = b1 * x[i] - a1 * r[i] + d1;
-	    d1 = b2 * x[i] - a2 * r[i];
-	}
-
-	delay[0] = d0;
-	delay[1] = d1;
-}
-
 double DSPF_dp_maxval(const double* x, const int &nx)		//SC maximum of a vector
 {
 // x: input array

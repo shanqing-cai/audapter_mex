@@ -79,8 +79,6 @@ int algoCallbackFuncToneSeq(char *buffer, int buffer_size, void * data); //SC(20
 /* DSP routines (some of which are from TI DSPLib) */
 void	DSPF_dp_blk_move(const dtype * x, dtype * r, const int nx);
 dtype	DSPF_dp_vecsum_sq(const dtype *x,int n);                           
-//void	DSPF_dp_biquad(dtype * x, dtype * b, dtype * a, dtype * delay, dtype * r, int nx);
-void	DSPF_dp_biquad(double *x, double *b, double *a, double *delay, double *r, const int &nx);
 void	DSPF_dp_vecmul(const dtype * x, const dtype * y, dtype * r, const int &n);
 void	DSPF_dp_autocor(dtype * r, dtype * x, const int & nx, const int & nr);
 
@@ -363,25 +361,16 @@ private:
 	dtype downSampBuffer[maxFrameLen * downSampFact_default];
 	dtype upSampBuffer[maxFrameLen * downSampFact_default];
 
-	// preemphasis 
-	dtype a_preemp[2];								// denominator coefficients 
-	dtype b_preemp[2];								// numerator coefficients
-	dtype preemp_delay[1];							// IIR filter delay buffer for pre-emphasis Marked
-
-	// deemphasis
-	dtype a_deemp[2];								// denominator coefficients 
-	dtype b_deemp[2];								// numerator coefficients
-	dtype deemp_delay[1];							// IIR filter delay buffer for de-emphasis Marked
+	IIR_Filter<dtype> shiftF1Filter;	/* Biquad filter for shifting F1 */
+	IIR_Filter<dtype> shiftF2Filter;	/* Biquad filter for shifting F2 */
 
 	// first filter (f1 shift)
-	dtype a_filt1[2];								// denominator coefficients 
+	dtype a_filt1[3];								// denominator coefficients 
 	dtype b_filt1[3];								// numerator coefficients
-	dtype filt_delay1[2];							// IIR filter delay buffer
 
 	// second filter (f2 shift)
-	dtype a_filt2[2];								// denominator coefficients 
+	dtype a_filt2[3];								// denominator coefficients 
 	dtype b_filt2[3];								// numerator coefficients
-	dtype filt_delay2[2];							// filter delays
 
 	// sample rate conversion filter 
 
@@ -612,7 +601,7 @@ private:
 	dtype  getGain(dtype * r, dtype * ophi,dtype * sphi, int nfmts);
 	
 	void trackPhi(dtype *r_ptr,dtype *phi_ptr,dtype time);
-	void myFilt (dtype *xin_ptr, dtype* xout_ptr,dtype *oldPhi_ptr,dtype *newPhi_ptr,dtype *r_ptr,const int size);
+	void formantShiftFilter (dtype *xin_ptr, dtype* xout_ptr,dtype *oldPhi_ptr,dtype *newPhi_ptr,dtype *r_ptr,const int size);
 	dtype calcRMS1(const dtype *xin_ptr, int size);	
 	dtype calcRMS2(const dtype *xin_ptr, int size);
 	dtype calcRMS_fb(const dtype *xin_ptr, int size, bool above_rms);

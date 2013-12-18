@@ -212,7 +212,8 @@ Parameter::paramType Parameter::checkParam(const char *name) {
 
 Audapter::Audapter()
 	: downSampFilter(nCoeffsSRFilt), upSampFilter(nCoeffsSRFilt), 
-	  preEmpFilter(2), deEmpFilter(2)
+	  preEmpFilter(2), deEmpFilter(2), 
+	  shiftF1Filter(3), shiftF2Filter(3)
 {//modifiable parameters ( most of them can be modified externally) 
 	/* Parameters configuration */
 	/* Boolean parameters */
@@ -485,24 +486,15 @@ Audapter::Audapter()
 	const dtype t_preemp_b[2] = {1, -p.dPreemp};
 	preEmpFilter.setCoeff(2, t_preemp_a, 2, t_preemp_b);
 
-	/* Marked */
-	a_preemp[0] = 1;
-	a_preemp[1] = 0;
-	b_preemp[0] = 1;
-	b_preemp[1] = -p.dPreemp;
-
 	// deemphasis filter
 	const dtype t_deemp_a[2] = {1, -p.dPreemp};
 	const dtype t_deemp_b[2] = {1.0, 0.0};
 	deEmpFilter.setCoeff(2, t_deemp_a, 2, t_deemp_b);
 
-	/* Marked */
-	a_deemp[0] = 1;
-	a_deemp[1] = -p.dPreemp;
-	b_deemp[0] = 1;
-	b_deemp[1] = 0;
-
     // shift filter
+	a_filt1[0] = 1;
+	a_filt2[0] = 1;
+
 	b_filt1[0] = 1;
 	b_filt2[0] = 1;
 
@@ -577,8 +569,8 @@ void Audapter::reset()
 		upSampBuffer[i0] = 0.0;
 	}
 
-	downSampFilter.resetBuffer();
-	upSampFilter.resetBuffer();
+	downSampFilter.reset();
+	upSampFilter.reset();
 
 	for (i0 = 0; i0 < internalBufLen; i0 ++){
 		outFrameBuf[i0] = 0;
@@ -604,26 +596,14 @@ void Audapter::reset()
 //*****************************************************  FILTER STATES  *****************************************************
 
 	// reinitialize formant shift filter states
-	for(i0=0;i0<2;i0++)
-	{
-		filt_delay1[i0]=0;
-		filt_delay2[i0]=0;
-	}
 
 	// reinitialize preempahsis and deemphasis filter states
-	deemp_delay[0]=0; /* Marked */
-	preemp_delay[0]=0; /* Marked */
+	preEmpFilter.reset();
+	deEmpFilter.reset();
 
-	preEmpFilter.resetBuffer();
-	deEmpFilter.resetBuffer();
+	shiftF1Filter.reset();
+	shiftF2Filter.reset();
 
-	// reinitialize down - and upsampling filter states
-	/*for(i0=0;i0<nCoeffsSRFilt-1;i0++)
-	{
-		srfilt_delay_up[i0]=0;
-		srfilt_delay_down[i0]=0;
-	}*/
-	
 //*****************************************************  RECORDING  *****************************************************
 
 	// Initialize signal recorder
@@ -1582,7 +1562,7 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 					sFmts[i0]=newPhis[i0]*p.sr/(2*M_PI); // shifted fotmants for recording
 				}
 
-				myFilt(&inBuf[si],&outBuf[si],&wmaPhis[0],&newPhis[0],&amps[0],p.frameShift); // f1 f2 filtering 
+				formantShiftFilter(&inBuf[si],&outBuf[si],&wmaPhis[0],&newPhis[0],&amps[0],p.frameShift); // f1 f2 filtering 
 				gtot[fi]=getGain(&amps[0],&wmaPhis[0],&newPhis[0],p.nFmts); // gain factor calculation
 
 			}
@@ -1590,7 +1570,7 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 			{
 	 
 				if(above_rms)				
-					myFilt(&inBuf[si],&fakeBuf[0],&wmaPhis[0],&wmaPhis[0],&amps[0],p.frameShift);
+					formantShiftFilter(&inBuf[si],&fakeBuf[0],&wmaPhis[0],&wmaPhis[0],&amps[0],p.frameShift);
 			}
 
 		}
@@ -2714,28 +2694,33 @@ void Audapter::trackPhi(dtype *r_ptr,dtype *phi_ptr,dtype time)
 	
 }
 
-void Audapter::myFilt (dtype *xin_ptr, dtype* xout_ptr,dtype *oldPhi_ptr,dtype *newPhi_ptr,dtype *r_ptr,const int size)
-	{// filter cascading two biquad IIR filters 
-
+void Audapter::formantShiftFilter(dtype *xin_ptr, dtype* xout_ptr, 
+								  dtype *oldPhi_ptr, dtype *newPhi_ptr, dtype *r_ptr, 
+								  const int size) {
+	// filter cascading two biquad IIR filters 
 	// coefficients for the first filter (f1 shift) NOTE: b_filt1[0]=1 (see initilization)
-	//SC The first filter is for correcting the first formant (?)
 	b_filt1[1]=-2*r_ptr[0]*cos(oldPhi_ptr[0]);
 	b_filt1[2]= r_ptr[0]*r_ptr[0]; 	
-	a_filt1[0]=-2*r_ptr[0]*cos(newPhi_ptr[0]);  
-	a_filt1[1]= r_ptr[0]*r_ptr[0];              
-	
+	/*a_filt1[0]=-2*r_ptr[0]*cos(newPhi_ptr[0]);  
+	a_filt1[1]= r_ptr[0]*r_ptr[0]; */
+	a_filt1[1]=-2*r_ptr[0]*cos(newPhi_ptr[0]);  
+	a_filt1[2]= r_ptr[0]*r_ptr[0]; 
+
+	shiftF1Filter.setCoeff(3, a_filt1, 3, b_filt1);
+
 	// coefficients for the second filter (f2 shift) NOTE: b_filt2[0]=1 (see initilization)
-	//SC The second filter is for correcting the second formant (?)
 	b_filt2[1]=-2*r_ptr[1]*cos(oldPhi_ptr[1]);
 	b_filt2[2]= r_ptr[1]*r_ptr[1]; 	
-	a_filt2[0]=-2*r_ptr[1]*cos(newPhi_ptr[1]);  
-	a_filt2[1]= r_ptr[1]*r_ptr[1];              
+	/*a_filt2[0]=-2*r_ptr[1]*cos(newPhi_ptr[1]);  
+	a_filt2[1]= r_ptr[1]*r_ptr[1];*/
+	a_filt2[1]=-2*r_ptr[1]*cos(newPhi_ptr[1]);  
+	a_filt2[2]= r_ptr[1]*r_ptr[1];
 
-	DSPF_dp_biquad(xin_ptr, &b_filt1[0], &a_filt1[0], &filt_delay1[0], &filtbuf[0], size);//first formant
-	DSPF_dp_biquad(&filtbuf[0],&b_filt2[0], &a_filt2[0], &filt_delay2[0], xout_ptr, size);//second formant
-	
+	shiftF2Filter.setCoeff(3, a_filt2, 3, b_filt2);
+
+	shiftF1Filter.filter(xin_ptr, filtbuf, size);
+	shiftF2Filter.filter(filtbuf, xout_ptr, size);
 }
-
 
 // Calculate rms of buffer
 dtype Audapter::calcRMS1(const dtype *xin_ptr, int size)
