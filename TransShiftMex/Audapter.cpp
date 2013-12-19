@@ -50,6 +50,7 @@ Speech Laboratory, Boston University
 #include <algorithm>
 #include "mex.h"
 
+
 using namespace std;
 
 /* Right shift */
@@ -166,19 +167,7 @@ int algoCallbackFuncWavePB(char *buffer, int buffer_size, void * data)	//SC sine
 	return 0;
 }
 
-void init_ostTab(OST_TAB *ostTab) {
-	ostTab->n = 0;
-	ostTab->mode = NULL;
-	ostTab->stat0 = NULL;
-	ostTab->prm1 = NULL;
-	ostTab->prm2 = NULL;
-	ostTab->prm3 = NULL;
-	
-	ostTab->maxIOICfg.n = 0;
-	ostTab->maxIOICfg.stat0 = NULL;
-	ostTab->maxIOICfg.maxInterval = NULL;
-	ostTab->maxIOICfg.stat1 = NULL;
-}
+
 
 void init_pipCfg(PIP_CFG *pipCfg) {
 	pipCfg->n = 0;
@@ -310,7 +299,7 @@ Audapter::Audapter()
 		
 		strcpy_s(deviceName, sizeof(deviceName), "MOTU MicroBook");
 
-		init_ostTab(&ostTab);
+		/*init_ostTab(&ostTab);*/ //Marked
 		init_pipCfg(&pipCfg);
 		
 		p.downFact			= downSampFact_default;
@@ -532,8 +521,7 @@ Audapter::Audapter()
 	// For wav file writing
 	sprintf_s(wavFileBase, "");
 
-	/* ost related */
-	statOnsetIndices = NULL;
+	
 
 	p.bBypassFmt = 0;
 
@@ -736,8 +724,8 @@ void Audapter::reset()
 	
 	//SC(2012/10/19): OST online sentence tracking
 	stat = 0;
-	stretchCnt = 0;
-	stretchSpanAccum = 0.0;
+	/*stretchCnt = 0;*/ //Marked
+	/*stretchSpanAccum = 0.0;*/ //Marked
 	
 	duringTimeWarp = false;
 	duringTimeWarp_prev = false;
@@ -1501,7 +1489,11 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 		rmsSlopeN = (int)(rmsSlopeWin / ((dtype)p.frameLen / (dtype)p.sr));
 		calcRMSSlope();
 
-		osTrack();
+		//osTrack();//Marked
+		stat = ostTab.osTrack(stat, data_counter, frame_counter, 
+							  static_cast<double>(a_rms_o[data_counter]), static_cast<double>(a_rms_o_slp[data_counter]), static_cast<double>(rms_ratio), 
+							  data_recorder[1], 
+							  static_cast<double>(p.frameLen) / static_cast<double>(p.sr));
 		
 		if (p.bShift)
 		{
@@ -1736,7 +1728,7 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 					duringTimeWarp = false;
 				}
 				else {
-					t01 = t0 - ((dtype) (statOnsetIndices[warpCfg->ostInitState] - (p.nDelay - 1)) * p.frameLen / p.sr);
+					t01 = t0 - ((dtype) (ostTab.statOnsetIndices[warpCfg->ostInitState] - (p.nDelay - 1)) * p.frameLen / p.sr);
 					duringTimeWarp = (t01 >= warpCfg->tBegin && t01 < warpCfg->tBegin + warpCfg->dur1 + warpCfg->durHold + warpCfg->dur2);
 					if (duringTimeWarp)
 						t0 = t01;
@@ -1776,7 +1768,7 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 				}
 					
 				if (warpCfg->ostInitState >= 0)
-					t1 += (dtype) (statOnsetIndices[warpCfg->ostInitState] - (p.nDelay - 1)) * p.frameLen / p.sr;
+					t1 += (dtype) (ostTab.statOnsetIndices[warpCfg->ostInitState] - (p.nDelay - 1)) * p.frameLen / p.sr;
 
 				cidx1_d = t1 * (dtype)p.sr / (dtype)p.pvocHop;
 				cidx1 = (int)floor(cidx1_d);
@@ -3183,199 +3175,7 @@ void Audapter::writeSignalsToWavFile() {
 	dataFileCnt++;
 }
 
-void Audapter::readOSTTab(int bVerbose) {
-	FILE *fp;
-	int i0, n;
-	static int maxStatesPerLine = 4;
-	char c0[128], c1;
 
-	// Free previously existing fields of ostTab
-	if (ostTab.stat0) {
-		free(ostTab.stat0);
-		ostTab.stat0 = NULL;
-	}
-	if (ostTab.mode) {
-		free(ostTab.mode);
-		ostTab.mode = NULL;
-	}
-	if (ostTab.prm1) {		
-		free(ostTab.prm1);
-		ostTab.prm1 = NULL;
-	}
-	if (ostTab.prm2) {
-		free(ostTab.prm2);
-		ostTab.prm2 = NULL;
-	}
-	
-	if (ostTab.maxIOICfg.stat0) {
-		free(ostTab.maxIOICfg.stat0);
-		ostTab.maxIOICfg.stat0 = NULL;
-	}
-	if (ostTab.maxIOICfg.maxInterval) {
-		free(ostTab.maxIOICfg.maxInterval);
-		ostTab.maxIOICfg.maxInterval = NULL;
-	}
-	if (ostTab.maxIOICfg.stat1) {
-		free(ostTab.maxIOICfg.stat1);
-		ostTab.maxIOICfg.stat1 = NULL;
-	}
-
-	if (statOnsetIndices) {
-		free(statOnsetIndices);
-		statOnsetIndices = NULL;
-	}
-
-	if (bVerbose)
-		printf("ostfn = %s\n", this->ostfn);
-
-	/* fp = fopen(this->ostfn, "r"); */
-	if (fopen_s(&fp, this->ostfn, "r")) {
-		printf("ERROR: Unable to open ost file: %s\n", this->ostfn);
-		return;
-	}
-
-	for (i0 = 0; i0 < 3; i0++)
-		/* fscanf(fp, "%s", c0); */
-		fscanf_s(fp, "%s", c0, sizeof(c0));
-	this->rmsSlopeWin = atof(c0);
-	
-	if (bVerbose)
-		printf("rmsSlopeWin = %f\n", this->rmsSlopeWin);
-
-	for (i0 = 0; i0 < 3; i0++)
-		/* fscanf(fp, "%s", c0); */
-		fscanf_s(fp, "%s", c0, sizeof(c0));
-	ostTab.n = atoi(c0);
-
-	if (bVerbose)
-		printf("ostTab.n = %d\n", ostTab.n);
-
-	if ((ostTab.stat0 = (int *)calloc(ostTab.n, sizeof(int))) == NULL) {
-		printf("ERROR: failed to allocate memor for ostTab.stat0");
-		return;
-	}
-	if ((ostTab.mode = (int *)calloc(ostTab.n, sizeof(int))) == NULL) {
-		printf("ERROR: failed to allocate memor for ostTab.mode");
-		return;
-	}
-	if ((ostTab.prm1 = (dtype *)calloc(ostTab.n, sizeof(dtype))) == NULL) {
-		printf("ERROR: failed to allocate memor for ostTab.prm1");
-		return;
-	}
-	if ((ostTab.prm2 = (dtype *)calloc(ostTab.n, sizeof(dtype))) == NULL) {
-		printf("ERROR: failed to allocate memor for ostTab.prm2");
-		return;
-	}
-
-	for (i0 = 0; i0 < ostTab.n; i0++) {
-		/* fscanf(fp, "%s", c0); */
-		fscanf_s(fp, "%s", c0, sizeof(c0));
-		ostTab.stat0[i0] = atoi(c0);
-		//printf("\tstat0[%d] = %d\n", i0, ostTab.stat0[i0]);
-
-		/*fscanf(fp, "%s", c0);*/
-		fscanf_s(fp, "%s", c0, sizeof(c0));
-		ostTab.mode[i0] = atoi(c0);
-		//printf("\tmode[%d] = %d\n", i0, ostTab.mode[i0]);
-
-		/*fscanf(fp, "%s", c0);*/
-		fscanf_s(fp, "%s", c0, sizeof(c0));
-		ostTab.prm1[i0] = atof(c0);
-		//printf("\tprm1[%d] = %f\n", i0, ostTab.prm1[i0]);
-
-		/* fscanf(fp, "%s", c0); */
-		fscanf_s(fp, "%s", c0, sizeof(c0));
-		ostTab.prm2[i0] = atof(c0);
-		//printf("\tprm2[%d] = %f\n", i0, ostTab.prm2[i0]);
-
-		c1 = '\0';
-		while (!(c1 == '\n' || c1 == '\r' || c1 == EOF)) {
-			c1 = fgetc(fp);
-		}
-	
-		if (bVerbose)
-			printf("\tSeg %d: stat0=%d; mode=%d; prm1=%f; prm2=%f\n", 
-				   i0, ostTab.stat0[i0], ostTab.mode[i0], ostTab.prm1[i0], ostTab.prm2[i0]);
-	}
-
-	if ((statOnsetIndices = (int *) calloc(ostTab.n * maxStatesPerLine, sizeof(int))) == NULL) {
-		printf("ERROR: failed to allocate memor for statOnsetIndices");
-		return;
-	}
-
-	if (c1 == EOF) {
-		fclose(fp);
-		return;
-	}
-			
-	while (c1 != EOF) {
-		c1 = fgetc(fp);
-
-		if (c1 == EOF) {
-			fclose(fp);
-			return;
-		}
-
-		if (c1 == 'n')
-			break;
-	}
-
-	/* Process maxInterOnsetIntervalCfg (maxIOICfg)  */
-	for (i0 = 0; i0 < 2; i0++)
-		/* n = fscanf(fp, "%s", c0); */
-		n = fscanf_s(fp, "%s", c0, sizeof(c0));
-
-	if (atoi(c0) > 0) {
-		ostTab.maxIOICfg.n = atoi(c0);
-		if (bVerbose)
-			printf("ostTab.maxIOICfg.n = %d\n", ostTab.maxIOICfg.n);
-
-		if ((ostTab.maxIOICfg.stat0 = (int *)calloc(ostTab.maxIOICfg.n, sizeof(int))) == NULL) {
-			printf("ERROR: failed to allocate memor for ostTab.maxIOICfg.stat0");
-			fclose(fp);
-			return;
-		}
-		if ((ostTab.maxIOICfg.maxInterval = (dtype *)calloc(ostTab.maxIOICfg.n, sizeof(dtype))) == NULL) {
-			printf("ERROR: failed to allocate memor for ostTab.maxIOICfg.maxInterval");
-			fclose(fp);
-			return;
-		}
-		if ((ostTab.maxIOICfg.stat1 = (int *)calloc(ostTab.maxIOICfg.n, sizeof(int))) == NULL) {
-			printf("ERROR: failed to allocate memor for ostTab.maxIOICfg.stat1");
-			fclose(fp);
-			return;
-		}
-
-		for (i0 = 0; i0 < ostTab.maxIOICfg.n; i0++) {
-			/* fscanf(fp, "%s", c0); */
-			fscanf_s(fp, "%s", c0, sizeof(c0));
-			ostTab.maxIOICfg.stat0[i0] = atoi(c0);
-
-			/* fscanf(fp, "%s", c0); */
-			fscanf_s(fp, "%s", c0, sizeof(c0));
-			ostTab.maxIOICfg.maxInterval[i0] = atof(c0);
-
-			/* fscanf(fp, "%s", c0); */
-			fscanf_s(fp, "%s", c0, sizeof(c0));
-			ostTab.maxIOICfg.stat1[i0] = atoi(c0);
-
-			c1 = '\0';
-			while (!(c1 == '\n' || c1 == '\r' || c1 == EOF)) {
-				c1 = fgetc(fp);
-			}
-
-			if (bVerbose)
-				printf("maxIOICfg %d: stat0=%d; maxInterval=%d; stat1=%d\n", 
-					   i0, ostTab.maxIOICfg.stat0[i0], ostTab.maxIOICfg.maxInterval[i0], ostTab.maxIOICfg.stat1[i0]);
-		}
-	}
-	else {
-		fclose(fp);
-		return;
-	}
-
-	fclose(fp);
-}
 
 int readline(FILE *fp, char *line) {
 	int lineLen = 0;
@@ -3671,246 +3471,7 @@ void Audapter::calcRMSSlope() {
 	a_rms_o_slp[data_counter] = nom / den / (p.frameLen / (dtype)p.sr);	
 }
 
-void Audapter::osTrack() {
-	int k, i, j;
-	int stat0, mode;
-	int bIsGOET;
-	int nLBDelay;
-	int minDurN;
-	/*float elapTime;*/
-	float frameDur;
 
-	const dtype rmsLBDelay = 5 * 0.002;
-
-	frameDur = (float)p.frameLen / (float)p.sr;
-	nLBDelay = (int)(floor(rmsLBDelay / frameDur + 0.5));
-
-	if (ostTab.n == 0) {
-		stat = 0;
-		return;
-	}
-
-	// Determine which segment of the tab (ostCfg) we are currently in
-	k = -1;
-	for (i = 0; i < ostTab.n; i++) {
-		if (stat >= ostTab.stat0[i] && stat < ostTab.stat0[i + 1]) {
-			k = i;
-			break;
-		}
-	}
-
-	if (k >= 0) {
-		stat0 = ostTab.stat0[k];
-		mode = ostTab.mode[k];
-
-		if (mode == 1) { // (+1) Elapsed time from previous state. prm1: duration (s)
-			if ((data_counter - statOnsetIndices[stat]) * frameDur > ostTab.prm1[k]) {
-				stat++;
-				statOnsetIndices[stat] = frame_counter;
-			}
-		}
-		else if (mode == 5) { // (+2) Crossing an rmsThresh (from below) and hold. prm1: rmsThresh; prm2: minHoldDur (s)			
-			if (stat - stat0 == 0) {
-				if (a_rms_o[data_counter] > ostTab.prm1[k]) {
-					stat++;
-					statOnsetIndices[stat] = frame_counter;
-					stretchCnt = 1;
-				}
-			}
-			else {
-				minDurN = (int) floor(ostTab.prm2[k] / frameDur + 0.5);
-
-				if (a_rms_o[data_counter] > ostTab.prm1[k]) {
-					stretchCnt++;
-					if (stretchCnt > minDurN) {
-						stat++;
-						statOnsetIndices[stat] = frame_counter;
-						lastStatEnd = data_counter;
-					}
-				}
-				else {
-					stat--;
-				}
-			}
-
-		}
-		else if (mode == 6) { // (+2) Crossing an rmsThresh (from below) and hold, during positive RMS slopes. prm1: rmsThresh; prm2: minHoldDur (s)			
-			if (stat - stat0 == 0) {
-				if (a_rms_o[data_counter] > ostTab.prm1[k] && 
-					a_rms_o_slp[data_counter] > 0) {
-					stat++;
-					statOnsetIndices[stat] = frame_counter;
-					stretchCnt = 1;
-				}
-			}
-			else {
-				minDurN = (int) floor(ostTab.prm2[k] / frameDur + 0.5);
-
-				if (a_rms_o[data_counter] > ostTab.prm1[k] &&
-					a_rms_o_slp[data_counter] > 0) {
-					stretchCnt++;
-					if (stretchCnt > minDurN) {
-						stat++;
-						statOnsetIndices[stat] = frame_counter;
-						lastStatEnd = data_counter;
-					}
-				}
-				else {
-					stat--;
-				}
-			}
-
-		}
-		else if (mode == 10) { // (+2) Stretch of of positive rms slope, with only a stretch count threshold
-			if (stat - stat0 == 0) {
-				if (a_rms_o_slp[data_counter] > 0) {
-					stat++;
-					statOnsetIndices[stat] = frame_counter;
-					stretchCnt = 1;
-				}
-			}
-			else {
-				if (a_rms_o_slp[data_counter] > 0) {
-					stretchCnt++;
-					if (stretchCnt > ostTab.prm1[k]) {
-						stat++;
-						statOnsetIndices[stat] = frame_counter;
-						lastStatEnd = data_counter;
-					}
-				}
-				else {
-					stat--;
-				}
-			}
-
-		}
-		else if (mode == 11) { // Stretch of negative rms slope, with a stretch count thresold and a stretch span threshold
-			if (stat - stat0 == 0) {
-				if (a_rms_o_slp[data_counter] < 0) {
-					stat++;
-					statOnsetIndices[stat] = frame_counter;
-					stretchCnt = 1;
-					stretchSpanAccum = a_rms_o_slp[data_counter];
-				}
-			}
-			else {
-				if (a_rms_o_slp[data_counter] < 0) {
-					stretchCnt++;
-					stretchSpanAccum += a_rms_o_slp[data_counter];
-
-					if ((stretchCnt > ostTab.prm1[k]) && (stretchSpanAccum < ostTab.prm2[k])) {
-						stat++;
-						statOnsetIndices[stat] = frame_counter;
-						lastStatEnd = data_counter;
-					}
-				}
-				else {
-					stat--;
-				}
-			}
-
-		}
-		else if (mode == 20) { // (+1) Fall from a certain RMS threshold
-			minDurN = (int)floor(ostTab.prm2[k] / frameDur + 0.5);
-
-			bIsGOET = 0;
-			for (j = 0; j < nLBDelay; j++) {
-				if (data_counter - j < 0) {
-					bIsGOET = 1;
-					break;
-				}
-				if (data_recorder[1][data_counter - j] >= ostTab.prm1[k]) {
-					bIsGOET = 1;
-					break;
-				}
-			}
-
-			if ((bIsGOET == 0) && ((data_counter - lastStatEnd) > minDurN)) {
-				stat++;
-				statOnsetIndices[stat] = frame_counter;
-				lastStatEnd = data_counter;
-			}
-
-		}
-		else if (mode == 30) { // (+2) RMS ratio cross, hold and fall. prm1: rms_ratio threshold; prm2: minDurN
-			if (stat - stat0 == 0) {
-				if (1. / rms_ratio > ostTab.prm1[k]) {
-					stat++;
-					statOnsetIndices[stat] = frame_counter;
-					stretchCnt = 0;
-				}
-			}
-			else if (stat - stat0 == 1) {
-				minDurN = (int)floor(ostTab.prm2[k] / frameDur);
-
-				if (1. / rms_ratio > ostTab.prm1[k]) {
-					stretchCnt++;
-					if (stretchCnt > minDurN) {
-						stat++;
-						statOnsetIndices[stat] = frame_counter;
-					}
-				}
-				else {
-					stat--;
-				}
-			}
-			else {
-				if (1. / rms_ratio < ostTab.prm1[k]) {
-					stat++;
-					statOnsetIndices[stat] = frame_counter;
-					lastStatEnd = data_counter;
-				}
-			}			
-		}
-		else if (mode == 31) { // (+2) RMS ratio fall from a threshold, hold and fall. prm1: rms_ratio threshold; prm2: minDurN
-			if (stat - stat0 == 0) {
-				if (1. / rms_ratio < ostTab.prm1[k]) {
-					stat++;
-					statOnsetIndices[stat] = frame_counter;
-					stretchCnt = 0;
-				}
-			}
-			else if (stat - stat0 == 1) {
-				minDurN = (int)floor(ostTab.prm2[k] / frameDur);
-
-				if (1. / rms_ratio < ostTab.prm1[k]) {
-					stretchCnt++;
-					if (stretchCnt > minDurN) {
-						stat++;
-						statOnsetIndices[stat] = frame_counter;
-					}
-				}
-				else {
-					stat--;
-				}
-			}
-			else {
-				if (1. / rms_ratio < ostTab.prm1[k]) {
-					stat++;
-					statOnsetIndices[stat] = frame_counter;
-					lastStatEnd = data_counter;
-				}
-			}
-		}
-			 
-	}
-
-	/* Process maxIOICfg */
-	if (ostTab.maxIOICfg.n > 0) {
-		for (i = 0; i < ostTab.maxIOICfg.n; i++) {
-			if ((stat >= ostTab.maxIOICfg.stat0[i]) && (stat < ostTab.maxIOICfg.stat1[i])) {
-				if ((frame_counter - statOnsetIndices[ostTab.maxIOICfg.stat0[i]]) * frameDur > ostTab.maxIOICfg.maxInterval[i]) {
-					for (j = stat + 1; j <= ostTab.maxIOICfg.stat1[i]; j++) {
-						statOnsetIndices[stat] = frame_counter;
-					}
-
-					stat = ostTab.maxIOICfg.stat1[i];
-					
-				}
-			}
-		}
-	}
-}
 
 
 int Audapter::gainPerturb(dtype *buffer,dtype *gtot_ptr,int framelen, int frameshift)
@@ -4294,4 +3855,9 @@ void getRPhiBw(dtype *wr, dtype *wi, dtype *radius, dtype *phi, dtype *bandwith,
 		bandwith[i0] = -log(mag2[i0]) * dtype(sr) / M_PI;
 		phi[i0]=arc2[i0];
 	}
+}
+
+void Audapter::readOSTTab(int bVerbose) {
+	ostTab.readFromFile(string(ostfn), bVerbose);
+	this->rmsSlopeWin = ostTab.rmsSlopeWin;
 }

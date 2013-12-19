@@ -41,6 +41,7 @@ Speech Laboratory, Boston University
 #include "mex.h"
 
 #include "filter.h"
+#include "ost.h"
 
 typedef double dtype;
 
@@ -92,25 +93,6 @@ typedef struct tag_thrWriteWavStruct {
 	char *wavfn_out;
 } thrWriteWavStruct;
 
-typedef struct tag_maxInterOnsetIntervalCfg {
-	int n;
-
-	int *stat0;
-	dtype *maxInterval; /* Unit: s */
-	int *stat1;
-} maxInterOnsetIntervalCfg;
-
-typedef struct tag_ostTab {
-	int n;	// Number of segments
-
-	int *stat0; // Initial stat number
-	int *mode; // Mode number
-	dtype *prm1; // First parameter
-	dtype *prm2; // Second parameter
-	dtype *prm3; // Third parameter
-
-	maxInterOnsetIntervalCfg maxIOICfg;
-} OST_TAB;
 
 typedef struct tag_pipCfg { // Pitch and intensity perturbation configurtion
 	int n; // Number of stats
@@ -256,10 +238,10 @@ private:
 
 	// (10/19/2012): OST sentence status
 	int stat;
-	int lastStatEnd;
-	int stretchCnt;
-	int *statOnsetIndices; /* Onset index of all state numbers. By definition, statOnsets[0] = 0 */
-	dtype stretchSpanAccum;
+	/*int lastStatEnd;*/ //Marked
+	/*int stretchCnt;*/ //Marked
+	//int *statOnsetIndices; /* Onset index of all state numbers. By definition, statOnsets[0] = 0 */ //Marked
+	/*dtype stretchSpanAccum;*/ //Marked
 
 	int doEdge;
 	bool   bTransReset;			// set true when resetted, set to false after first process
@@ -704,5 +686,5 @@ public:
 	const int getMaxDelayFrames() const {return maxDelayFrames; };
 };
 
-void init_ostTab(OST_TAB *ostTab);
+
 void init_pipCfg(PIP_CFG *pipCfg);

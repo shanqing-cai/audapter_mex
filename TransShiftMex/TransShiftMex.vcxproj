@@ -1383,6 +1383,7 @@
     <ClCompile Include="DSPF.cpp" />
     <ClCompile Include="filter.cpp" />
     <ClCompile Include="mexLibrary.cpp" />
+    <ClCompile Include="ost.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\audioIO\audioIO.vcxproj">
@@ -1393,6 +1394,7 @@
   <ItemGroup>
     <ClInclude Include="Audapter.h" />
     <ClInclude Include="filter.h" />
+    <ClInclude Include="ost.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
