@@ -358,9 +358,9 @@ void mexFunction( int nlhs, mxArray *plhs[],
 				else
 					bVerbose = (int)(*(double *) mxGetPr(prhs[2]));
 
-				strcpy_s(audapter.ostfn, sizeof(audapter.ostfn), mxArrayToString(prhs[1]));
+				strcpy_s(audapter.ostFN, sizeof(audapter.ostFN), mxArrayToString(prhs[1]));
 				if (bVerbose)
-					printf("ostfn = %s\n", audapter.ostfn);
+					printf("ostFN = %s\n", audapter.ostFN);
 				//audapter.readOSTTab(bVerbose);//Marked
 				audapter.readOSTTab(bVerbose);
 			}
@@ -377,9 +377,9 @@ void mexFunction( int nlhs, mxArray *plhs[],
 				else
 					bVerbose = (int)(*(double *) mxGetPr(prhs[2]));
 
-				strcpy_s(audapter.pipcfgfn, sizeof(audapter.pipcfgfn), mxArrayToString(prhs[1]));				
+				strcpy_s(audapter.pertCfgFN, sizeof(audapter.pertCfgFN), mxArrayToString(prhs[1]));				
 				if (bVerbose)
-					printf("pipcfgfn = %s\n", audapter.pipcfgfn);
+					printf("pertCfgFN = %s\n", audapter.pertCfgFN);
 				audapter.readPIPCfg(bVerbose);
 			}
 			else {

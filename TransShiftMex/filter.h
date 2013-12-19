@@ -47,12 +47,13 @@ public:
 
 	/* Filter signal frame: filter output in y */
 	void filter(D_TYPE *x, D_TYPE *y, const int nr, D_TYPE g=1.0) {// IIR Direct II transposed form
-		// Input: 
-		//		x : input frame
-		//		nr: length of output frame
-		//		g : additional gain
-		// Output: 
-		//		y
+		/* Input: 
+				x : input frame
+				nr: length of output frame
+				g : additional gain
+		   Output: 
+				y */
+
 		int m, k;
 
 		for(m = 0; m < nr; m++) {

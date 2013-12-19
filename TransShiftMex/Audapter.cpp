@@ -169,15 +169,7 @@ int algoCallbackFuncWavePB(char *buffer, int buffer_size, void * data)	//SC sine
 
 
 
-void init_pipCfg(PIP_CFG *pipCfg) {
-	pipCfg->n = 0;
 
-	pipCfg->pitchShift = NULL;
-	pipCfg->intShift = NULL;
-	pipCfg->fmtPertAmp = NULL;
-	pipCfg->fmtPertPhi = NULL;
-
-}
 
 Parameter::paramType Parameter::checkParam(const char *name) {
 	string inputNameStr = string(name);
@@ -295,180 +287,180 @@ Audapter::Audapter()
 	/* Other types of parameters */
 	params.addParam("pvocwarp",		"Phase vocoder time warping configuration", Parameter::TYPE_PVOC_WARP);
 
-		int		n;
+	int		n;
 		
-		strcpy_s(deviceName, sizeof(deviceName), "MOTU MicroBook");
+	strcpy_s(deviceName, sizeof(deviceName), "MOTU MicroBook");
 
 		/*init_ostTab(&ostTab);*/ //Marked
-		init_pipCfg(&pipCfg);
+		/*init_pipCfg(&pertCfg);*/ //Marked
 		
-		p.downFact			= downSampFact_default;
+	p.downFact			= downSampFact_default;
 		
-		p.sr				= 48000 / p.downFact;				// internal samplerate (souncard samplerate = p.sr*DOWNSAMP_FACT)
-		p.nLPC				= 13;					// LPC order ... number of lpc coeefs= nLPC +1
-		p.nFmts				= 2;					// originally the number of formants you want shift ( hardseted = 2)
+	p.sr				= 48000 / p.downFact;				// internal samplerate (souncard samplerate = p.sr*DOWNSAMP_FACT)
+	p.nLPC				= 13;					// LPC order ... number of lpc coeefs= nLPC +1
+	p.nFmts				= 2;					// originally the number of formants you want shift ( hardseted = 2)
 
-		// framing and processing 
-		p.frameLen			= 96 / p.downFact;		// length of one internal frame ( framelen = nWin * frameshift) (souncard frame length = p.frameLen *DOWNDAMP_FACT)
-		p.nDelay			= 7;					// number of delayed framas (of size framelen) before an incoming frame is sent back
-													// thus the overall process latency (without souncard) is :Tproc=nDelay*frameLen/sr
-		p.bufLen			= (2*p.nDelay-1)*p.frameLen;	// main buffer length : buflen stores (2*nDelay -1)*frameLen samples
+	// framing and processing 
+	p.frameLen			= 96 / p.downFact;		// length of one internal frame ( framelen = nWin * frameshift) (souncard frame length = p.frameLen *DOWNDAMP_FACT)
+	p.nDelay			= 7;					// number of delayed framas (of size framelen) before an incoming frame is sent back
+												// thus the overall process latency (without souncard) is :Tproc=nDelay*frameLen/sr
+	p.bufLen			= (2*p.nDelay-1)*p.frameLen;	// main buffer length : buflen stores (2*nDelay -1)*frameLen samples
 		
-		p.nWin				= 1;					// number of processes per frame (of frameLen samples)	
-		p.frameShift		= p.frameLen/p.nWin;	// number of samples shift between two processes ( = size of processed samples in 1 process)	
-		p.anaLen			= p.frameShift+2*(p.nDelay-1)*p.frameLen;// size of lpc analysis (symmetric around window to be processed)
-		p.pvocFrameLen			= p.frameShift + (2 * p.nDelay - 3) * p.frameLen;// For frequency/pitch shifting: size of lpc analysis (symmetric around window to be processed)
-		p.avgLen			= 10;				    // length of smoothing ( should be approx one pitch period, 
-		// can be greater /shorter if you want more / lesss smoothing)
-		// avgLen = 1 ---> no smoothing ( i.e. smoothing over one value)
+	p.nWin				= 1;					// number of processes per frame (of frameLen samples)	
+	p.frameShift		= p.frameLen/p.nWin;	// number of samples shift between two processes ( = size of processed samples in 1 process)	
+	p.anaLen			= p.frameShift+2*(p.nDelay-1)*p.frameLen;// size of lpc analysis (symmetric around window to be processed)
+	p.pvocFrameLen			= p.frameShift + (2 * p.nDelay - 3) * p.frameLen;// For frequency/pitch shifting: size of lpc analysis (symmetric around window to be processed)
+	p.avgLen			= 10;				    // length of smoothing ( should be approx one pitch period, 
+	// can be greater /shorter if you want more / lesss smoothing)
+	// avgLen = 1 ---> no smoothing ( i.e. smoothing over one value)
 
-		// RMS
-		p.dRMSThresh		= 0.02;	// RMS threshhold for voicing detection
-		p.dRMSRatioThresh	= 1.3;	// preemp / original RMS ratio threshhold, for fricative detection 
-		p.rmsFF				= 0.9;  // rms forgetting factor for long time rms 
+	// RMS
+	p.dRMSThresh		= 0.02;	// RMS threshhold for voicing detection
+	p.dRMSRatioThresh	= 1.3;	// preemp / original RMS ratio threshhold, for fricative detection 
+	p.rmsFF				= 0.9;  // rms forgetting factor for long time rms 
 
-		p.rmsFF_fb[0]		= 0.85; // rms forgetting factor for feedback
-		p.rmsFF_fb[1]		= 0.85;	
-		p.rmsFF_fb[2]		= 0.0;	// Unit: s: 0.0 means no transition: use only rmsFF_fb[0]
-		p.rmsFF_fb[2]		= 0.0;
+	p.rmsFF_fb[0]		= 0.85; // rms forgetting factor for feedback
+	p.rmsFF_fb[1]		= 0.85;	
+	p.rmsFF_fb[2]		= 0.0;	// Unit: s: 0.0 means no transition: use only rmsFF_fb[0]
+	p.rmsFF_fb[2]		= 0.0;
 
-		rmsFF_fb_now = p.rmsFF_fb[0];
+	rmsFF_fb_now = p.rmsFF_fb[0];
 
-		p.fb4GainDB			= 0.0;	// Gain (in dB) of the feedback-mode-4 speech-modulated noise
-		p.fb4Gain			= pow(10.0, p.fb4GainDB / 20);
+	p.fb4GainDB			= 0.0;	// Gain (in dB) of the feedback-mode-4 speech-modulated noise
+	p.fb4Gain			= pow(10.0, p.fb4GainDB / 20);
 
-		p.fb3Gain			= 0.0;
+	p.fb3Gain			= 0.0;
 
-		p.dPreemp			= .98;	// preemphasis factor
-		p.dScale			= 1;	// scaling the output (when upsampling) (does not affect internal signal
+	p.dPreemp			= .98;	// preemphasis factor
+	p.dScale			= 1;	// scaling the output (when upsampling) (does not affect internal signal
 
-		// for transition detection
-		p.dFmtsFF			= 0;	// formant forgeeting factor for s
-		p.maxDelta			= 40;	// maximal allowed formant derivative 		
-		p.fmtDetectStart[0] = 800;	// formant frequencies at start of transition (goal region),i.e. [a]
-		p.fmtDetectStart[1] = 1600;	// formant frequencies at start of transition (goal region),i.e. [a]		
-		p.minDetected		= 10;	// min transition detection in row before starting transition		
+	// for transition detection
+	p.dFmtsFF			= 0;	// formant forgeeting factor for s
+	p.maxDelta			= 40;	// maximal allowed formant derivative 		
+	p.fmtDetectStart[0] = 800;	// formant frequencies at start of transition (goal region),i.e. [a]
+	p.fmtDetectStart[1] = 1600;	// formant frequencies at start of transition (goal region),i.e. [a]		
+	p.minDetected		= 10;	// min transition detection in row before starting transition		
 
-		// for formant tracking algorithm
-		p.trackIntroTime	= 100;	// time in ms
+	// for formant tracking algorithm
+	p.trackIntroTime	= 100;	// time in ms
 				
-		p.aFact			= 1;	// end value ....		
-		p.bFact			= 0.8;	// end value ....
-		p.gFact			= 1;	// end value ....
+	p.aFact			= 1;	// end value ....		
+	p.bFact			= 0.8;	// end value ....
+	p.gFact			= 1;	// end value ....
 
-		p.fn1			= 633;	// A priori expectation of F1 (Hz)
-		p.fn2			= 1333; // A priori expectation of F2 (Hz)
+	p.fn1			= 633;	// A priori expectation of F1 (Hz)
+	p.fn2			= 1333; // A priori expectation of F2 (Hz)
 
-		p.nTracks			= 4;	// number of tracked formants 
-		p.nCands			= 6;	// number of possible formant candiates  ( > ntracks     but  < p.nLPC/2!!!! (choose carefully : not idiot proofed!)
-		p.trackFF			= 0.95;		
+	p.nTracks			= 4;	// number of tracked formants 
+	p.nCands			= 6;	// number of possible formant candiates  ( > ntracks     but  < p.nLPC/2!!!! (choose carefully : not idiot proofed!)
+	p.trackFF			= 0.95;		
 
-		// booleans						
-		p.bRecord			= 1;	// record signal, should almost always be set to 1. 
-		p.bTrack			= 1;	// use formant tracking algorithm
-		p.bShift			= 1;	// do shifting	//SC-Mod(09/23/2007): changed from 0 to 1
-		p.bGainAdapt		= 1;	// use gain adaption
-		p.bDetect			= 0;	// detect transition
-		p.bRelative			= 1;	// shift relative to actual formant point, (otherwise absolute coordinate)			
-		p.bWeight			= 1;	// do weighted moving average formant smoothing (over avglen) , otherwise not weigthed (= simple moving average)				
-		p.bCepsLift			= 0;	//SC-Mod(2008/05/15) Do cepstral lifting by default
+	// booleans						
+	p.bRecord			= 1;	// record signal, should almost always be set to 1. 
+	p.bTrack			= 1;	// use formant tracking algorithm
+	p.bShift			= 1;	// do shifting	//SC-Mod(09/23/2007): changed from 0 to 1
+	p.bGainAdapt		= 1;	// use gain adaption
+	p.bDetect			= 0;	// detect transition
+	p.bRelative			= 1;	// shift relative to actual formant point, (otherwise absolute coordinate)			
+	p.bWeight			= 1;	// do weighted moving average formant smoothing (over avglen) , otherwise not weigthed (= simple moving average)				
+	p.bCepsLift			= 0;	//SC-Mod(2008/05/15) Do cepstral lifting by default
 		
-		p.bRatioShift		= 0;	//SC(2009/01/20)
-		p.bMelShift			= 1;	//SC(2009/01/20)
+	p.bRatioShift		= 0;	//SC(2009/01/20)
+	p.bMelShift			= 1;	//SC(2009/01/20)
 
-		//SC(2012/03/05)
-		p.bPitchShift		= 0;
-		for (n = 0; n < maxNVoices; n++)
-			p.pitchShiftRatio[n]   = 1.;	// 1. = no shift.
+	//SC(2012/03/05)
+	p.bPitchShift		= 0;
+	for (n = 0; n < maxNVoices; n++)
+		p.pitchShiftRatio[n]   = 1.;	// 1. = no shift.
 		
-		//SC Initialize the playback data and the counter
-		for(n=0;n<maxPBSize;n++){
-			data_pb[n]      = 0;
-		}
-		pbCounter			= 0;
+	//SC Initialize the playback data and the counter
+	for(n=0;n<maxPBSize;n++){
+		data_pb[n]      = 0;
+	}
+	pbCounter			= 0;
 
-		for (n = 0; n < maxToneSeqRecLen; n++) {
-			tsg_wf[n] = 0.0;
-		}
-		tsgRecCounter = 0;
+	for (n = 0; n < maxToneSeqRecLen; n++) {
+		tsg_wf[n] = 0.0;
+	}
+	tsgRecCounter = 0;
 
-		p.wgFreq			= 1000.;
-		p.wgAmp				= 0.1;
-		p.wgTime			= 0.;
+	p.wgFreq			= 1000.;
+	p.wgAmp				= 0.1;
+	p.wgTime			= 0.;
 		
-		p.F2Min		= 0;		// Lower boundary of the perturbation field (mel)
-		p.F2Max		= 0;		// Upper boundary of the perturbation field (mel)
-		p.F1Min		= 0;		// Left boundary of the perturbation field (mel)
-		p.F1Max		= 0;		// Right boundary of the perturbation field (mel)
-		p.LBk		= 0;		// The slope of a tilted boundary: F2 = p.LBk * F1 + p.LBb. (mel/mel)
-		p.LBb		= 0;		// The intercept of a tilted boundary (mel)
+	p.F2Min		= 0;		// Lower boundary of the perturbation field (mel)
+	p.F2Max		= 0;		// Upper boundary of the perturbation field (mel)
+	p.F1Min		= 0;		// Left boundary of the perturbation field (mel)
+	p.F1Max		= 0;		// Right boundary of the perturbation field (mel)
+	p.LBk		= 0;		// The slope of a tilted boundary: F2 = p.LBk * F1 + p.LBb. (mel/mel)
+	p.LBb		= 0;		// The intercept of a tilted boundary (mel)
 
-		for(n=0;n<pfNPoints;n++){
-			p.pertF2[n]=0;			// Independent variable of the perturbation vectors
-			p.pertAmp[n]=0;			// Magnitude of the perturbation vectors (mel)
-			p.pertPhi[n]=0;			// Angle of the perturbation vectors (rad). 0 corresponds to the x+ axis. Increase in the countetclockwise direction. 
-		}
+	for(n=0;n<pfNPoints;n++){
+		p.pertF2[n]=0;			// Independent variable of the perturbation vectors
+		p.pertAmp[n]=0;			// Magnitude of the perturbation vectors (mel)
+		p.pertPhi[n]=0;			// Angle of the perturbation vectors (rad). 0 corresponds to the x+ axis. Increase in the countetclockwise direction. 
+	}
 
-		p.minVowelLen=60;
-		p.transDone=false;
-		p.transCounter=0;
+	p.minVowelLen=60;
+	p.transDone=false;
+	p.transCounter=0;
 
-		//SC(2008/05/15)
-		p.cepsWinWidth=30;
+	//SC(2008/05/15)
+	p.cepsWinWidth=30;
 
-		//SC(2008/06/20)
-		p.fb=1;		
+	//SC(2008/06/20)
+	p.fb=1;		
 
-		//SC(2008/06/22)
-		p.trialLen = 9;	//sec
-		p.rampLen=0.05;	//sec
+	//SC(2008/06/22)
+	p.trialLen = 9;	//sec
+	p.rampLen=0.05;	//sec
 
-		//SC(2012/02/28) DAF
-		for (n = 0; n < maxNVoices; n++) {
-			p.delayFrames[n] = 0; // Unit: # of frames (no delay by default)
-			p.gain[n] = 1.0;
-			p.mute[n] = 0;
-		}
+	//SC(2012/02/28) DAF
+	for (n = 0; n < maxNVoices; n++) {
+		p.delayFrames[n] = 0; // Unit: # of frames (no delay by default)
+		p.gain[n] = 1.0;
+		p.mute[n] = 0;
+	}
 
-		//SC(2012/02/29) For data saving
-		dataFileCnt = 0;
+	//SC(2012/02/29) For data saving
+	dataFileCnt = 0;
 
-		//SC(2012/03/09) Phase vocoder (pvoc) pitch shifting
-		p.pvocFrameLen = 1024;
-		p.pvocHop = 256;		// 256 = 16 * 16
+	//SC(2012/03/09) Phase vocoder (pvoc) pitch shifting
+	p.pvocFrameLen = 1024;
+	p.pvocHop = 256;		// 256 = 16 * 16
 
-		p.bDownSampFilt = 1;
+	p.bDownSampFilt = 1;
 
-		//SC(2012/03/13) PVOC Time warp
-		warpCfg = new pvocWarpAtom();
+	//SC(2012/03/13) PVOC Time warp //Marked
+	/*warpCfg = new pvocWarpAtom();*/ //Marked
 
-		//SC(2012/09/08) BlueShift
-		p.nFB = 1;
+	//SC(2012/09/08) BlueShift
+	p.nFB = 1;
 
-		//SC(2009/12/01)
-		p.tsgNTones=0;
-		for (n=0;n<maxNTones;n++){
-			p.tsgToneFreq[n]=0;
-			p.tsgToneDur[n]=0;
-			p.tsgToneAmp[n]=0;
-			p.tsgToneRamp[n]=0;
-			p.tsgInt[n]=0;
-		}
+	//SC(2009/12/01)
+	p.tsgNTones=0;
+	for (n=0;n<maxNTones;n++){
+		p.tsgToneFreq[n]=0;
+		p.tsgToneDur[n]=0;
+		p.tsgToneAmp[n]=0;
+		p.tsgToneRamp[n]=0;
+		p.tsgInt[n]=0;
+	}
 
-		/* SC (2013-08-06) */
-		p.stereoMode = 1;		/* Default: left-right identical */
+	/* SC (2013-08-06) */
+	p.stereoMode = 1;		/* Default: left-right identical */
 
-		/* SC (2013-08-20) */
-		p.bPvocAmpNorm = 0;
-		p.pvocAmpNormTrans = 16;
+	/* SC (2013-08-20) */
+	p.bPvocAmpNorm = 0;
+	p.pvocAmpNormTrans = 16;
 
-		rmsSlopeWin = 0.03; // Unit: s
-		rmsSlopeN = (int)(rmsSlopeWin / ((dtype)p.frameLen / (dtype)p.sr));
-//************************************** Initialize filter coefs **************************************	
+	rmsSlopeWin = 0.03; // Unit: s
+	rmsSlopeN = (int)(rmsSlopeWin / ((dtype)p.frameLen / (dtype)p.sr));
 
 	intShiftRatio = 1.0;
 	amp_ratio = 1.0;
 	amp_ratio_prev = 1.0;
+//************************************** Initialize filter coefs **************************************	
 
 	// preemphasis filter
 	const dtype t_preemp_a[2] = {1.0, 0.0};
@@ -480,7 +472,7 @@ Audapter::Audapter()
 	const dtype t_deemp_b[2] = {1.0, 0.0};
 	deEmpFilter.setCoeff(2, t_deemp_a, 2, t_deemp_b);
 
-    // shift filter
+    // Formant-shifting filters
 	a_filt1[0] = 1;
 	a_filt2[0] = 1;
 
@@ -521,18 +513,16 @@ Audapter::Audapter()
 	// For wav file writing
 	sprintf_s(wavFileBase, "");
 
-	
-
 	p.bBypassFmt = 0;
 
 	reset();
 }
 
 Audapter::~Audapter(){
-	if (warpCfg) {
+	/*if (warpCfg) {
 		delete warpCfg;
 		warpCfg = NULL;
-	}
+	}*/ //Marked
 	/*delete [] data_recorder;
 	delete [] signal_recorder;
 	data_recorder=NULL;
@@ -964,7 +954,7 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 			len = p.nFB;
 	}
 	else if (ns == string("pvocwarp")) {
-		ptr = (void *)warpCfg;
+		ptr = (void *) pertCfg.warpCfg;
 	}
 	else if (ns == string("gain")) {
 		ptr = (void *)p.gain;
@@ -1044,15 +1034,9 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 			}
 		}
 		else if (pType == Parameter::TYPE_PVOC_WARP) {
-			if (warpCfg) {
-				delete warpCfg;
-				warpCfg = NULL;
-			}
-			warpCfg = new pvocWarpAtom(*((dtype *)value), 
-										*((dtype *)value + 1), 
-										*((dtype *)value + 2), 
-										*((dtype *)value + 3), 
-										*((dtype *)value + 4));
+			pertCfg.setWarpCfg(*((double *)value), *((double *)value + 1), 
+							   *((double *)value + 2), *((double *)value + 3), 
+							   *((double *)value + 4));
 		}
 		else if (pType == Parameter::TYPE_SMN_RMS_FF) {
 			if (nPars == 1) {
@@ -1497,11 +1481,11 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 		
 		if (p.bShift)
 		{
-			if (pipCfg.n == 0) {
+			if (pertCfg.n == 0) {
 				/*during_trans = false;*/
 			}
 			else {
-				during_trans = (pipCfg.fmtPertAmp[stat] != 0);
+				during_trans = (pertCfg.fmtPertAmp[stat] != 0);
 			}
 
 			/* if (during_trans) {
@@ -1517,8 +1501,8 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 				//mamp=p.pertAmp[locint]+locfrac*(p.pertAmp[locint+1]-p.pertAmp[locint]);	// Interpolaton (linear)
 				//mphi=p.pertPhi[locint]+locfrac*(p.pertPhi[locint+1]-p.pertPhi[locint]);
 				
-				mamp = pipCfg.fmtPertAmp[stat];
-				mphi = pipCfg.fmtPertPhi[stat];
+				mamp = pertCfg.fmtPertAmp[stat];
+				mphi = pertCfg.fmtPertPhi[stat];
 
 				if (!p.bRatioShift){	// Absoluate shift					
 					sf1m = f1m + mamp * cos(mphi);	// Shifting imposed
@@ -1632,10 +1616,10 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 	dtype xBuf[max_nFFT];
 
 	//SCai (10/19/2012): determine the amount of pitch and intensity shift based on the OST stat number
-	// Note: we will override p.pitchShiftRatio[0] if pipCfg.n > 0d
-	if (stat < pipCfg.n) {
-		p.pitchShiftRatio[0] = pow(2.0, pipCfg.pitchShift[stat] / 12.0);
-		intShiftRatio = pow(10, pipCfg.intShift[stat] / 20.0);
+	// Note: we will override p.pitchShiftRatio[0] if pertCfg.n > 0d
+	if (stat < pertCfg.n) {
+		p.pitchShiftRatio[0] = pow(2.0, pertCfg.pitchShift[stat] / 12.0);
+		intShiftRatio = pow(10, pertCfg.intShift[stat] / 20.0);
 	}
 
 
@@ -1720,16 +1704,18 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 			/* Time warping, overrides pitch shifting */
 			int ifb = 0;
 				
-			if (warpCfg->ostInitState < 0) {
-				duringTimeWarp = (t0 >= warpCfg->tBegin && t0 < warpCfg->tBegin + warpCfg->dur1 + warpCfg->durHold + warpCfg->dur2);
+			if (pertCfg.warpCfg->ostInitState < 0) {
+				duringTimeWarp = (t0 >= pertCfg.warpCfg->tBegin 
+								  && t0 < pertCfg.warpCfg->tBegin + pertCfg.warpCfg->dur1 + pertCfg.warpCfg->durHold + pertCfg.warpCfg->dur2);
 			}
 			else {
-				if (stat < warpCfg->ostInitState) {
+				if (stat < pertCfg.warpCfg->ostInitState) {
 					duringTimeWarp = false;
 				}
 				else {
-					t01 = t0 - ((dtype) (ostTab.statOnsetIndices[warpCfg->ostInitState] - (p.nDelay - 1)) * p.frameLen / p.sr);
-					duringTimeWarp = (t01 >= warpCfg->tBegin && t01 < warpCfg->tBegin + warpCfg->dur1 + warpCfg->durHold + warpCfg->dur2);
+					t01 = t0 - ((dtype) (ostTab.statOnsetIndices[pertCfg.warpCfg->ostInitState] - (p.nDelay - 1)) * p.frameLen / p.sr);
+					duringTimeWarp = (t01 >= pertCfg.warpCfg->tBegin 
+									  && t01 < pertCfg.warpCfg->tBegin + pertCfg.warpCfg->dur1 + pertCfg.warpCfg->durHold + pertCfg.warpCfg->dur2);
 					if (duringTimeWarp)
 						t0 = t01;
 				}
@@ -1742,33 +1728,21 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 			if (duringTimeWarp){
 				duringPitchShift = false;
 				p.pitchShiftRatio[0] = 1.0;
-				/* Steps to take when there is the time warping is zero */
-				/*cidx1 = cidx0;
-
-				for (i0 = 0; i0 <= p.pvocFrameLen / 2; i0++){
-					magn = pvocWarpCache[cidx1 % (internalBufLen / 64)][i0];
-					phase = pvocWarpCache[cidx1 % (internalBufLen / 64)][i0 + p.pvocFrameLen];
-
-					ftBuf2ps[2 * i0] = magn * cos(phase);
-					ftBuf2ps[2 * i0 + 1] = magn * sin(phase);
-
-					lastPhase[i0] = phase;						
-				}*/
-
-				if (t0 < warpCfg->tBegin + warpCfg->dur1){ /* Time dilation (deceleration) */
-					t1 = (t0 - warpCfg->tBegin) * warpCfg->rate1 + warpCfg->tBegin;
+				
+				if (t0 < pertCfg.warpCfg->tBegin + pertCfg.warpCfg->dur1){ /* Time dilation (deceleration) */
+					t1 = (t0 - pertCfg.warpCfg->tBegin) * pertCfg.warpCfg->rate1 + pertCfg.warpCfg->tBegin;
 				}
-				else if (t0 < warpCfg->tBegin + warpCfg->dur1 + warpCfg->durHold){ /* Time shifting (no compression or dilation) */
-					t1 = warpCfg->rate1 * warpCfg->dur1 - warpCfg->dur1 + t0;
+				else if (t0 < pertCfg.warpCfg->tBegin + pertCfg.warpCfg->dur1 + pertCfg.warpCfg->durHold){ /* Time shifting (no compression or dilation) */
+					t1 = pertCfg.warpCfg->rate1 * pertCfg.warpCfg->dur1 - pertCfg.warpCfg->dur1 + t0;
 				}
-				else if (t0 < warpCfg->tBegin + warpCfg->dur1 + warpCfg->durHold + warpCfg->dur2){ /* Time compression (acceleration) at the end of the warp interval */
+				else if (t0 < pertCfg.warpCfg->tBegin + pertCfg.warpCfg->dur1 + pertCfg.warpCfg->durHold + pertCfg.warpCfg->dur2){ /* Time compression (acceleration) at the end of the warp interval */
 					//t1 = (t0 - (warpCfg->tBegin + warpCfg->dur1 + warpCfg->durHold)) * warpCfg->rate2 + warpCfg->tBegin + warpCfg->dur1 + warpCfg->durHold;
-					t1 = warpCfg->tBegin + warpCfg->dur1 + warpCfg->durHold + warpCfg->dur2;
-					t1 -= (warpCfg->tBegin + warpCfg->dur1 + warpCfg->durHold + warpCfg->dur2 - t0) * warpCfg->rate2;
+					t1 = pertCfg.warpCfg->tBegin + pertCfg.warpCfg->dur1 + pertCfg.warpCfg->durHold + pertCfg.warpCfg->dur2;
+					t1 -= (pertCfg.warpCfg->tBegin + pertCfg.warpCfg->dur1 + pertCfg.warpCfg->durHold + pertCfg.warpCfg->dur2 - t0) * pertCfg.warpCfg->rate2;
 				}
 					
-				if (warpCfg->ostInitState >= 0)
-					t1 += (dtype) (ostTab.statOnsetIndices[warpCfg->ostInitState] - (p.nDelay - 1)) * p.frameLen / p.sr;
+				if (pertCfg.warpCfg->ostInitState >= 0)
+					t1 += (dtype) (ostTab.statOnsetIndices[pertCfg.warpCfg->ostInitState] - (p.nDelay - 1)) * p.frameLen / p.sr;
 
 				cidx1_d = t1 * (dtype)p.sr / (dtype)p.pvocHop;
 				cidx1 = (int)floor(cidx1_d);
@@ -1814,20 +1788,13 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 				}
 			}
 			else { /* Pitch shifting */
-				if (pipCfg.pitchShift && stat < pipCfg.n) {
-					p.pitchShiftRatio[ifb] = pow(2.0, pipCfg.pitchShift[stat] / 12.0);
+				if (pertCfg.pitchShift && stat < pertCfg.n) {
+					p.pitchShiftRatio[ifb] = pow(2.0, pertCfg.pitchShift[stat] / 12.0);
 				}
 				/* else {
 					p.pitchShiftRatio[ifb] = 1.0;
 				} */
-				duringPitchShift = (pipCfg.pitchShift[stat] != 0.0); /* TODO: Fix it */
-
-				//if (duringPitchShift_prev && !duringPitchShift) { /* Recover from time warping */ 
-				//	for (i0 = 0; i0 <= p.pvocFrameLen / 2; i0++) {
-				//		lastPhase[i0] = lastPhase_nps[i0];
-				//	}
-				//}	
-
+				duringPitchShift = (pertCfg.pitchShift[stat] != 0.0); /* TODO: Fix it */
 					
 				for (i0=0; i0 <= p.pvocFrameLen / 2; i0++){
 					for (int i1 = 0; i1 < 2; i1++) {
@@ -1883,14 +1850,6 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 				}
 
 					
-				/* if (p.pitchShiftRatio[ifb] != 1.0) {
-					for (i0 = 0; i0 <= p.pvocFrameLen / 2; i0++) {
-						ss_synMagn += synMagn[0][i0] * synMagn[0][i0];
-					}
-					ss_synMagn = ss_synMagn;
-				} */
-
-					
 				for (i0 = 0; i0 <= p.pvocFrameLen / 2; i0++) {
 					for (int i1 = 0; i1 < 2; i1++) {
 						magn[i1] = synMagn[i1][i0]; // get magnitude and true frequency from synthesis arrays						
@@ -1919,13 +1878,6 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 				//	ss_synMagn += 0.0; // DEBUG
 				//}
 			}
-
-			/* if (duringPitchShift_prev == true && duringPitchShift == false) { // DEBUG
-				mexPrintf("Falling edge: frame_counter = %d\n", frame_counter);
-			}
-			else if  (duringPitchShift_prev == false && duringPitchShift == true) { // DEBUG
-				mexPrintf("Rising edge: frame_counter = %d\n", frame_counter);
-			} */
 
 			for (i0 = p.pvocFrameLen + 1; i0 < p.pvocFrameLen * 2; i0++) {
 				for (int i1 = 0; i1 < 2; i1++) {
@@ -2683,7 +2635,6 @@ void Audapter::trackPhi(dtype *r_ptr,dtype *phi_ptr,dtype time)
 		last_f[k]=(1-p.trackFF)*phi_ptr[k]*p.sr/(2*M_PI)+p.trackFF*last_f[k];
 	}
 
-	
 }
 
 void Audapter::formantShiftFilter(dtype *xin_ptr, dtype* xout_ptr, 
@@ -2693,8 +2644,6 @@ void Audapter::formantShiftFilter(dtype *xin_ptr, dtype* xout_ptr,
 	// coefficients for the first filter (f1 shift) NOTE: b_filt1[0]=1 (see initilization)
 	b_filt1[1]=-2*r_ptr[0]*cos(oldPhi_ptr[0]);
 	b_filt1[2]= r_ptr[0]*r_ptr[0]; 	
-	/*a_filt1[0]=-2*r_ptr[0]*cos(newPhi_ptr[0]);  
-	a_filt1[1]= r_ptr[0]*r_ptr[0]; */
 	a_filt1[1]=-2*r_ptr[0]*cos(newPhi_ptr[0]);  
 	a_filt1[2]= r_ptr[0]*r_ptr[0]; 
 
@@ -2702,9 +2651,7 @@ void Audapter::formantShiftFilter(dtype *xin_ptr, dtype* xout_ptr,
 
 	// coefficients for the second filter (f2 shift) NOTE: b_filt2[0]=1 (see initilization)
 	b_filt2[1]=-2*r_ptr[1]*cos(oldPhi_ptr[1]);
-	b_filt2[2]= r_ptr[1]*r_ptr[1]; 	
-	/*a_filt2[0]=-2*r_ptr[1]*cos(newPhi_ptr[1]);  
-	a_filt2[1]= r_ptr[1]*r_ptr[1];*/
+	b_filt2[2]= r_ptr[1]*r_ptr[1];
 	a_filt2[1]=-2*r_ptr[1]*cos(newPhi_ptr[1]);  
 	a_filt2[2]= r_ptr[1]*r_ptr[1];
 
@@ -3176,276 +3123,6 @@ void Audapter::writeSignalsToWavFile() {
 }
 
 
-
-int readline(FILE *fp, char *line) {
-	int lineLen = 0;
-	char c;
-
-	c = fgetc(fp);
-	while (c != '\n' && c != '\r' && c != EOF) {		
-		line[lineLen ++] = c;
-		c = fgetc(fp);
-	}
-
-	line[lineLen] = '\0';
-
-	return lineLen;
-}
-
-int deblank(char *line) {
-	int lineLen = strlen(line);
-	int newLineLen, i;
-	int ine0 = 0;
-	int ine1 = lineLen - 1;
-
-	while (line[ine0] == ' ' || line[ine0] == '\t')
-		ine0++;
-
-	while (line[ine1] == ' ' || line[ine1] == '\t') {
-		ine1--;
-		if (ine1 == ine0)
-			break;
-	}
-
-	newLineLen = ine1 - ine0 + 1;
-	for (i = 0; i < newLineLen; i++)
-		line[i] = line[i + ine0];
-	line[newLineLen] = '\0';
-	
-	return newLineLen;
-}
-
-int string_count_char(char *str, char c) {
-	unsigned int i0;
-	int cnt = 0;
-
-	for (i0 = 0; i0 < strlen(str); i0++)
-		if (str[i0] == c)
-			cnt++;
-
-	return cnt;
-}
-
-int sscanf_floatArray(char *str, dtype *xs, int nx) {
-	int xc = 0, j;
-	unsigned int i;
-	bool tBreak = false;
-	char tmpstr[256];
-
-	i = 0;
-	while (xc < nx) {
-		j = 0;
-
-		while (str[i] == ',' || str[i] == ' ' || str[i] == '\t' || str[i] == ';')
-			i++;
-
-		tmpstr[j++] = str[i++];
-		while (tmpstr[j - 1] != ',' && tmpstr[j - 1] != ' ' && tmpstr[j - 1] != ';' && tmpstr[j - 1] != '\t' 
-			   && tmpstr[j - 1] != EOF && tmpstr[j - 1] != '\0')
-			tmpstr[j++] = str[i++];
-	
-		if (i >= strlen(str))
-			tBreak = true;
-
-		tmpstr[j] = '\0';
-		xs[xc ++] = atof(tmpstr);
-
-		if (tBreak)
-			break;
-	}
-
-	return xc;
-}
-
-void Audapter::readPIPCfg(int bVerbose) {
-	FILE *fp;
-	int i0;
-	int lineWidth;
-	int nTimeWarpAtoms = -1; /* SCai: currently a dummy variable. TODO: implement multiple time warping atoms */
-	char line[512];
-	dtype tmpx[16];
-	int t_ostInitState;
-	dtype t_tBegin, t_rate1, t_dur1, t_durHold, t_rate2;
-
-	// Free previously existing fields of ostTab
-	if (pipCfg.pitchShift) {
-		free(pipCfg.pitchShift);
-		pipCfg.pitchShift = NULL;
-	}
-	if (pipCfg.intShift) {
-		free(pipCfg.intShift);
-		pipCfg.intShift = NULL;
-	}
-
-	/*fp = fopen(pipcfgfn, "r");*/
-	if (fopen_s(&fp, pipcfgfn, "r")) {
-		printf("ERROR: Unable to open ost file: %s\n", this->pipcfgfn);
-		return;
-	}
-
-	/* 1. Read the time warping section */
-	while (nTimeWarpAtoms == -1) {
-		lineWidth = readline(fp, line);
-		lineWidth = deblank(line);
-
-		if (lineWidth == 0) 
-			continue;
-		if (line[0] == '#') 
-			continue;
-
-		nTimeWarpAtoms = atoi(line);
-	}
-
-	/* Read the time warp details, one by one {tBegin, rate1, dur1, durHold, rate2} */
-	/*for (i0 = 0; i0 < nTimeWarpAtoms; i0 ++) {*/ /* TODO */
-	for (i0 = 0; i0 < 1 && i0 < nTimeWarpAtoms; i0 ++) {
-		lineWidth = readline(fp, line);
-		lineWidth = deblank(line);
-
-		if (lineWidth == 0) 
-			continue;
-		if (line[0] == '#') 
-			continue;
-
-		/*sscanf(line, "%f, %f, %f, %f, %f", 
-			   &t_tBegin, &t_rate1, &t_dur1, &t_durHold, &t_rate2);*/
-		if (warpCfg) {
-			delete warpCfg;
-			warpCfg = NULL;
-		}
-
-		if (string_count_char(line, ',') == 4) {
-			sscanf_floatArray(line, tmpx, 5);
-
-			t_tBegin = tmpx[0];
-			t_rate1 = tmpx[1];
-			t_dur1 = tmpx[2];
-			t_durHold = tmpx[3];
-			t_rate2 = tmpx[4];
-
-			warpCfg = new pvocWarpAtom(t_tBegin, t_rate1, t_dur1, t_durHold, t_rate2);		
-		}
-		else {
-			sscanf_floatArray(line, tmpx, 6);
-
-			t_ostInitState = (int) tmpx[0];
-			t_tBegin = tmpx[1];
-			t_rate1 = tmpx[2];
-			t_dur1 = tmpx[3];
-			t_durHold = tmpx[4];
-			t_rate2 = tmpx[5];
-
-			warpCfg = new pvocWarpAtom(t_ostInitState, t_tBegin, t_rate1, t_dur1, t_durHold, t_rate2);		
-		}
-		
-	}
-	
-	/* 2. Read the formant/pitch/intensity shift section */
-	pipCfg.n = -1;
-
-	while (pipCfg.n == -1) {
-		lineWidth = readline(fp, line);
-		lineWidth = deblank(line);
-
-		if (lineWidth == 0) 
-			continue;
-		if (line[0] == '#') 
-			continue;
-
-		pipCfg.n = atoi(line);
-		
-		if (bVerbose)
-			printf("pipCfg.n = %d\n", pipCfg.n);
-	}
-
-	if ((pipCfg.pitchShift = (float *)calloc(pipCfg.n, sizeof(float))) == NULL) {
-		printf("ERROR: failed to allocate memor for pipCfg.pitchShift\n");
-		return;
-	}
-	if ((pipCfg.intShift = (float *)calloc(pipCfg.n, sizeof(float))) == NULL) {
-		printf("ERROR: failed to allocate memor for pipCfg.intShift\n");
-		return;
-	}
-	if ((pipCfg.fmtPertAmp = (float *)calloc(pipCfg.n, sizeof(float))) == NULL) {
-		printf("ERROR: failed to allocate memor for pipCfg.fmtPertAmp\n");
-		return;
-	}
-	if ((pipCfg.fmtPertPhi = (float *)calloc(pipCfg.n, sizeof(float))) == NULL) {
-		printf("ERROR: failed to allocate memor for pipCfg.fmtPertPhi\n");
-		return;
-	}
-
-	for (i0 = 0; i0 < pipCfg.n; i0++) {
-		lineWidth = readline(fp, line);
-		lineWidth = deblank(line);
-
-		if (lineWidth == 0) 
-			continue;
-		if (line[0] == '#') 
-			continue;
-
-		sscanf_floatArray(line, tmpx, 5);
-		pipCfg.pitchShift[i0] = (float) tmpx[1];
-		pipCfg.intShift[i0] = (float) tmpx[2];
-		pipCfg.fmtPertAmp[i0] = (float) tmpx[3];
-		pipCfg.fmtPertPhi[i0] = (float) tmpx[4];
-		
-		if (bVerbose) {
-			printf("\tstat=%d: pitchShift = %f s.t.; intShift = %f dB;\n", 
-				   i0, pipCfg.pitchShift[i0], pipCfg.intShift[i0]);
-			printf("\t\tfmtPertAmp = %f; fmtPertPhi = %f rad;\n", 
-				   pipCfg.fmtPertAmp[i0], pipCfg.fmtPertPhi[i0]);
-		}
-	}
-
-	/*c1 = '\0';
-	while (!(c1 == '\n') || (c1 == '\r')) {
-		c1 = fgetc(fp);
-	}
-	fscanf(fp, "%s", c0);
-	pipCfg.n = atoi(c0);
-	printf("pipCfg.n = %d\n", pipCfg.n);
-
-	if ((pipCfg.pitchShift = (float *)calloc(pipCfg.n, sizeof(float))) == NULL) {
-		printf("ERROR: failed to allocate memor for pipCfg.pitchShift\n");
-		return;
-	}
-	if ((pipCfg.intShift = (float *)calloc(pipCfg.n, sizeof(float))) == NULL) {
-		printf("ERROR: failed to allocate memor for pipCfg.intShift\n");
-		return;
-	}
-	if ((pipCfg.fmtPertAmp = (float *)calloc(pipCfg.n, sizeof(float))) == NULL) {
-		printf("ERROR: failed to allocate memor for pipCfg.fmtPertAmp\n");
-		return;
-	}
-	if ((pipCfg.fmtPertPhi = (float *)calloc(pipCfg.n, sizeof(float))) == NULL) {
-		printf("ERROR: failed to allocate memor for pipCfg.fmtPertPhi\n");
-		return;
-	}
-
-	for (i0 = 0; i0 < pipCfg.n; i0++) {
-		fscanf(fp, "%s", c0);
-		fscanf(fp, "%s", c0);
-		pipCfg.pitchShift[i0] = atof(c0);
-
-		fscanf(fp, "%s", c0);
-		pipCfg.intShift[i0] = atof(c0);
-
-		fscanf(fp, "%s", c0);
-		pipCfg.fmtPertAmp[i0] = atof(c0);
-
-		fscanf(fp, "%s", c0);
-		pipCfg.fmtPertPhi[i0] = atof(c0);
-		
-		printf("\tstat=%d: pitchShift = %f s.t.; intShift = %f dB;\n", 
-			   i0, pipCfg.pitchShift[i0], pipCfg.intShift[i0]);
-		printf("\t\tfmtPertAmp = %f; fmtPertPhi = %f rad;\n", 
-			   pipCfg.fmtPertAmp[i0], pipCfg.fmtPertPhi[i0]);
-	}*/
-
-	fclose(fp);
-}
-
 void Audapter::calcRMSSlope() {
 	int i0;
 	dtype nom = 0, den = 0;
@@ -3472,8 +3149,6 @@ void Audapter::calcRMSSlope() {
 }
 
 
-
-
 int Audapter::gainPerturb(dtype *buffer,dtype *gtot_ptr,int framelen, int frameshift)
 {// this routine applies the gain factors collected in the vector gTot to the signal
  // for each window (nwin windows in one frame) the function finds the first zerocrossing
@@ -3491,7 +3166,7 @@ int Audapter::gainPerturb(dtype *buffer,dtype *gtot_ptr,int framelen, int frames
 	dtype gain_new = intShiftRatio; //SCai(2012/10/19): PIP
 	bool armed=true;
 
-	bGainPert = (pipCfg.n > 0);
+	bGainPert = (pertCfg.n > 0);
 
 	if (bGainPert) {
 		if (lastSample * buffer[0] <= 0)// zero crossing at first sample ?
@@ -3536,30 +3211,30 @@ int Audapter::handleBufferToneSeq(dtype *inFrame_ptr, dtype *outFrame_ptr, int f
 	double dt=0.00002083333333333333;
 	double rt,sineVal,envVal;
 
-	for (n=0;n<frame_size;n++){
-		for (m=p.tsgNTones-1;m>=0;m--){
+	for (n=0;n<frame_size;n++) {
+		for (m=p.tsgNTones-1;m>=0;m--) {
 			if (p.wgTime>=tsgToneOnsets[m])
 				break;
 		}
 		rt=p.wgTime-tsgToneOnsets[m];
 		sineVal=p.tsgToneAmp[m]*sin(2*M_PI*p.tsgToneFreq[m]*rt);
-		if (rt>p.tsgToneDur[m]){
+		if (rt>p.tsgToneDur[m]) {
 			envVal=0;
 		}
-		else if (rt<p.tsgToneRamp[m]){
+		else if (rt<p.tsgToneRamp[m]) {
 			envVal=rt/p.tsgToneRamp[m];
 		}
-		else if (rt>p.tsgToneDur[m]-p.tsgToneRamp[m]){
+		else if (rt>p.tsgToneDur[m]-p.tsgToneRamp[m]) {
 			envVal=(p.tsgToneDur[m]-rt)/p.tsgToneRamp[m];
 		}
-		else{
+		else {
 			envVal=1.;
 		}
 
 		outFrame_ptr[2 * n] = outFrame_ptr[2 * n + 1] = sineVal * envVal; /* Stereo */
 		tsg_wf[tsgRecCounter++] = outFrame_ptr[2 * n];
 
-		p.wgTime=p.wgTime+dt;
+		p.wgTime = p.wgTime + dt;
 	}
 
 	return 0;
@@ -3858,6 +3533,10 @@ void getRPhiBw(dtype *wr, dtype *wi, dtype *radius, dtype *phi, dtype *bandwith,
 }
 
 void Audapter::readOSTTab(int bVerbose) {
-	ostTab.readFromFile(string(ostfn), bVerbose);
+	ostTab.readFromFile(string(ostFN), bVerbose);
 	this->rmsSlopeWin = ostTab.rmsSlopeWin;
+}
+
+void Audapter::readPIPCfg(int bVerbose) {
+	pertCfg.readFromFile(string(pertCfgFN), bVerbose);
 }

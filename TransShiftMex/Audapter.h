@@ -42,6 +42,7 @@ Speech Laboratory, Boston University
 
 #include "filter.h"
 #include "ost.h"
+#include "pcf.h"
 
 typedef double dtype;
 
@@ -93,62 +94,6 @@ typedef struct tag_thrWriteWavStruct {
 	char *wavfn_out;
 } thrWriteWavStruct;
 
-
-typedef struct tag_pipCfg { // Pitch and intensity perturbation configurtion
-	int n; // Number of stats
-	
-	float *pitchShift;	// Unit: st
-	float *intShift;	// Unit: dB
-
-	float *fmtPertAmp;
-	float *fmtPertPhi;	// Unit: phi
-
-} PIP_CFG;
-
-class pvocWarpAtom {
-public:
-	dtype tBegin;
-	dtype rate1;	// Should aways be in the interval of (0, 1)
-	dtype dur1;
-	dtype durHold;
-	dtype rate2;	// Should aways be > 1
-	dtype dur2;
-	int ostInitState; // The ost (online speech tracking) state number at which the clock for pvoc starts. -1: use the same clock as TransShiftMex (default)
-
-	pvocWarpAtom(){
-		tBegin = 0.25;
-		dur1 = 0.25; 
-		rate1 = 0.5;
-		durHold = 1;
-		rate2 = 2;
-		/* ostInitState = -1; */
-		ostInitState = 9999; /* Use a large number to effectively disable time warping by default */
-			
-		dur2 = (1 - rate1) / (rate2 - 1) * dur1;
-	}
-	
-	pvocWarpAtom(dtype t_tBegin, dtype t_rate1, dtype t_dur1, dtype t_durHold, dtype t_rate2){
-		tBegin = t_tBegin;
-		rate1 = t_rate1;
-		dur1 = t_dur1;
-		durHold = t_durHold;
-		rate2 = t_rate2;
-
-		dur2 = (1 - rate1) / (rate2 - 1) * dur1;
-	}
-
-	pvocWarpAtom(int t_ostInitState, dtype t_tBegin, dtype t_rate1, dtype t_dur1, dtype t_durHold, dtype t_rate2){
-		tBegin = t_tBegin;
-		rate1 = t_rate1;
-		dur1 = t_dur1;
-		durHold = t_durHold;
-		rate2 = t_rate2;
-
-		ostInitState = t_ostInitState;
-
-		dur2 = (1 - rate1) / (rate2 - 1) * dur1;
-	}
-};
 
 class Parameter {
 public:
@@ -252,7 +197,7 @@ private:
 	dtype rmsSlopeWin;
 	int rmsSlopeN;
 
-	PIP_CFG pipCfg;	
+	PERT_CFG pertCfg;
 
 	// counters
 	int frame_counter;		// frame counter : increments at every new frame from soundcard	(frame rate)						
@@ -645,7 +590,7 @@ public:
 
 	int pbCounter;	//SC The integer counter used in wave playback 
 
-	pvocWarpAtom *warpCfg;
+	/*pvocWarpAtom *warpCfg;*/ //Marked
 
 	char deviceName[256];
 
@@ -667,8 +612,8 @@ public:
 	}
 	
 	// OST related (10/18/2012)
-	char ostfn[512];
-	char pipcfgfn[512];
+	char ostFN[512];
+	char pertCfgFN[512];
 
 	bool duringTimeWarp, duringTimeWarp_prev;
 	bool duringPitchShift, duringPitchShift_prev;
@@ -687,4 +632,4 @@ public:
 };
 
 
-void init_pipCfg(PIP_CFG *pipCfg);
+//void init_pipCfg(PERT_CFG *pertCfg); //Marked
