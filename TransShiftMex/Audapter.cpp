@@ -616,7 +616,6 @@ void Audapter::reset()
 
 		lastPhase_ntw[i0] = 0.0;
 		
-		
 		outputAccum[i0] = 0;
 
 		for (j0 = 0; j0 < maxNVoices; j0++)
@@ -1682,7 +1681,8 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 
 			// --- Time warping preparation ---
 			dtype t0 = (dtype)(frame_counter - (p.nDelay - 1)) * p.frameLen / p.sr;
-			dtype t1, t01;				
+			/*dtype t1, t01;*/ //Marked
+			dtype t1;
 			dtype cidx1_d, cidx1_f;
 			// dtype cidx0_d, cidx0_f;
 			dtype dp;
@@ -1704,27 +1704,29 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 			/* Time warping, overrides pitch shifting */
 			int ifb = 0;
 				
-			if (pertCfg.warpCfg->ostInitState < 0) {
-				duringTimeWarp = (t0 >= pertCfg.warpCfg->tBegin 
-								  && t0 < pertCfg.warpCfg->tBegin + pertCfg.warpCfg->dur1 + pertCfg.warpCfg->durHold + pertCfg.warpCfg->dur2);
-			}
-			else {
-				if (stat < pertCfg.warpCfg->ostInitState) {
-					duringTimeWarp = false;
-				}
-				else {
-					t01 = t0 - ((dtype) (ostTab.statOnsetIndices[pertCfg.warpCfg->ostInitState] - (p.nDelay - 1)) * p.frameLen / p.sr);
-					duringTimeWarp = (t01 >= pertCfg.warpCfg->tBegin 
-									  && t01 < pertCfg.warpCfg->tBegin + pertCfg.warpCfg->dur1 + pertCfg.warpCfg->durHold + pertCfg.warpCfg->dur2);
-					if (duringTimeWarp)
-						t0 = t01;
-				}
-				/* TODO */
-			}
+			//if (pertCfg.warpCfg->ostInitState < 0) {
+			//	/*duringTimeWarp = (t0 >= pertCfg.warpCfg->tBegin 
+			//					  && t0 < pertCfg.warpCfg->tBegin + pertCfg.warpCfg->dur1 + pertCfg.warpCfg->durHold + pertCfg.warpCfg->dur2);*/ //Marked
+			//	/*duringTimeWarp = pertCfg.warpCfg->isDuringTimeWarp(t0);*/
+			//	duringTimeWarp = false;
+			//}
+			//else {
+			//	/*if (stat < pertCfg.warpCfg->ostInitState) {
+			//		duringTimeWarp = false;
+			//	}
+			//	else {
+			//		t01 = t0 - ((dtype) (ostTab.statOnsetIndices[pertCfg.warpCfg->ostInitState] - (p.nDelay - 1)) * p.frameLen / p.sr);
+			//		duringTimeWarp = (t01 >= pertCfg.warpCfg->tBegin 
+			//						  && t01 < pertCfg.warpCfg->tBegin + pertCfg.warpCfg->dur1 + pertCfg.warpCfg->durHold + pertCfg.warpCfg->dur2);
+			//		if (duringTimeWarp)
+			//			t0 = t01;
+			//	}*/ //Marked
+			duringTimeWarp = pertCfg.warpCfg->isDuringTimeWarp(stat, ostTab.statOnsetIndices[pertCfg.warpCfg->ostInitState], 
+															   p.nDelay, static_cast<double>(p.frameLen) / static_cast<double>(p.sr), t0);
+			//}
 
 			// duringTimeWarp = false; /* DEBUG */
 
-				
 			if (duringTimeWarp){
 				duringPitchShift = false;
 				p.pitchShiftRatio[0] = 1.0;
@@ -1751,18 +1753,13 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 				/* For no-time-warp backup */					
 
 				for (i0 = 0; i0 <= p.pvocFrameLen / 2; i0++) {
-					magn[0] = pvocWarpCache[cidx1 % (internalBufLen / 64)][i0] * (1 - cidx1_f) + 
-								pvocWarpCache[(cidx1 + 1) % (internalBufLen / 64)][i0] * cidx1_f;
+					int k0 = cidx1 % (internalBufLen / 64);
+					int k1 = (cidx1 + 1) % (internalBufLen / 64);
+					magn[0] = pvocWarpCache[k0][i0] * (1 - cidx1_f) + pvocWarpCache[k1][i0] * cidx1_f;
 					/* No time warp */
 					/*magn = pvocWarpCache[cidx0 % (internalBufLen / 64)][i0];*/
-					
-					/*phase1 = pvocWarpCache[cidx1 % (internalBufLen / 64)][i0 + p.pvocFrameLen] * (1 - cidx1_f) + 
-								pvocWarpCache[(cidx1 + 1) % (internalBufLen / 64)][i0 + p.pvocFrameLen] * cidx1_f;*/
-
-					dp = pvocWarpCache[(cidx1 + 1) % (internalBufLen / 64)][i0 + p.pvocFrameLen] - 
-							pvocWarpCache[cidx1 % (internalBufLen / 64)][i0 + p.pvocFrameLen];
-					/*dp = phase1 - phase0;
-					phase0 = phase1;*/
+				
+					dp = pvocWarpCache[k1][i0 + p.pvocFrameLen] - pvocWarpCache[k0][i0 + p.pvocFrameLen];
 						
 					dp -= (dtype)i0 * expct;
 						
@@ -1788,6 +1785,12 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 				}
 			}
 			else { /* Pitch shifting */
+				if (duringTimeWarp_prev && !duringTimeWarp) { /* Recover from time warping */ 
+					for (i0 = 0; i0 <= p.pvocFrameLen / 2; i0++) {
+						lastPhase[0][i0] = lastPhase_ntw[i0];
+					}
+				}
+
 				if (pertCfg.pitchShift && stat < pertCfg.n) {
 					p.pitchShiftRatio[ifb] = pow(2.0, pertCfg.pitchShift[stat] / 12.0);
 				}
@@ -1868,16 +1871,11 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 						ftBuf2ps[i1][2 * i0] = magn[i1] * cos(phase[i1]);
 						ftBuf2ps[i1][2 * i0 + 1] = magn[i1] * sin(phase[i1]);			// What causes the sign reversal here?
 
-						//if (i1 == 0) { // DEBUG
-						//	ss_synMagn += ftBuf2ps[i1][2 * i0] * ftBuf2ps[i1][2 * i0] + ftBuf2ps[i1][2 * i0 + 1] * ftBuf2ps[i1][2 * i0 + 1];
-						//}
 					}
 				}
-
-				//if (p.pitchShiftRatio[ifb] != 1.0) { // DEBUG
-				//	ss_synMagn += 0.0; // DEBUG
-				//}
 			}
+
+			duringTimeWarp_prev = duringTimeWarp;
 
 			for (i0 = p.pvocFrameLen + 1; i0 < p.pvocFrameLen * 2; i0++) {
 				for (int i1 = 0; i1 < 2; i1++) {
@@ -1906,9 +1904,12 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 
 			// --- Accumulate to buffer ---
 			for (i0 = 0; i0 < p.pvocFrameLen; i0++){					
+				/*outFrameBufPS[ifb][(outFrameBuf_circPtr + i0) % (internalBufLen)] = 
+					outFrameBufPS[ifb][(outFrameBuf_circPtr + i0) % (internalBufLen)] + 
+					2 * ftBuf2ps[1 - duringPitchShift][2 * i0] * hwin2[i0] / (osamp / 2);*/
 				outFrameBufPS[ifb][(outFrameBuf_circPtr + i0) % (internalBufLen)] = 
 					outFrameBufPS[ifb][(outFrameBuf_circPtr + i0) % (internalBufLen)] + 
-					2 * ftBuf2ps[1 - duringPitchShift][2 * i0] * hwin2[i0] / (osamp / 2);
+					2 * ftBuf2ps[0][2 * i0] * hwin2[i0] / (osamp / 2);
 			}			
 
 			// Front zeroing

@@ -21,7 +21,7 @@ pvocWarpAtom::pvocWarpAtom() {
 	durHold = 1;
 	rate2 = 2;
 	/* ostInitState = -1; */
-	ostInitState = 9999; /* Use a large number to effectively disable time warping by default */
+	ostInitState = -1; /* Use a negative number to effectively disable time warping by default */
 			
 	dur2 = (1 - rate1) / (rate2 - 1) * dur1;
 }
@@ -33,6 +33,8 @@ pvocWarpAtom::pvocWarpAtom(double t_tBegin, double t_rate1, double t_dur1, doubl
 	dur1 = t_dur1;
 	durHold = t_durHold;
 	rate2 = t_rate2;
+
+	ostInitState = 0;
 
 	dur2 = (1 - rate1) / (rate2 - 1) * dur1;
 }
@@ -50,6 +52,37 @@ pvocWarpAtom::pvocWarpAtom(int t_ostInitState, double t_tBegin, double t_rate1, 
 	dur2 = (1 - rate1) / (rate2 - 1) * dur1;
 }
 
+///* pvocWarpAtom: Test if the input time t is within the time-shift period: Variant 1: without initial state number */
+//const bool pvocWarpAtom::isDuringTimeWarp(const double t) const {
+//	if (ostInitState < 0)
+//		return false;
+//	else
+//		return (t >= tBegin) && (t < tBegin + dur1 + durHold + dur2);
+//}
+
+/* pvocWarpAtom: Test if the input time t is within the time-shift period: Variant 2: with initial state number */
+const bool pvocWarpAtom::isDuringTimeWarp(const int stat, const int statOnsetIndex, 
+										  const int nDelay, const double frameDur, double & t) const {
+	if ((ostInitState < 0) || (stat < ostInitState)) {
+		return false;
+	}
+	else {
+		double t01;
+		bool duringTimeWarp;
+
+		//t01 = t - static_cast<double>((statOnsetIndex - (nDelay - 1)) * frameDur);
+		t01 = t - static_cast<double>(statOnsetIndex) * frameDur;
+		duringTimeWarp = (t01 >= tBegin) && (t01 < tBegin + dur1 + durHold + dur2);
+
+		if (duringTimeWarp)
+			//t = t01;
+			t = t;
+
+		return duringTimeWarp;
+	}
+
+}
+
 /* PERT_CFG: Constructor */
 PERT_CFG::PERT_CFG() {
 	n = 0;
@@ -59,7 +92,7 @@ PERT_CFG::PERT_CFG() {
 	fmtPertAmp = NULL;
 	fmtPertPhi = NULL;
 
-	warpCfg = NULL;
+	warpCfg = new pvocWarpAtom();
 }
 
 /* PERT_CFG: Destructor */
@@ -230,10 +263,6 @@ void PERT_CFG::readFromFile(const string pertCfgFN, const int bVerbose) {
 
 		/*sscanf(line, "%f, %f, %f, %f, %f", 
 			   &t_tBegin, &t_rate1, &t_dur1, &t_durHold, &t_rate2);*/
-		if (warpCfg) {
-			delete warpCfg;
-			warpCfg = NULL;
-		}
 
 		if (string_count_char(line, ',') == 4) {
 			sscanf_floatArray(line, tmpx, 5);
@@ -244,7 +273,11 @@ void PERT_CFG::readFromFile(const string pertCfgFN, const int bVerbose) {
 			t_durHold = tmpx[3];
 			t_rate2 = tmpx[4];
 
+			/* TODO: Implement multiple time warping events */
+			if (warpCfg)
+				delete warpCfg;
 			warpCfg = new pvocWarpAtom(t_tBegin, t_rate1, t_dur1, t_durHold, t_rate2);		
+			
 		}
 		else {
 			sscanf_floatArray(line, tmpx, 6);

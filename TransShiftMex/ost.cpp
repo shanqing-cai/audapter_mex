@@ -312,14 +312,14 @@ int OST_TAB::osTrack(const int stat, const int data_counter, const int frame_cou
 		if (t_mode == 1) { // (+1) Elapsed time from previous state. prm1: duration (s)
 			if ((data_counter - statOnsetIndices[stat]) * frameDur > prm1[k]) {
 				stat_out = stat + 1;
-				statOnsetIndices[stat] = frame_counter;
+				statOnsetIndices[stat_out] = frame_counter;
 			}
 		}
 		else if (t_mode == 5) { // (+2) Crossing an rmsThresh (from below) and hold. prm1: rmsThresh; prm2: minHoldDur (s)			
 			if (stat == t_stat0) {
 				if (rms_o > prm1[k]) {
 					stat_out = stat + 1;
-					statOnsetIndices[stat] = frame_counter;
+					statOnsetIndices[stat_out] = frame_counter;
 					stretchCnt = 1;
 				}
 			}
@@ -330,7 +330,7 @@ int OST_TAB::osTrack(const int stat, const int data_counter, const int frame_cou
 					stretchCnt++;
 					if (stretchCnt > minDurN) {
 						stat_out = stat + 1;
-						statOnsetIndices[stat] = frame_counter;
+						statOnsetIndices[stat_out] = frame_counter;
 						lastStatEnd = data_counter;
 					}
 				}
@@ -345,7 +345,7 @@ int OST_TAB::osTrack(const int stat, const int data_counter, const int frame_cou
 				if (rms_o > prm1[k] && 
 					rms_o_slp > 0) {
 					stat_out = stat + 1;
-					statOnsetIndices[stat] = frame_counter;
+					statOnsetIndices[stat_out] = frame_counter;
 					stretchCnt = 1;
 				}
 			}
@@ -357,7 +357,7 @@ int OST_TAB::osTrack(const int stat, const int data_counter, const int frame_cou
 					stretchCnt++;
 					if (stretchCnt > minDurN) {
 						stat_out = stat + 1;
-						statOnsetIndices[stat] = frame_counter;
+						statOnsetIndices[stat_out] = frame_counter;
 						lastStatEnd = data_counter;
 					}
 				}
@@ -371,7 +371,7 @@ int OST_TAB::osTrack(const int stat, const int data_counter, const int frame_cou
 			if (stat == t_stat0) {
 				if (rms_o_slp > 0) {
 					stat_out = stat + 1;
-					statOnsetIndices[stat] = frame_counter;
+					statOnsetIndices[stat_out] = frame_counter;
 					stretchCnt = 1;
 				}
 			}
@@ -380,7 +380,7 @@ int OST_TAB::osTrack(const int stat, const int data_counter, const int frame_cou
 					stretchCnt++;
 					if (stretchCnt > prm1[k]) {
 						stat_out = stat + 1;
-						statOnsetIndices[stat] = frame_counter;
+						statOnsetIndices[stat_out] = frame_counter;
 						lastStatEnd = data_counter;
 					}
 				}
@@ -394,7 +394,7 @@ int OST_TAB::osTrack(const int stat, const int data_counter, const int frame_cou
 			if (stat == t_stat0) {
 				if (rms_o_slp < 0) {
 					stat_out = stat + 1;
-					statOnsetIndices[stat] = frame_counter;
+					statOnsetIndices[stat_out] = frame_counter;
 					stretchCnt = 1;
 					stretchSpanAccum = rms_o_slp;
 				}
@@ -406,7 +406,7 @@ int OST_TAB::osTrack(const int stat, const int data_counter, const int frame_cou
 
 					if ((stretchCnt > prm1[k]) && (stretchSpanAccum < prm2[k])) {
 						stat_out = stat + 1;
-						statOnsetIndices[stat] = frame_counter;
+						statOnsetIndices[stat_out] = frame_counter;
 						lastStatEnd = data_counter;
 					}
 				}
@@ -433,7 +433,7 @@ int OST_TAB::osTrack(const int stat, const int data_counter, const int frame_cou
 
 			if ((bIsGOET == 0) && ((data_counter - lastStatEnd) > minDurN)) {
 				stat_out = stat + 1;
-				statOnsetIndices[stat] = frame_counter;
+				statOnsetIndices[stat_out] = frame_counter;
 				lastStatEnd = data_counter;
 			}
 
@@ -442,7 +442,7 @@ int OST_TAB::osTrack(const int stat, const int data_counter, const int frame_cou
 			if (stat == t_stat0) {
 				if (1. / rms_ratio > prm1[k]) {
 					stat_out = stat + 1;
-					statOnsetIndices[stat] = frame_counter;
+					statOnsetIndices[stat_out] = frame_counter;
 					stretchCnt = 0;
 				}
 			}
@@ -453,7 +453,7 @@ int OST_TAB::osTrack(const int stat, const int data_counter, const int frame_cou
 					stretchCnt++;
 					if (stretchCnt > minDurN) {
 						stat_out = stat + 1;
-						statOnsetIndices[stat] = frame_counter;
+						statOnsetIndices[stat_out] = frame_counter;
 					}
 				}
 				else {
@@ -463,7 +463,7 @@ int OST_TAB::osTrack(const int stat, const int data_counter, const int frame_cou
 			else {
 				if (1. / rms_ratio < prm1[k]) {
 					stat_out = stat + 1;
-					statOnsetIndices[stat] = frame_counter;
+					statOnsetIndices[stat_out] = frame_counter;
 					lastStatEnd = data_counter;
 				}
 			}			
@@ -472,7 +472,7 @@ int OST_TAB::osTrack(const int stat, const int data_counter, const int frame_cou
 			if (stat == t_stat0) {
 				if (1. / rms_ratio < prm1[k]) {
 					stat_out = stat + 1;
-					statOnsetIndices[stat] = frame_counter;
+					statOnsetIndices[stat_out] = frame_counter;
 					stretchCnt = 0;
 				}
 			}
@@ -483,7 +483,7 @@ int OST_TAB::osTrack(const int stat, const int data_counter, const int frame_cou
 					stretchCnt++;
 					if (stretchCnt > minDurN) {
 						stat_out = stat + 1;
-						statOnsetIndices[stat] = frame_counter;
+						statOnsetIndices[stat_out] = frame_counter;
 					}
 				}
 				else {
@@ -493,7 +493,7 @@ int OST_TAB::osTrack(const int stat, const int data_counter, const int frame_cou
 			else {
 				if (1. / rms_ratio < prm1[k]) {
 					stat_out = stat + 1;
-					statOnsetIndices[stat] = frame_counter;
+					statOnsetIndices[stat_out] = frame_counter;
 					lastStatEnd = data_counter;
 				}
 			}
