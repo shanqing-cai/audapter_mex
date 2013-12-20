@@ -52,17 +52,19 @@ pvocWarpAtom::pvocWarpAtom(int t_ostInitState, double t_tBegin, double t_rate1, 
 	dur2 = (1 - rate1) / (rate2 - 1) * dur1;
 }
 
-///* pvocWarpAtom: Test if the input time t is within the time-shift period: Variant 1: without initial state number */
-//const bool pvocWarpAtom::isDuringTimeWarp(const double t) const {
-//	if (ostInitState < 0)
-//		return false;
-//	else
-//		return (t >= tBegin) && (t < tBegin + dur1 + durHold + dur2);
-//}
-
 /* pvocWarpAtom: Test if the input time t is within the time-shift period: Variant 2: with initial state number */
 const bool pvocWarpAtom::isDuringTimeWarp(const int stat, const int statOnsetIndex, 
-										  const int nDelay, const double frameDur, double & t) const {
+										  const int nDelay, const double frameDur, 
+										  double & t, double & wt) const {
+/* Input arguments: 
+		stat:			current OST status number
+		statOnsetIndex: frame index at which the current status is first entered
+		nDelay:			Audapter nDelay
+		frameDur:		Audapter frame duration (in s, = frameLen / sr)
+		t:				current time (s)
+		wt:				warped time (s)
+*/
+
 	if ((ostInitState < 0) || (stat < ostInitState)) {
 		return false;
 	}
@@ -70,13 +72,31 @@ const bool pvocWarpAtom::isDuringTimeWarp(const int stat, const int statOnsetInd
 		double t01;
 		bool duringTimeWarp;
 
-		//t01 = t - static_cast<double>((statOnsetIndex - (nDelay - 1)) * frameDur);
 		t01 = t - static_cast<double>(statOnsetIndex) * frameDur;
+		//t01 = t - static_cast<double>(statOnsetIndex - (nDelay - 1)) * frameDur;
 		duringTimeWarp = (t01 >= tBegin) && (t01 < tBegin + dur1 + durHold + dur2);
 
 		if (duringTimeWarp)
-			//t = t01;
-			t = t;
+			t = t01;
+			//t = t;
+
+		/* Determine warped time */
+		if (t < tBegin + dur1){ /* Time dilation (deceleration) */
+			wt = (t - tBegin) * rate1 + tBegin;
+		}
+		else if (t < tBegin + dur1 + durHold){ /* Time shifting (no compression or dilation) */
+			wt = rate1 * dur1 - dur1 + t;
+		}
+		else if (t < tBegin + dur1 + durHold + dur2){ /* Time compression (acceleration) at the end of the warp interval */
+			//t1 = (t0 - (warpCfg->tBegin + warpCfg->dur1 + warpCfg->durHold)) * warpCfg->rate2 + warpCfg->tBegin + warpCfg->dur1 + warpCfg->durHold;
+			wt = tBegin + dur1 + durHold + dur2;
+			wt -= (tBegin + dur1 + durHold + dur2 - t) * rate2;
+		}
+			
+		//if (pertCfg.warpCfg->ostInitState >= 0)
+		wt += static_cast<double>(statOnsetIndex) * frameDur;
+		//wt += static_cast<double>(statOnsetIndex - (nDelay - 1)) * frameDur;
+		/* ~Determine warped time */
 
 		return duringTimeWarp;
 	}

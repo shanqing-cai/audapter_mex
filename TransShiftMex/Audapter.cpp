@@ -1722,7 +1722,8 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 			//			t0 = t01;
 			//	}*/ //Marked
 			duringTimeWarp = pertCfg.warpCfg->isDuringTimeWarp(stat, ostTab.statOnsetIndices[pertCfg.warpCfg->ostInitState], 
-															   p.nDelay, static_cast<double>(p.frameLen) / static_cast<double>(p.sr), t0);
+															   p.nDelay, static_cast<double>(p.frameLen) / static_cast<double>(p.sr), 
+															   t0, t1);
 			//}
 
 			// duringTimeWarp = false; /* DEBUG */
@@ -1731,20 +1732,20 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 				duringPitchShift = false;
 				p.pitchShiftRatio[0] = 1.0;
 				
-				if (t0 < pertCfg.warpCfg->tBegin + pertCfg.warpCfg->dur1){ /* Time dilation (deceleration) */
-					t1 = (t0 - pertCfg.warpCfg->tBegin) * pertCfg.warpCfg->rate1 + pertCfg.warpCfg->tBegin;
-				}
-				else if (t0 < pertCfg.warpCfg->tBegin + pertCfg.warpCfg->dur1 + pertCfg.warpCfg->durHold){ /* Time shifting (no compression or dilation) */
-					t1 = pertCfg.warpCfg->rate1 * pertCfg.warpCfg->dur1 - pertCfg.warpCfg->dur1 + t0;
-				}
-				else if (t0 < pertCfg.warpCfg->tBegin + pertCfg.warpCfg->dur1 + pertCfg.warpCfg->durHold + pertCfg.warpCfg->dur2){ /* Time compression (acceleration) at the end of the warp interval */
-					//t1 = (t0 - (warpCfg->tBegin + warpCfg->dur1 + warpCfg->durHold)) * warpCfg->rate2 + warpCfg->tBegin + warpCfg->dur1 + warpCfg->durHold;
-					t1 = pertCfg.warpCfg->tBegin + pertCfg.warpCfg->dur1 + pertCfg.warpCfg->durHold + pertCfg.warpCfg->dur2;
-					t1 -= (pertCfg.warpCfg->tBegin + pertCfg.warpCfg->dur1 + pertCfg.warpCfg->durHold + pertCfg.warpCfg->dur2 - t0) * pertCfg.warpCfg->rate2;
-				}
-					
-				if (pertCfg.warpCfg->ostInitState >= 0)
-					t1 += (dtype) (ostTab.statOnsetIndices[pertCfg.warpCfg->ostInitState] - (p.nDelay - 1)) * p.frameLen / p.sr;
+				//if (t0 < pertCfg.warpCfg->tBegin + pertCfg.warpCfg->dur1){ /* Time dilation (deceleration) */
+				//	t1 = (t0 - pertCfg.warpCfg->tBegin) * pertCfg.warpCfg->rate1 + pertCfg.warpCfg->tBegin;
+				//}
+				//else if (t0 < pertCfg.warpCfg->tBegin + pertCfg.warpCfg->dur1 + pertCfg.warpCfg->durHold){ /* Time shifting (no compression or dilation) */
+				//	t1 = pertCfg.warpCfg->rate1 * pertCfg.warpCfg->dur1 - pertCfg.warpCfg->dur1 + t0;
+				//}
+				//else if (t0 < pertCfg.warpCfg->tBegin + pertCfg.warpCfg->dur1 + pertCfg.warpCfg->durHold + pertCfg.warpCfg->dur2){ /* Time compression (acceleration) at the end of the warp interval */
+				//	//t1 = (t0 - (warpCfg->tBegin + warpCfg->dur1 + warpCfg->durHold)) * warpCfg->rate2 + warpCfg->tBegin + warpCfg->dur1 + warpCfg->durHold;
+				//	t1 = pertCfg.warpCfg->tBegin + pertCfg.warpCfg->dur1 + pertCfg.warpCfg->durHold + pertCfg.warpCfg->dur2;
+				//	t1 -= (pertCfg.warpCfg->tBegin + pertCfg.warpCfg->dur1 + pertCfg.warpCfg->durHold + pertCfg.warpCfg->dur2 - t0) * pertCfg.warpCfg->rate2;
+				//}
+				//	
+				//if (pertCfg.warpCfg->ostInitState >= 0)
+				//	t1 += (dtype) (ostTab.statOnsetIndices[pertCfg.warpCfg->ostInitState] - (p.nDelay - 1)) * p.frameLen / p.sr; //Marked
 
 				cidx1_d = t1 * (dtype)p.sr / (dtype)p.pvocHop;
 				cidx1 = (int)floor(cidx1_d);

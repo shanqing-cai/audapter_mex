@@ -34,7 +34,8 @@ public:
 
 	/* Test if the input time t is within the time-shift period: Variant 2: with initial state number */
 	const bool isDuringTimeWarp(const int stat, const int statOnsetIndex, 
-								const int nDelay, const double frameDur, double & t) const;
+								const int nDelay, const double frameDur, 
+								double & t, double & wt) const;
 };
 
 class PERT_CFG { // Pitch and intensity perturbation configurtion
