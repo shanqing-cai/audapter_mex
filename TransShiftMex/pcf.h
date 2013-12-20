@@ -9,6 +9,7 @@
 #define PIP_H
 
 #include <string>
+#include <list>
 
 class pvocWarpAtom {
 public:
@@ -30,10 +31,10 @@ public:
 	pvocWarpAtom(int t_ostInitState, double t_tBegin, double t_rate1, double t_dur1, double t_durHold, double t_rate2);
 
 	///* Test if the input time t is within the time-shift period: Variant 1: without initial state number */
-	//const bool isDuringTimeWarp(const double t) const;
+	//const bool procTimeWarp(const double t) const;
 
-	/* Test if the input time t is within the time-shift period: Variant 2: with initial state number */
-	const bool isDuringTimeWarp(const int stat, const int statOnsetIndex, 
+	/* Test if the input time t is within the time-shift period and output the warped time (wt) */
+	const bool procTimeWarp(const int stat, const int statOnsetIndex, 
 								const int nDelay, const double frameDur, 
 								double & t, double & wt) const;
 };
@@ -48,7 +49,7 @@ public:
 	float *fmtPertAmp;
 	float *fmtPertPhi;	// Unit: phi
 
-	pvocWarpAtom *warpCfg; // Time warping events
+	std::list<pvocWarpAtom> warpCfg; // Time warping events
 
 	/* Member functions */
 	/* Constructor */
@@ -60,10 +61,13 @@ public:
 	/* Read PERT_CFG from file */
 	void readFromFile(const std::string pertCfgFN, int bVerbose);
 
-	/* Set time-warping configuration */
-	void setWarpCfg(double t_tBegin, double t_rate1, double t_dur1, double t_durHold, double t_rate2);
+	/* Add a time-warping event configuration */
+	void addWarpCfg(double t_tBegin, double t_rate1, double t_dur1, double t_durHold, double t_rate2);
 
-
+	/* Test if the input time t is within the time-shift period and output the warped time (wt) */
+	const bool procTimeWarp(const int stat, const int * statOnsetIndex, 
+							const int nDelay, const double frameDur, 
+							double & t, double & wt) const;
 };
 
 #endif

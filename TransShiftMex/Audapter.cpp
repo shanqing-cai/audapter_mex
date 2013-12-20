@@ -941,7 +941,13 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 			len = p.nFB;
 	}
 	else if (ns == string("pvocwarp")) {
-		ptr = (void *) pertCfg.warpCfg;
+		/*ptr = (void *) pertCfg.warpCfg[0];
+		if (pertCfg.warpCfg.size() > 0) {
+			std::list<pvocWarpAtom>::iterator w_it = pertCfg.warpCfg.begin();
+
+			ptr = (void *) (w_it);
+		}*/
+		ptr = NULL; //TODO
 	}
 	else if (ns == string("gain")) {
 		ptr = (void *)p.gain;
@@ -1021,9 +1027,10 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 			}
 		}
 		else if (pType == Parameter::TYPE_PVOC_WARP) {
-			pertCfg.setWarpCfg(*((double *)value), *((double *)value + 1), 
+			pertCfg.addWarpCfg(*((double *)value), *((double *)value + 1), 
 							   *((double *)value + 2), *((double *)value + 3), 
 							   *((double *)value + 4));
+			/* TODO: Clarify whether it is set or add */
 		}
 		else if (pType == Parameter::TYPE_SMN_RMS_FF) {
 			if (nPars == 1) {
@@ -1690,12 +1697,12 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 			/* Time warping, overrides pitch shifting */
 			int ifb = 0;
 			
-			duringTimeWarp = pertCfg.warpCfg->isDuringTimeWarp(stat, ostTab.statOnsetIndices[pertCfg.warpCfg->ostInitState], 
+			/*duringTimeWarp = pertCfg.warpCfg->procTimeWarp(stat, ostTab.statOnsetIndices[pertCfg.warpCfg->ostInitState], 
 															   p.nDelay, static_cast<double>(p.frameLen) / static_cast<double>(p.sr), 
-															   t0, t1);
-			//}
-
-			// duringTimeWarp = false; /* DEBUG */
+															   t0, t1);*/
+			duringTimeWarp = pertCfg.procTimeWarp(stat, ostTab.statOnsetIndices, 
+												  p.nDelay, static_cast<double>(p.frameLen) / static_cast<double>(p.sr), 
+									    		  t0, t1);
 
 			if (duringTimeWarp){
 				duringPitchShift = false;

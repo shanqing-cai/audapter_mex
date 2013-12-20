@@ -53,7 +53,7 @@ pvocWarpAtom::pvocWarpAtom(int t_ostInitState, double t_tBegin, double t_rate1, 
 }
 
 /* pvocWarpAtom: Test if the input time t is within the time-shift period: Variant 2: with initial state number */
-const bool pvocWarpAtom::isDuringTimeWarp(const int stat, const int statOnsetIndex, 
+const bool pvocWarpAtom::procTimeWarp(const int stat, const int statOnsetIndex, 
 										  const int nDelay, const double frameDur, 
 										  double & t, double & wt) const {
 /* Input arguments: 
@@ -63,6 +63,10 @@ const bool pvocWarpAtom::isDuringTimeWarp(const int stat, const int statOnsetInd
 		frameDur:		Audapter frame duration (in s, = frameLen / sr)
 		t:				current time (s)
 		wt:				warped time (s)
+
+	Return value:
+		true if the current time (t) is during this time-warping event
+		false otherwise
 */
 
 	if ((ostInitState < 0) || (stat < ostInitState)) {
@@ -87,13 +91,11 @@ const bool pvocWarpAtom::isDuringTimeWarp(const int stat, const int statOnsetInd
 		else if (t < tBegin + dur1 + durHold){ /* Time shifting (no compression or dilation) */
 			wt = rate1 * dur1 - dur1 + t;
 		}
-		else if (t < tBegin + dur1 + durHold + dur2){ /* Time compression (acceleration) at the end of the warp interval */
-			//t1 = (t0 - (warpCfg->tBegin + warpCfg->dur1 + warpCfg->durHold)) * warpCfg->rate2 + warpCfg->tBegin + warpCfg->dur1 + warpCfg->durHold;
+		else if (t < tBegin + dur1 + durHold + dur2){ /* Time compression (acceleration) at the end of the warp interval */			
 			wt = tBegin + dur1 + durHold + dur2;
 			wt -= (tBegin + dur1 + durHold + dur2 - t) * rate2;
 		}
 			
-		//if (pertCfg.warpCfg->ostInitState >= 0)
 		wt += static_cast<double>(statOnsetIndex) * frameDur;
 		//wt += static_cast<double>(statOnsetIndex - (nDelay - 1)) * frameDur;
 		/* ~Determine warped time */
@@ -112,7 +114,7 @@ PERT_CFG::PERT_CFG() {
 	fmtPertAmp = NULL;
 	fmtPertPhi = NULL;
 
-	warpCfg = new pvocWarpAtom();
+	/*warpCfg = new pvocWarpAtom();*/
 }
 
 /* PERT_CFG: Destructor */
@@ -129,8 +131,8 @@ PERT_CFG::~PERT_CFG() {
 	if (fmtPertPhi)
 		free(fmtPertPhi);
 
-	if (warpCfg)
-		delete warpCfg;
+	/*if (warpCfg)
+		delete warpCfg;*/
 }
 
 /* Subroutine: readline */
@@ -219,14 +221,17 @@ int sscanf_floatArray(char *str, double *xs, int nx) {
 }
 
 /* Set time-warping configuration */
-void PERT_CFG::setWarpCfg(double t_tBegin, double t_rate1, 
+void PERT_CFG::addWarpCfg(double t_tBegin, double t_rate1, 
 						  double t_dur1, double t_durHold, double t_rate2) {
-	if (warpCfg) {
-		delete warpCfg;
-		warpCfg = NULL;
-	}
+	//if (warpCfg) {
+	//	delete warpCfg;
+	//	warpCfg = NULL;
+	//}
 
-	warpCfg = new pvocWarpAtom(t_tBegin, t_rate1, t_dur1, t_durHold, t_rate2);
+	/*warpCfg = new pvocWarpAtom(t_tBegin, t_rate1, t_dur1, t_durHold, t_rate2);*/
+
+	pvocWarpAtom t_warpCfg(t_tBegin, t_rate1, t_dur1, t_durHold, t_rate2);
+	warpCfg.push_back(t_warpCfg);
 }
 
 
@@ -294,10 +299,12 @@ void PERT_CFG::readFromFile(const string pertCfgFN, const int bVerbose) {
 			t_rate2 = tmpx[4];
 
 			/* TODO: Implement multiple time warping events */
-			if (warpCfg)
-				delete warpCfg;
-			warpCfg = new pvocWarpAtom(t_tBegin, t_rate1, t_dur1, t_durHold, t_rate2);		
-			
+			/*if (warpCfg)
+				delete warpCfg;*/
+			//warpCfg = new pvocWarpAtom(t_tBegin, t_rate1, t_dur1, t_durHold, t_rate2);
+			pvocWarpAtom t_warpCfg(t_tBegin, t_rate1, t_dur1, t_durHold, t_rate2);
+
+			warpCfg.push_back(t_warpCfg);
 		}
 		else {
 			sscanf_floatArray(line, tmpx, 6);
@@ -309,7 +316,10 @@ void PERT_CFG::readFromFile(const string pertCfgFN, const int bVerbose) {
 			t_durHold = tmpx[4];
 			t_rate2 = tmpx[5];
 
-			warpCfg = new pvocWarpAtom(t_ostInitState, t_tBegin, t_rate1, t_dur1, t_durHold, t_rate2);		
+			/*warpCfg = new pvocWarpAtom(t_ostInitState, t_tBegin, t_rate1, t_dur1, t_durHold, t_rate2);*/
+			pvocWarpAtom t_warpCfg(t_ostInitState, t_tBegin, t_rate1, t_dur1, t_durHold, t_rate2);
+
+			warpCfg.push_back(t_warpCfg);
 		}
 		
 	}
@@ -373,4 +383,21 @@ void PERT_CFG::readFromFile(const string pertCfgFN, const int bVerbose) {
 	}
 
 	fclose(fp);
+}
+
+const bool PERT_CFG::procTimeWarp(const int stat, const int * statOnsetIndices, 
+							      const int nDelay, const double frameDur, 
+								  double & t, double & wt) const {
+	if (warpCfg.empty())
+		return false;
+
+	for (list<pvocWarpAtom>::const_iterator w_it = warpCfg.cbegin(); 
+		 w_it != warpCfg.cend(); 
+		 ++w_it) {
+		int statOnsetIndex = statOnsetIndices[w_it->ostInitState];
+		if ( w_it->procTimeWarp(stat, statOnsetIndex, nDelay, frameDur, t, wt) )
+			return true;
+	}
+
+	return false;
 }
