@@ -290,9 +290,6 @@ Audapter::Audapter()
 	int		n;
 		
 	strcpy_s(deviceName, sizeof(deviceName), "MOTU MicroBook");
-
-		/*init_ostTab(&ostTab);*/ //Marked
-		/*init_pipCfg(&pertCfg);*/ //Marked
 		
 	p.downFact			= downSampFact_default;
 		
@@ -431,9 +428,6 @@ Audapter::Audapter()
 
 	p.bDownSampFilt = 1;
 
-	//SC(2012/03/13) PVOC Time warp //Marked
-	/*warpCfg = new pvocWarpAtom();*/ //Marked
-
 	//SC(2012/09/08) BlueShift
 	p.nFB = 1;
 
@@ -519,10 +513,6 @@ Audapter::Audapter()
 }
 
 Audapter::~Audapter(){
-	/*if (warpCfg) {
-		delete warpCfg;
-		warpCfg = NULL;
-	}*/ //Marked
 	/*delete [] data_recorder;
 	delete [] signal_recorder;
 	data_recorder=NULL;
@@ -713,8 +703,6 @@ void Audapter::reset()
 	
 	//SC(2012/10/19): OST online sentence tracking
 	stat = 0;
-	/*stretchCnt = 0;*/ //Marked
-	/*stretchSpanAccum = 0.0;*/ //Marked
 	
 	duringTimeWarp = false;
 	duringTimeWarp_prev = false;
@@ -1472,7 +1460,6 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 		rmsSlopeN = (int)(rmsSlopeWin / ((dtype)p.frameLen / (dtype)p.sr));
 		calcRMSSlope();
 
-		//osTrack();//Marked
 		stat = ostTab.osTrack(stat, data_counter, frame_counter, 
 							  static_cast<double>(a_rms_o[data_counter]), static_cast<double>(a_rms_o_slp[data_counter]), static_cast<double>(rms_ratio), 
 							  data_recorder[1], 
@@ -1681,7 +1668,6 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 
 			// --- Time warping preparation ---
 			dtype t0 = (dtype)(frame_counter - (p.nDelay - 1)) * p.frameLen / p.sr;
-			/*dtype t1, t01;*/ //Marked
 			dtype t1;
 			dtype cidx1_d, cidx1_f;
 			// dtype cidx0_d, cidx0_f;
@@ -1703,24 +1689,7 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 			// --- ~Time warping preparation ---
 			/* Time warping, overrides pitch shifting */
 			int ifb = 0;
-				
-			//if (pertCfg.warpCfg->ostInitState < 0) {
-			//	/*duringTimeWarp = (t0 >= pertCfg.warpCfg->tBegin 
-			//					  && t0 < pertCfg.warpCfg->tBegin + pertCfg.warpCfg->dur1 + pertCfg.warpCfg->durHold + pertCfg.warpCfg->dur2);*/ //Marked
-			//	/*duringTimeWarp = pertCfg.warpCfg->isDuringTimeWarp(t0);*/
-			//	duringTimeWarp = false;
-			//}
-			//else {
-			//	/*if (stat < pertCfg.warpCfg->ostInitState) {
-			//		duringTimeWarp = false;
-			//	}
-			//	else {
-			//		t01 = t0 - ((dtype) (ostTab.statOnsetIndices[pertCfg.warpCfg->ostInitState] - (p.nDelay - 1)) * p.frameLen / p.sr);
-			//		duringTimeWarp = (t01 >= pertCfg.warpCfg->tBegin 
-			//						  && t01 < pertCfg.warpCfg->tBegin + pertCfg.warpCfg->dur1 + pertCfg.warpCfg->durHold + pertCfg.warpCfg->dur2);
-			//		if (duringTimeWarp)
-			//			t0 = t01;
-			//	}*/ //Marked
+			
 			duringTimeWarp = pertCfg.warpCfg->isDuringTimeWarp(stat, ostTab.statOnsetIndices[pertCfg.warpCfg->ostInitState], 
 															   p.nDelay, static_cast<double>(p.frameLen) / static_cast<double>(p.sr), 
 															   t0, t1);
@@ -1731,21 +1700,6 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 			if (duringTimeWarp){
 				duringPitchShift = false;
 				p.pitchShiftRatio[0] = 1.0;
-				
-				//if (t0 < pertCfg.warpCfg->tBegin + pertCfg.warpCfg->dur1){ /* Time dilation (deceleration) */
-				//	t1 = (t0 - pertCfg.warpCfg->tBegin) * pertCfg.warpCfg->rate1 + pertCfg.warpCfg->tBegin;
-				//}
-				//else if (t0 < pertCfg.warpCfg->tBegin + pertCfg.warpCfg->dur1 + pertCfg.warpCfg->durHold){ /* Time shifting (no compression or dilation) */
-				//	t1 = pertCfg.warpCfg->rate1 * pertCfg.warpCfg->dur1 - pertCfg.warpCfg->dur1 + t0;
-				//}
-				//else if (t0 < pertCfg.warpCfg->tBegin + pertCfg.warpCfg->dur1 + pertCfg.warpCfg->durHold + pertCfg.warpCfg->dur2){ /* Time compression (acceleration) at the end of the warp interval */
-				//	//t1 = (t0 - (warpCfg->tBegin + warpCfg->dur1 + warpCfg->durHold)) * warpCfg->rate2 + warpCfg->tBegin + warpCfg->dur1 + warpCfg->durHold;
-				//	t1 = pertCfg.warpCfg->tBegin + pertCfg.warpCfg->dur1 + pertCfg.warpCfg->durHold + pertCfg.warpCfg->dur2;
-				//	t1 -= (pertCfg.warpCfg->tBegin + pertCfg.warpCfg->dur1 + pertCfg.warpCfg->durHold + pertCfg.warpCfg->dur2 - t0) * pertCfg.warpCfg->rate2;
-				//}
-				//	
-				//if (pertCfg.warpCfg->ostInitState >= 0)
-				//	t1 += (dtype) (ostTab.statOnsetIndices[pertCfg.warpCfg->ostInitState] - (p.nDelay - 1)) * p.frameLen / p.sr; //Marked
 
 				cidx1_d = t1 * (dtype)p.sr / (dtype)p.pvocHop;
 				cidx1 = (int)floor(cidx1_d);

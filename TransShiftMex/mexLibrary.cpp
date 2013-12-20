@@ -361,7 +361,6 @@ void mexFunction( int nlhs, mxArray *plhs[],
 				strcpy_s(audapter.ostFN, sizeof(audapter.ostFN), mxArrayToString(prhs[1]));
 				if (bVerbose)
 					printf("ostFN = %s\n", audapter.ostFN);
-				//audapter.readOSTTab(bVerbose);//Marked
 				audapter.readOSTTab(bVerbose);
 			}
 			else {

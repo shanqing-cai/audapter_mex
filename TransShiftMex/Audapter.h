@@ -183,10 +183,6 @@ private:
 
 	// (10/19/2012): OST sentence status
 	int stat;
-	/*int lastStatEnd;*/ //Marked
-	/*int stretchCnt;*/ //Marked
-	//int *statOnsetIndices; /* Onset index of all state numbers. By definition, statOnsets[0] = 0 */ //Marked
-	/*dtype stretchSpanAccum;*/ //Marked
 
 	int doEdge;
 	bool   bTransReset;			// set true when resetted, set to false after first process
@@ -590,8 +586,6 @@ public:
 
 	int pbCounter;	//SC The integer counter used in wave playback 
 
-	/*pvocWarpAtom *warpCfg;*/ //Marked
-
 	char deviceName[256];
 
 	char wavFileBase[256];
@@ -630,6 +624,3 @@ public:
 	const int getMaxFrameLen() const { return maxFrameLen; };
 	const int getMaxDelayFrames() const {return maxDelayFrames; };
 };
-
-
-//void init_pipCfg(PERT_CFG *pertCfg); //Marked
