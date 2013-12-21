@@ -162,7 +162,7 @@ int readline(FILE *fp, char *line) {
 }
 
 /* Subroutine: deblank a char string */
-int deblank(char *line) {
+int deblank(char * line) {
 	int lineLen = strlen(line);
 	int newLineLen, i;
 	int ine0 = 0;
@@ -329,7 +329,9 @@ void PERT_CFG::readFromFile(const string pertCfgFN, const int bVerbose) {
 
 	/* Read the time warp details, one by one {tBegin, rate1, dur1, durHold, rate2} */
 	/*for (i0 = 0; i0 < nTimeWarpAtoms; i0 ++) {*/ /* TODO */
-	for (i0 = 0; i0 < nTimeWarpAtoms; i0 ++) {
+	int nReadAtoms = 0;
+	while (nReadAtoms < nTimeWarpAtoms) {
+	/*for (i0 = 0; i0 < nTimeWarpAtoms; i0 ++) {*/
 		lineWidth = readline(fp, line);
 		lineWidth = deblank(line);
 
@@ -363,12 +365,10 @@ void PERT_CFG::readFromFile(const string pertCfgFN, const int bVerbose) {
 			catch (overlappingWarpIntervalsError) {
 				ostringstream oss;
 				oss << "ERROR: Overlapping time intervals between time-warping events. " 
-					<< "Time-warp event #" << i0 + 1 << " cannot be loaded";
+					<< "Time-warp event #" << nReadAtoms + 1 << " cannot be loaded.";
 				
 				if (fp) fclose(fp);
 				mexErrMsgTxt(oss.str().c_str());
-			/*	printf("ERROR: Overlapping time intervals. Time-warp event #%d will not be loaded.\n", 
-					   i0 + 1);*/
 			}
 		}
 		else {
@@ -382,11 +382,23 @@ void PERT_CFG::readFromFile(const string pertCfgFN, const int bVerbose) {
 			t_rate2 = tmpx[5];
 
 			/*warpCfg = new pvocWarpAtom(t_ostInitState, t_tBegin, t_rate1, t_dur1, t_durHold, t_rate2);*/
-			pvocWarpAtom t_warpCfg(t_ostInitState, t_tBegin, t_rate1, t_dur1, t_durHold, t_rate2);
+			/*pvocWarpAtom t_warpCfg(t_ostInitState, t_tBegin, t_rate1, t_dur1, t_durHold, t_rate2);
 
-			warpCfg.push_back(t_warpCfg);
+			warpCfg.push_back(t_warpCfg);*/
+			try {
+				addWarpCfg(t_ostInitState, t_tBegin, t_rate1, t_dur1, t_durHold, t_rate2);
+			}
+			catch (overlappingWarpIntervalsError) {
+				ostringstream oss;
+				oss << "ERROR: Overlapping time intervals between time-warping events. " 
+					<< "Time-warp event #" << nReadAtoms + 1 << " cannot be loaded.";
+				
+				if (fp) fclose(fp);
+				mexErrMsgTxt(oss.str().c_str());
+			}
 		}
 		
+		nReadAtoms++;
 	}
 	
 	/* 2. Read the formant/pitch/intensity shift section */
