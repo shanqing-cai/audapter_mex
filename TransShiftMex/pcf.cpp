@@ -1,4 +1,5 @@
-/* pcf.cpp
+/*
+pcf.cpp
 	Perturbation configuration 
 	Part of Audapter
 
@@ -8,7 +9,9 @@
 #include <cstdlib>
 #include <cstdio>
 #include <string>
+#include <sstream>
 
+#include "mex.h"
 #include "pcf.h"
 
 using namespace std;
@@ -20,10 +23,13 @@ pvocWarpAtom::pvocWarpAtom() {
 	rate1 = 0.5;
 	durHold = 1;
 	rate2 = 2;
+
 	/* ostInitState = -1; */
 	ostInitState = -1; /* Use a negative number to effectively disable time warping by default */
 			
 	dur2 = (1 - rate1) / (rate2 - 1) * dur1;
+
+	tEnd = tBegin + dur1 + durHold + dur2;
 }
 
 /* pvocWarpAtom: with input arguments: Version 1 */
@@ -37,6 +43,8 @@ pvocWarpAtom::pvocWarpAtom(double t_tBegin, double t_rate1, double t_dur1, doubl
 	ostInitState = 0;
 
 	dur2 = (1 - rate1) / (rate2 - 1) * dur1;
+
+	tEnd = tBegin + dur1 + durHold + dur2;
 }
 
 /* pvocWarpAtom: with input arguments: Version 2 */
@@ -50,6 +58,8 @@ pvocWarpAtom::pvocWarpAtom(int t_ostInitState, double t_tBegin, double t_rate1, 
 	ostInitState = t_ostInitState;
 
 	dur2 = (1 - rate1) / (rate2 - 1) * dur1;
+
+	tEnd = tBegin + dur1 + durHold + dur2;
 }
 
 /* pvocWarpAtom: Test if the input time t is within the time-shift period: Variant 2: with initial state number */
@@ -78,7 +88,7 @@ const bool pvocWarpAtom::procTimeWarp(const int stat, const int statOnsetIndex,
 
 		t01 = t - static_cast<double>(statOnsetIndex) * frameDur;
 		//t01 = t - static_cast<double>(statOnsetIndex - (nDelay - 1)) * frameDur;
-		duringTimeWarp = (t01 >= tBegin) && (t01 < tBegin + dur1 + durHold + dur2);
+		duringTimeWarp = (t01 >= tBegin) && (t01 < tEnd);
 
 		if (duringTimeWarp)
 			t = t01;
@@ -220,18 +230,57 @@ int sscanf_floatArray(char *str, double *xs, int nx) {
 	return xc;
 }
 
-/* Set time-warping configuration */
+/* Check whether the input warp event has any time overlap with exisiting warp events */
+const bool PERT_CFG::checkWarpIntervalsOverlap(const pvocWarpAtom t_warpCfg) {
+/* Return value: 
+	true if there is one or more overlaps 
+	false if there is none 
+
+	Limited to checking within the same ostInitStates
+*/
+	for (list<pvocWarpAtom>::const_iterator w_it = warpCfg.cbegin();
+		 w_it != warpCfg.cend();
+		 ++w_it) {
+		if (t_warpCfg.ostInitState != w_it->ostInitState) {
+			continue;
+		}
+		else {
+			if ( !((t_warpCfg.tBegin > w_it->tEnd) || 
+				   (t_warpCfg.tEnd < w_it->tBegin)) )
+				return true;
+		}
+	}
+
+	return false;
+}
+
+/* Add time-warping event */
 void PERT_CFG::addWarpCfg(double t_tBegin, double t_rate1, 
-						  double t_dur1, double t_durHold, double t_rate2) {
-	//if (warpCfg) {
-	//	delete warpCfg;
-	//	warpCfg = NULL;
-	//}
-
-	/*warpCfg = new pvocWarpAtom(t_tBegin, t_rate1, t_dur1, t_durHold, t_rate2);*/
-
+						  double t_dur1, double t_durHold, double t_rate2)
+	throw(overlappingWarpIntervalsError) {
 	pvocWarpAtom t_warpCfg(t_tBegin, t_rate1, t_dur1, t_durHold, t_rate2);
-	warpCfg.push_back(t_warpCfg);
+
+	/* Check to make sure that there is no overlapping time warp periods */
+	if ( !checkWarpIntervalsOverlap(t_warpCfg) )
+		warpCfg.push_back(t_warpCfg);
+	else
+		throw overlappingWarpIntervalsError();
+
+}
+
+/* Add time-warping event */
+void PERT_CFG::addWarpCfg(int t_ostInitState, double t_tBegin, double t_rate1, 
+						  double t_dur1, double t_durHold, double t_rate2)
+	throw(overlappingWarpIntervalsError) {
+
+	pvocWarpAtom t_warpCfg(t_ostInitState, t_tBegin, t_rate1, t_dur1, t_durHold, t_rate2);
+
+	/* Check to make sure that there is no overlapping time warp periods */
+	if ( !checkWarpIntervalsOverlap(t_warpCfg) )
+		warpCfg.push_back(t_warpCfg);
+	else
+		throw overlappingWarpIntervalsError();
+
 }
 
 
@@ -275,9 +324,12 @@ void PERT_CFG::readFromFile(const string pertCfgFN, const int bVerbose) {
 		nTimeWarpAtoms = atoi(line);
 	}
 
+	/* Clean up existing time-warp events */
+	warpCfg.clear();
+
 	/* Read the time warp details, one by one {tBegin, rate1, dur1, durHold, rate2} */
 	/*for (i0 = 0; i0 < nTimeWarpAtoms; i0 ++) {*/ /* TODO */
-	for (i0 = 0; i0 < 1 && i0 < nTimeWarpAtoms; i0 ++) {
+	for (i0 = 0; i0 < nTimeWarpAtoms; i0 ++) {
 		lineWidth = readline(fp, line);
 		lineWidth = deblank(line);
 
@@ -302,9 +354,22 @@ void PERT_CFG::readFromFile(const string pertCfgFN, const int bVerbose) {
 			/*if (warpCfg)
 				delete warpCfg;*/
 			//warpCfg = new pvocWarpAtom(t_tBegin, t_rate1, t_dur1, t_durHold, t_rate2);
-			pvocWarpAtom t_warpCfg(t_tBegin, t_rate1, t_dur1, t_durHold, t_rate2);
+			/*pvocWarpAtom t_warpCfg(t_tBegin, t_rate1, t_dur1, t_durHold, t_rate2);
 
-			warpCfg.push_back(t_warpCfg);
+			warpCfg.push_back(t_warpCfg);*/
+			try {
+				addWarpCfg(t_tBegin, t_rate1, t_dur1, t_durHold, t_rate2);
+			}
+			catch (overlappingWarpIntervalsError) {
+				ostringstream oss;
+				oss << "ERROR: Overlapping time intervals between time-warping events. " 
+					<< "Time-warp event #" << i0 + 1 << " cannot be loaded";
+				
+				if (fp) fclose(fp);
+				mexErrMsgTxt(oss.str().c_str());
+			/*	printf("ERROR: Overlapping time intervals. Time-warp event #%d will not be loaded.\n", 
+					   i0 + 1);*/
+			}
 		}
 		else {
 			sscanf_floatArray(line, tmpx, 6);
