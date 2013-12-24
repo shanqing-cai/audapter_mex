@@ -50,10 +50,10 @@
     <ClInclude Include="pcf.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="lpc_formant.h">
+    <ClInclude Include="DSPF.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="DSPF.h">
+    <ClInclude Include="lpc_formant.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

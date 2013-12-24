@@ -194,7 +194,8 @@ Parameter::paramType Parameter::checkParam(const char *name) {
 Audapter::Audapter()
 	: downSampFilter(nCoeffsSRFilt), upSampFilter(nCoeffsSRFilt), 
 	  preEmpFilter(2), deEmpFilter(2), 
-	  shiftF1Filter(3), shiftF2Filter(3)
+	  shiftF1Filter(3), shiftF2Filter(3), 
+	  fmtTracker(0)
 {//modifiable parameters ( most of them can be modified externally) 
 	/* Parameters configuration */
 	/* Boolean parameters */
@@ -454,6 +455,18 @@ Audapter::Audapter()
 	intShiftRatio = 1.0;
 	amp_ratio = 1.0;
 	amp_ratio_prev = 1.0;
+
+	/* Initialize formant tracker */
+	try {
+		fmtTracker = new LPFormantTracker(p.nLPC, p.sr, p.anaLen, nFFT, p.cepsWinWidth * p.bCepsLift);
+	}
+	catch (LPFormantTracker::initializationError) {
+		mexErrMsgTxt("Failed to initialize formant tracker");
+	}
+	catch (LPFormantTracker::nLPCTooLargeError) {
+		mexErrMsgTxt("Failed to initialize formant tracker due to a too larger value in nLPC");
+	}
+
 //************************************** Initialize filter coefs **************************************	
 
 	// preemphasis filter
@@ -490,8 +503,7 @@ Audapter::Audapter()
 	downSampFilter.setCoeff(nCoeffsSRFilt, t_srfilt_a, nCoeffsSRFilt, t_srfilt_b);
 	upSampFilter.setCoeff(nCoeffsSRFilt, t_srfilt_a, nCoeffsSRFilt, t_srfilt_b);
 
-	//SC-Mod(2008/05/15) FFT related
-	gen_w_r2(fftc, nFFT);
+	//SC-Mod(2008/05/15) FFT related	
 	gen_w_r2(fftc_ps, max_nFFT);
 
 	//SC(2009/02/06) RMS level clipping protection. 
@@ -513,10 +525,8 @@ Audapter::Audapter()
 }
 
 Audapter::~Audapter(){
-	/*delete [] data_recorder;
-	delete [] signal_recorder;
-	data_recorder=NULL;
-	signal_recorder=NULL;*/
+	if (fmtTracker) 
+		delete fmtTracker;
 }
 
 
@@ -661,13 +671,6 @@ void Audapter::reset()
 
 //*****************************************************  getAI    *****************************************************
 
-	// Initialize hanning window
-	for(i0=0;i0<p.anaLen/2;i0++){
-		hwin[i0] = 0.5*cos(dtype(2*M_PI*(i0+1))/dtype(p.anaLen+1)); 
-		hwin[i0] = 0.5 - hwin[i0];
-		hwin[p.anaLen-i0-1] = hwin[i0];
-	}
-
 	// Initialize hanning window (for frequency / pitch shifting) SC(2012/03/05)
 	for(i0=0;i0<p.pvocFrameLen;i0++){
 		hwin2[i0] = 0.5*cos(dtype(2*M_PI*i0)/dtype(p.pvocFrameLen)); 
@@ -676,17 +679,6 @@ void Audapter::reset()
 	}
 
 //*****************************************************  hqr_Roots    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-	//  The following forms a template for the initial companion matrix
-    for (i0 = p.nLPC * p.nLPC -1; i0 >= 0; i0--) {
-		Acompanion[i0] = 0.0F;
-		AHess[i0] = 0.0F;
-	}
-
- 	for (i0 = p.nLPC - 2; i0 >= 0; i0--) {
-		Acompanion[(p.nLPC + 1) * i0 + 1] = 1.0F;
-		AHess[(p.nLPC + 1) * i0 + 1] = 1.0F;
-	}
 	
 	p.transDone=false;
 	p.transCounter=0;
@@ -731,6 +723,9 @@ void Audapter::reset()
 	duringPitchShift_prev = false;
 
 	amp_ratio = 1.0;
+
+	/* Reset formant tracker */
+	fmtTracker->reset();
 }
 
 void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars, bool bVerbose, int *length) {
@@ -746,6 +741,8 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 
 	void *ptr;
 	int len = 1;
+
+	bool bRemakeFmtTracker = false; /* Flag for reinitialization of formant tracker */
 
 	if (ns == string("bgainadapt")) {
 		ptr = (void *)&p.bGainAdapt;
@@ -764,6 +761,8 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 	}
 	else if (ns == string("bcepslift")) {
 		ptr = (void *)&p.bCepsLift;
+
+		bRemakeFmtTracker = (int)(*((dtype *)value)) != p.bCepsLift;
 	}
 	else if (ns == string("bratioshift")) {
 		ptr = (void *)&p.bRatioShift;
@@ -779,6 +778,8 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 	}
 	else if (ns == string("srate")) {
 		ptr = (void *)&p.sr;
+
+		bRemakeFmtTracker = (int)(*((dtype *)value)) != p.sr;
 	}
 	else if (ns == string("framelen")) {
 		ptr = (void *)&p.frameLen;
@@ -791,6 +792,8 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 	}
 	else if (ns == string("nlpc")) {
 		ptr = (void *)&p.nLPC;
+
+		bRemakeFmtTracker = (int)(*((dtype *)value)) != p.nLPC;
 	}
 	else if (ns == string("nfmts")) {
 		ptr = (void *)&p.nFmts;
@@ -803,6 +806,8 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 	}
 	else if (ns == string("cepswinwidth")) {
 		ptr = (void *)&p.cepsWinWidth;
+
+		bRemakeFmtTracker = (int)(*((dtype *)value)) != p.cepsWinWidth;
 	}
 	else if (ns == string("fb")) {
 		ptr = (void *)&p.fb;
@@ -1157,8 +1162,27 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 			mexPrintf(promptStr.c_str());
 		}
 
+
+		/* Re-generate the formant tracker, if necessary */
+		if (bRemakeFmtTracker) {
+			if (fmtTracker)
+				delete fmtTracker;
+
+			try {
+				fmtTracker = new LPFormantTracker(p.nLPC, p.sr, p.anaLen, nFFT, p.cepsWinWidth * p.bCepsLift);
+			}
+			catch (LPFormantTracker::initializationError) {
+				mexErrMsgTxt("Failed to initialize formant tracker");
+			}
+			catch (LPFormantTracker::nLPCTooLargeError) {
+				mexErrMsgTxt("Failed to initialize formant tracker due to a too larger value in nLPC");
+			}
+		}
+
 		return NULL;
 	}
+
+	
 }
 
 void Audapter::setParam(const char *name, void * value, int nPars, bool bVerbose) {
@@ -1307,10 +1331,6 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 		sFmts[i0] = 0;
 	}
 
-	for (i0 = 0; i0 < p.nLPC + 1; i0++) {		//SC Initialize the order LPC coefficients
-		lpcAi[i0] = 0;
-	}
-
 	/* downsample signal provided by soundcard */
 	downSampSig(inFrame_ptr, inFrameBuf, p.frameLen, p.downFact, p.bDownSampFilt == 1);
 
@@ -1381,14 +1401,16 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 
 			weiVec[circ_counter]=wei; // weighting vector
 			//SC the core code (getAi) is here
-			getAi(&pBuf[si], &lpcAi[0], p.anaLen, p.nLPC); // get LPC coefficients
-			quit_hqr = hqr_roots(lpcAi, realRoots, imagRoots, Acompanion, AHess, p.nLPC); // find the roots of polynomial
-			if (quit_hqr == 0)
-				mexErrMsgTxt("Error occurred during hqr_roots()");
+			//getAi(&pBuf[si], &lpcAi[0], p.anaLen, p.nLPC); // get LPC coefficients //Marked
+			//quit_hqr = hqr_roots(lpcAi, realRoots, imagRoots, Acompanion, AHess, p.nLPC); // find the roots of polynomial
+			//if (quit_hqr == 0)
+			//	mexErrMsgTxt("Error occurred during hqr_roots()");
+			//getRPhiBw(realRoots, imagRoots, amps, orgPhis, bw, p.sr, p.nLPC); // get radius and angle of sorted! roots
 
-			getRPhiBw(realRoots, imagRoots, amps, orgPhis, bw, p.sr, p.nLPC); // get radius and angle of sorted! roots
+			fmtTracker->procFrame(&pBuf[si], amps, orgPhis, bw); //TODO
+
 			if (p.bTrack)
-				trackPhi(&amps[0], &orgPhis[0], time_elapsed); // formant tracking routine 
+				trackPhi(&amps[0], &orgPhis[0], time_elapsed); // formant tracking routine
 
 			getWma(&orgPhis[0], &bw[0], &wmaPhis[0], &wmaR[0]); // weighted moving average
 
@@ -1430,8 +1452,8 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 				weiMatPhi[i0][circ_counter]=0;
 				weiMatBw[i0][circ_counter]=0;
 
-				realRoots[i0] = 0.0f;
-				imagRoots[i0] = 0.0f;
+				/*realRoots[i0] = 0.0f; //Marked
+				imagRoots[i0] = 0.0f;*/
 
 				amps[i0] = 0.0f;
 				orgPhis[i0] = 0.0f;
@@ -1569,7 +1591,7 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 		//SC Write the LPC coefficients to data_recorder
 		for (i0=0;i0<p.nLPC+1;i0++)
 		{
-			data_recorder[i0+offs][data_counter]		= lpcAi[i0];
+			data_recorder[i0+offs][data_counter]		= fmtTracker->lpcAi[i0];
 		}
 		offs += p.nLPC + 1;
 
@@ -2293,108 +2315,6 @@ bool Audapter::detectTrans(dtype *fmt_ptr, dtype *dFmt_ptr,int datcnt, dtype tim
 }
 
 
-/* Autocorrelation-based LPC analysis
-	Performs the LPC analysis on a given frame... returns the lpc coefficients
-	Input arguments
-	xx: input buffer pointer
-	aa: LPC coefficients pointer
-	size: size of the input buffer (xx)
-	nlpc: LPC order, i.e., number of LPC coefficients
-	SC (2008/05/06): Incoroporating cepstral lifting */
-void Audapter::getAi(dtype* xx, dtype* aa, const int & size, const int & nlpc) {
-	int i0, nlpcplus1;
-	int	size1;	//Debug
-	dtype temp_frame[maxBufLen + maxNLPC];	// Utility buffer for various filtering operations
-	dtype R[maxNLPC];					// lpc fit Autocorrelation estimate
-	
-	nlpcplus1 = nlpc + 1;
-
-	for(i0 = 0; i0 < nlpcplus1; i0++)
-		temp_frame[i0] = 0;
-	
-	// Window input
-	//SC vecmu1: vector multiply
-	//SC	hwin: a Hanning window
-	DSPF_dp_vecmul(xx, hwin, &temp_frame[nlpcplus1], size);	// Apply a Hanning window
-
-	////////////////////////////////////////////////////
-	//SC(2008/05/07) ----- Cepstral lifting -----
-	if (p.bCepsLift){
-		for (i0=0;i0<nFFT;i0++){
-			if (i0<size){
-				ftBuf1[i0*2]=temp_frame[nlpcplus1+i0];
-				ftBuf1[i0*2+1]=0;
-			}
-			else{
-				ftBuf1[i0*2]=0;
-				ftBuf1[i0*2+1]=0;
-			}
-		}
-		DSPF_dp_cfftr2(nFFT,ftBuf1,fftc,1);	
-		bit_rev(ftBuf1,nFFT);
-		// Now ftBuf1 is X
-		for (i0=0;i0<nFFT;i0++){
-			if (i0<=nFFT/2){
-				ftBuf2[i0*2]=log(sqrt(ftBuf1[i0*2]*ftBuf1[i0*2]+ftBuf1[i0*2+1]*ftBuf1[i0*2+1]));	// Optimize
-				ftBuf2[i0*2+1]=0;
-			}
-			else{
-				ftBuf2[i0*2]=ftBuf2[(nFFT-i0)*2];
-				ftBuf2[i0*2+1]=0;
-			}
-		}
-		DSPF_dp_icfftr2(nFFT,ftBuf2,fftc,1);
-		bit_rev(ftBuf2,nFFT);
-		// Now ftBuf2 is Xceps: the cepstrum
-		for (i0=0;i0<nFFT;i0++){
-			if (i0<p.cepsWinWidth || i0>nFFT-p.cepsWinWidth){			// Adjust! 
-				ftBuf1[i0*2]=ftBuf2[i0*2]/nFFT;		// Normlize the result of the previous IFFT
-				ftBuf1[i0*2+1]=0;
-			}
-			else{
-				ftBuf1[i0*2]=0;
-				ftBuf1[i0*2+1]=0;
-			}
-		}
-		// Now ftBuf1 is Xcepw: the windowed cepstrum
-		DSPF_dp_cfftr2(nFFT,ftBuf1,fftc,1);
-		bit_rev(ftBuf1,nFFT);
-		for (i0=0;i0<nFFT;i0++){
-			if (i0<=nFFT/2){
-				ftBuf2[i0*2]=exp(ftBuf1[i0*2]);
-				ftBuf2[i0*2+1]=0;
-			}
-			else{
-				ftBuf2[i0*2]=ftBuf2[(nFFT-i0)*2];
-				ftBuf2[i0*2+1]=0;
-			}
-		}
-		DSPF_dp_icfftr2(nFFT,ftBuf2,fftc,1);	// Need normalization
-		bit_rev(ftBuf2,nFFT);
-		
-		size1=size;
-		for (i0=0;i0<size1/2;i0++){
-			temp_frame[nlpcplus1+size1/2+i0]=ftBuf2[i0*2]/nFFT;
-		}
-		for (i0=1;i0<size1/2;i0++){
-			temp_frame[nlpcplus1+size1/2-i0]=ftBuf2[i0*2]/nFFT;
-		}
-		temp_frame[nlpcplus1]=0;
-	}
-	//~SC(2008/05/07) ----- Cepstral lifting -----
-	///////////////////////////////////////////////////////////
-
-	// Find autocorrelation values
-	DSPF_dp_autocor(R, temp_frame, size, nlpcplus1);		//SC Get LPC coefficients by autocorrelation
-
-	// Get unbiased autocorrelation
-	for(i0 = 0; i0 < nlpcplus1; i0++)
-		R[i0] /= size;
-
-	// levinson recursion
-	levinson(R, aa, nlpcplus1);
-}
-
 
 dtype Audapter::getGain(dtype * r, dtype * ophi,dtype * sphi, int nfmts)
 {// this routine calculates the gain factor used by the routine gainAdapt to compensate the formant shift
@@ -2457,47 +2377,6 @@ int Audapter::gainAdapt(dtype *buffer,dtype *gtot_ptr,int framelen, int frameshi
 	return updated;
 
 	
-}
-
-/* Levinson recursion for linear prediction (LP) */
-void levinson(dtype * R, dtype * aa, const int & size) {
-	dtype ki, t;
-    dtype E = R[0];
-    int   i0, j0;
-
-	if (R[0] == 0.0) {
-		for(i0=1; i0<size; i0++)
-			aa[i0] = 0.0;
-
-		aa[0] = 1;
-		return;
-	}
-
-    for(i0=1; i0<size; i0++) { 
-        ki = R[i0]; 
-      
-        // Update reflection coefficient: 
-        for (j0=1; j0<i0; j0++) 
-			ki += aa[j0] * R[i0-j0]; 
-      
-        ki   /= -E; 
-        E    *= (1 - ki*ki); 
-        
-        // Update polynomial: 
-        for (j0 = 1; j0 <= RSL(i0 - 1, 1); j0++) {
-            t = aa[j0];
-            aa[j0] += ki * aa[i0 - j0];
-            aa[i0 - j0] += ki * t; 
-        } 
-  
-        if (i0%2 == 0) aa[RSL(i0, 1)] *= 1+ki; 
-  
-        // Record reflection coefficient
-        aa[i0] = ki; 
-
-    } // end of for loop
-
-    aa[0] = 1.0;
 }
 
 
@@ -2862,20 +2741,20 @@ void Audapter::DSPF_dp_icfftr2(int n, double * x, double * w, int n_min)	//SC In
 	}
 }
 
-void Audapter::gen_w_r2(double* w, int n)		//SC An FFT subroutine
-{
-	int i, j=1;
-	double pi = 4.0*atan(1.0);
-	double e = pi*2.0/n;
-	for(j=1; j < n; j <<= 1)
-	{
-	for(i=0; i < ( n>>1 ); i += j)
-	{
-		*w++ = cos(i*e);
-		*w++ = -sin(i*e);
-	}
-}
-}
+//void Audapter::gen_w_r2(double* w, int n)		//SC An FFT subroutine
+//{
+//	int i, j=1;
+//	double pi = 4.0*atan(1.0);
+//	double e = pi*2.0/n;
+//	for(j=1; j < n; j <<= 1)
+//	{
+//	for(i=0; i < ( n>>1 ); i += j)
+//	{
+//		*w++ = cos(i*e);
+//		*w++ = -sin(i*e);
+//	}
+//}
+//}
 
 void Audapter::bit_rev(double* x, int n)	//SC Bit reversal: an FFT subroutine
 {
@@ -3201,298 +3080,6 @@ int Audapter::handleBufferToneSeq(dtype *inFrame_ptr, dtype *outFrame_ptr, int f
 	}
 
 	return 0;
-}
-
-/* The following takes in a polynomial stored in *c, and yields the roots of
-   this polynomial (*wr stores the real comp, and *wi stores the imag comp)
-   It forms a companion matrix, then uses the hqr algorithm 
-   VV 19 June 2003 */
-int hqr_roots(dtype *c, dtype *wr, dtype *wi, dtype *Acompanion, dtype *AHess, const int & nLPC) {
-#ifndef aMat
-	#define aMat(k, j) AHess[((j) - 1) * nLPC + (k) - 1]
-#endif
-
-	int nn, m, l, k, j, i, its, mmin, nLPC_SQR = nLPC * nLPC;
-
-    /*dtype AHess[maxNLPC_squared];*/
-    dtype z, y, x, w, v, u, t, s, r, q, p, anorm = 0.0F;
-        
-/*  generate companion matrix, starting off with an intialized version */
-	DSPF_dp_blk_move(Acompanion, AHess, nLPC_SQR);
-
-	for (i = 0; i < nLPC; i++)
-		AHess[nLPC * i] = -c[i + 1];
-
-    /* end of companion matrix generation  */
-
-    /* the following performs the hqr algoritm  */
-    /* NOTE:  This was taken from Numerical Recipes in C, with modification
-       Specifically, the wr and wi arrays were assumed to number from 1..n
-       in the book.  I modified calls to these arrays so that they number 0..n-1
-       Additionally, n (the order of the polynomial) is hardset to be 8 
-       VV 19 June 2003 */
-
-    for (i = 1; i < nLPC + 1; i++)
-        for (j = imax(i - 1, 1); j < nLPC + 1; j++)
-            anorm += fabs(aMat(i, j)); 
-			/*anorm += fabs(AHess[(j - 1) * nLPC + i - 1]);*/
-
-    nn = nLPC;
-    t = 0.0;
-    while (nn >= 1) {
-		its=0;
-        do {
-           for (l = nn; l >= 2; l--) {
-               s = fabs(aMat(l - 1, l - 1)) + fabs(aMat(l, l));
-			   /*s = fabs(AHess[(l - 2) * nLPC + l - 2]) + fabs(AHess[(l - 1) * nLPC + l - 1]);*/
-
-               if (s == 0.0) s = anorm;
-
-               if ((dtype) (fabs(aMat(l, l - 1)) + s) == s) 
-			   /*if ((dtype) (fabs(AHess[(l - 2) * nLPC + l - 1]) + s) == s)*/
-				   break;
-           }
-
-         x=aMat(nn, nn);
-		 /*x = AHess[(nn - 1) * nLPC + nn - 1];*/
-
-         if (l == nn) {
-			wr[(-1) + nn] = x + t;
-			wi[(-1) + nn--] = 0.0;
-		 }
-		 else {
-			y = aMat(nn - 1 ,nn - 1);
-			/*y = AHess[(nn - 2) * nLPC + nn - 2];*/
-
-            w = aMat(nn, nn - 1) * aMat(nn - 1, nn);
-			/*w = AHess[(nn - 2) * nLPC + nn - 1] * AHess[(nn - 2) * nLPC + nn - 1];*/
-                    
-			if (l == (nn-1)) {
-				p = 0.5 * (y - x);
-                q = p * p + w;
-                z=sqrt(fabs(q));
-                x += t;
-                
-				if (q >= 0.0) {
-					z = p + mul_sign(z, p);
-					wr[(-1) + nn - 1] = wr[(-1) + nn] = x + z;
-                    if (z) wr[(-1) + nn] = x - w / z;
-                    wi[(-1) + nn - 1] = wi[(-1) + nn] = 0.0;
-                } 
-				else {
-					wr[(-1) + nn - 1] = wr[(-1) + nn] = x + p;
-                    wi[(-1) + nn - 1] = -(wi[(-1) + nn] = z);
-                }
-				nn -= 2;
-			} 
-			else {
-				if (its == 10 || its == 20) {
-					t += x;
-                    for (i = 1; i <= nn; i++) 
-						aMat(i, i) -= x;
-						/*AHess[(i - 1) * nLPC + i - 1] -= x;*/
-
-                    s = fabs(aMat(nn, nn - 1)) + fabs(aMat(nn - 1, nn - 2));
-					/*s = fabs(AHess[(nn - 2) * nLPC + nn - 1]) + fabs(AHess[(nn - 3) * nLPC + nn - 2]);*/
-
-					y = x = 0.75 * s;
-                    w = -0.4375 * s * s;
-                }
-				
-				++its;
-                for (m = nn - 2; m >= l; m--) {
-					z = aMat(m, m);
-					/*z = AHess[(m - 1) * nLPC + m - 1];*/
-
-					r = x - z;
-					s = y - z;
-					
-					p = (r * s - w) / aMat(m + 1, m) + aMat(m, m + 1);
-					/*p = (r * s - w) /  AHess[(m - 1) * nLPC + m] + AHess[m * nLPC + m - 1];*/
-
-					q = aMat(m + 1, m + 1) - z - r - s;
-					/*q = AHess[m * nLPC + m] - z - r - s;*/
-
-					r = aMat(m + 2, m + 1);
-					/*r = AHess[m * nLPC + m + 1];*/
-
-					s = fabs(p) + fabs(q) + fabs(r);
-					p /= s;
-					q /= s;
-					r /= s;
-					if (m == l) break;
-
-					u = fabs(aMat(m, m - 1)) * (fabs(q) + fabs(r));
-					/*u = fabs(AHess[(m - 2) * nLPC + m - 1]) * (fabs(q) + fabs(r));*/
-
-					v = fabs(p) * (fabs(aMat(m - 1, m - 1)) + fabs(z) + fabs(aMat(m + 1, m + 1)));
-					/*v = fabs(p) * (fabs(AHess[(m - 2) * nLPC + m - 2]) + fabs(z) + fabs(AHess[m * nLPC + m]));*/
-
-					if ((dtype) (u+v) == v) break;
-                }
-                
-				for (i = m + 2; i <= nn; i++) {
-					aMat(i, i - 2) = 0.0F;
-					//AHess[(i - 3) * nLPC + i - 1] = 0.0F;
-
-                    if (i != (m + 2)) 
-						aMat(i, i - 3) = 0.0F;
-						/*AHess[(i - 4) * nLPC + i - 1] = 0.0F;*/
-                }
-
-				for (k = m; k <= nn - 1; k++) {
-					if (k != m) {
-						p = aMat(k, k - 1);
-						/*p = AHess[(k - 2) * nLPC + k - 1];*/
-
-                        q = aMat(k + 1,k - 1);
-						/*p = AHess[(k - 2) * nLPC + k];*/
-
-                        r = 0.0F;
-                        if (k != (nn - 1)) 
-							r = aMat(k + 2, k - 1);
-							/*r = AHess[(k - 2) * nLPC + k + 1];*/
-
-                        if ((x = fabs(p) + fabs(q) + fabs(r)) != 0.0) {
-                            p /= x;
-                            q /= x;
-                            r /= x;
-                        }
-					}
-                    
-					if ((s = mul_sign(sqrt(p * p + q * q + r * r), p)) != 0.0) {
-						if (k == m) {
-                            if (l != m)
-                            aMat(k,k-1) = -aMat(k,k-1);
-							/*AHess[(k - 2) * nLPC + k - 1] *= -1.0;*/
-                        } 
-						else
-                            aMat(k, k - 1) = -s * x;
-							/*AHess[(k - 2) * nLPC + k - 1] = -s * x;*/
-
-                        p += s;
-                        x=p/s;
-                        y=q/s;
-                        z=r/s;
-                        q /= p;
-                        r /= p;
-
-                        for (j=k;j<=nn;j++) {
-                            p=aMat(k,j)+q*aMat(k+1,j);
-							/*p = AHess[(j - 1) * nLPC + k - 1] + q * AHess[(j - 1) * nLPC + k];*/
-
-                            if (k != (nn-1)) {
-                                p += r * aMat(k + 2, j);
-								/*p += r * AHess[(j - 1) * nLPC + k + 1];*/
-
-                                aMat(k + 2, j) -= p * z;
-							/*	AHess[(j - 1) * nLPC + k + 1] -= p * z;*/
-                            }
-                            aMat(k+1,j) -= p*y;
-							/*AHess[(j - 1) * nLPC + k] -= p * y;*/
-
-                            aMat(k,j) -= p*x;
-							/*AHess[(j - 1) * nLPC + k - 1] -= p * x;*/
-                        }
-                        mmin = nn<k+3 ? nn : k+3;
-                        for (i=l;i<=mmin;i++) {
-                            p = x * aMat(i, k) + y * aMat(i, k + 1);
-							/*p = x * AHess[(k - 1) * nLPC + i - 1] + y * AHess[k * nLPC + i - 1];*/
-
-                            if (k != (nn-1)) {
-                                p += z*aMat(i,k+2);
-								/*p += z * AHess[(k + 1) * nLPC + i - 1];*/
-
-                                aMat(i,k+2) -= p*r;
-								/*AHess[(k + 1) * nLPC + i - 1] -= p * r;*/
-                            }
-
-                            aMat(i,k+1) -= p*q;
-							/*AHess[k * nLPC + i - 1] -= p * q;*/
-
-                            aMat(i,k) -= p;
-							/*AHess[(k - 1) * nLPC + i - 1] -= p;*/
-                        }
-                    }
-                }
-			}
-		}
-		
-		} 
-	while (l < nn - 1);
-	}
-
-	if (nn == 0) 
-		return 1;
-	else
-		return 0;
-}
-
-
-/* Get the angle (Phi) and magnitude (Bw) of the roots 
-	Input argments:
-	wr: real part of roots
-	wi: imag part of roots
-	radius: root radii
-	phi: root angle
-	bandwidth: root bandwidth
-	sr: sampling rate
-	nLPC: order of LPC (number of roots) */
-void getRPhiBw(dtype *wr, dtype *wi, dtype *radius, dtype *phi, dtype *bandwith, const dtype & sr, const int & nLPC) {
-  /* The following sorts the roots in wr and wi.  It is adapted from a matlab script that Reiner wrote */
-	const int maxNLPC = 64;
-	if (nLPC > maxNLPC) 
-		mexErrMsgTxt("getRPhiBw: nLPC too large");
-
-	dtype	arc[maxNLPC], arc2[maxNLPC], wr2[maxNLPC], wi2[maxNLPC];
-	dtype	wreal, wimag, warc, wmag, mag[maxNLPC], mag2[maxNLPC];
-	int numroots, i0, j0, nmark;
-	  
-	/* calculate angles for all defined roots */
-	numroots = 0;
-
-	for (i0=0; i0 < nLPC; i0++) {
-		arc[i0] = atan2(wi[i0],wr[i0]);
-		mag[i0] = sqrt(wi[i0]*wi[i0] + wr[i0]*wr[i0]);
-	    if  ( /*(arc[i0] > F1_min) && */ (wi[i0]>0) /*&& 
-    	 (mag[i0] > 0.9) && (mag[i0] < 1.0) */ )
-        /* only store positive arc root of conjugate pairs */
-        {
-            mag2[numroots]	 = mag[i0];
-            arc2[numroots]   = arc[i0];  
-            wr2[numroots]    = wr[i0];
-            wi2[numroots++]  = wi[i0];
-		}
-	}
-
-	/* sort according to arc using a stupid sort algorithm. */
-	for (i0=0; i0<numroots; i0++)  /* look for minimal first */
-	{
-		nmark = i0;
-		for (j0=i0+1; j0<numroots; j0++)  /* find smallest arc (frequency) */
-			if (arc2[j0] < arc2[nmark]) nmark = j0;
-		if (nmark != i0) /* switch places if smaller arc */
-        {
-			wreal = wr2[i0];
-            wimag = wi2[i0];
-            warc  = arc2[i0];
-            wmag  = mag2[i0];
-            wr2[i0] = wr2[nmark];
-            wi2[i0] = wi2[nmark];
-            arc2[i0] = arc2[nmark];
-            mag2[i0] = mag2[nmark];
-            wr2[nmark] = wreal;
-            wi2[nmark] = wimag;
-            arc2[nmark] = warc;
-            mag2[nmark] = wmag;
-        }
-    }
-
-	for (i0=0; i0<numroots; i0++) {
-		radius[i0]=mag2[i0];
-		bandwith[i0] = -log(mag2[i0]) * dtype(sr) / M_PI;
-		phi[i0]=arc2[i0];
-	}
 }
 
 void Audapter::readOSTTab(int bVerbose) {

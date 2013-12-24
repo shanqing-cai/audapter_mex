@@ -43,6 +43,8 @@ Speech Laboratory, Boston University
 #include "filter.h"
 #include "ost.h"
 #include "pcf.h"
+#include "DSPF.h"
+#include "lpc_formant.h"
 
 typedef double dtype;
 
@@ -78,15 +80,6 @@ int algoCallbackFuncWavePB(char *buffer, int buffer_size, void * data); //SC alg
 
 int algoCallbackFuncToneSeq(char *buffer, int buffer_size, void * data); //SC(2009/12/01) algorithm tone sequence generation
 
-/* DSP routines (some of which are from TI DSPLib) */
-void	DSPF_dp_blk_move(const dtype * x, dtype * r, const int nx);
-dtype	DSPF_dp_vecsum_sq(const dtype *x,int n);                           
-void	DSPF_dp_vecmul(const dtype * x, const dtype * y, dtype * r, const int &n);
-void	DSPF_dp_autocor(dtype * r, dtype * x, const int & nx, const int & nr);
-
-int		hqr_roots(dtype *c, dtype *wr, dtype *wi, dtype *Acompanion, dtype *AHess, const int & nLPC);
-void	getRPhiBw(dtype *wr,  dtype *wi, dtype *radius,  dtype *phi ,dtype *bandwith, const dtype & sr, const int & nLPC);
-void    levinson(dtype * R, dtype * aa, const int & size);
 
 typedef struct tag_thrWriteWavStruct {
 	void *pThis;
@@ -203,6 +196,9 @@ private:
 	/* unsigned long int frame_counter_nowarp; */
 	long int frame_counter_nowarp;
 
+	/* LP formant tracker object */
+	LPFormantTracker * fmtTracker;
+
 	// 
 	dtype time_step;       // process time unit 
 	dtype ma_rms1;			// moving average rms 
@@ -238,15 +234,8 @@ private:
 	//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  VARIOUS EXTRACTED DATA  *****************************************************%%%%%%%%%%%	
 
 
-	// other buffers : process rate = downsampled rate * nWin
-	dtype lpcAi[maxNLPC+1];						// lpc coeeficients	
-	dtype hwin[maxBufLen];						// Hanning window
+	// other buffers : process rate = downsampled rate * nWin		
 	dtype hwin2[maxBufLen];						// Hanning window for frequency/pitch shifting
-	dtype realRoots[maxNLPC];						// real part of roots
-	dtype imagRoots[maxNLPC];						// imag part of roots
-	
-	dtype Acompanion[maxNLPC_squared];			// companion matrix for (eigenvalue ---> )roots calculation
-	dtype AHess[maxNLPC_squared];				// companion matrix for (eigenvalue ---> )roots calculation
 
 	dtype amps[maxNPoles];						// radius of poles
 	dtype orgPhis[maxNPoles];						// angle of original poles
@@ -298,8 +287,6 @@ private:
 	// sample rate conversion filter 
 
 	//SC(2008/05/07)
-	dtype ftBuf1[nFFT*2];
-	dtype ftBuf2[nFFT*2];
 	dtype ftBuf1ps[max_nFFT * 2]; // For frequency/pitch shifting
 	dtype ftBuf2ps[2][max_nFFT * 2]; // For frequency/pitch shifting: (Normal / nps)	
 
@@ -329,8 +316,7 @@ private:
 	dtype f2m;     // F2 (mel)
 	dtype f2mp;	// F2 (mel) of the foot of perpendicular to the fit polynomial.
 
-	//SC-Mod(2008/05/15) FFT related
-	dtype fftc[nFFT*2];
+	//SC-Mod(2008/05/15) FFT related	
 	dtype fftc_ps0[max_nFFT * 2];
 	dtype fftc_ps[max_nFFT * 2];	//SC(2012/03/05) For frequency/pitch shifting
 
@@ -518,9 +504,7 @@ private:
 	} p;
 
 
-	//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  FUNCTIONS  *****************************************************%%%%%%%%%%%
-
-	void   getAi(dtype* xx, dtype* aa, const int & size, const int & nlpc);
+	//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  FUNCTIONS  *****************************************************%%%%%%%%%%%	
 	dtype  getGain(dtype * r, dtype * ophi,dtype * sphi, int nfmts);
 	
 	void trackPhi(dtype *r_ptr,dtype *phi_ptr,dtype time);
@@ -547,7 +531,7 @@ private:
 
 	void	DSPF_dp_cfftr2(int n, dtype * x, dtype * w, int n_min);
 	void	DSPF_dp_icfftr2(int n, double * x, double * w, int n_min);
-	void	gen_w_r2(double* w, int n);
+	/*void	gen_w_r2(double* w, int n);*/
 	void	bit_rev(double* x, int n);
 
 	void	smbFft(dtype *fftBuffer, double fftFrame_Size, int sign);
