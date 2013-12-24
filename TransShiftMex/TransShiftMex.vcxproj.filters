@@ -33,6 +33,9 @@
     <ClCompile Include="pcf.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="lpc_formant.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Audapter.h">
@@ -45,6 +48,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="pcf.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="lpc_formant.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="DSPF.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

@@ -1382,6 +1382,7 @@
     <ClCompile Include="Audapter.cpp" />
     <ClCompile Include="DSPF.cpp" />
     <ClCompile Include="filter.cpp" />
+    <ClCompile Include="lpc_formant.cpp" />
     <ClCompile Include="mexLibrary.cpp" />
     <ClCompile Include="ost.cpp" />
     <ClCompile Include="pcf.cpp" />
@@ -1394,7 +1395,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Audapter.h" />
+    <ClInclude Include="DSPF.h" />
     <ClInclude Include="filter.h" />
+    <ClInclude Include="lpc_formant.h" />
     <ClInclude Include="ost.h" />
     <ClInclude Include="pcf.h" />
   </ItemGroup>
