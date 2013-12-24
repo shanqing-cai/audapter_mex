@@ -6,6 +6,8 @@ DSP functions
 
 #include <cmath>
 
+#include "DSPF.h"
+
 void DSPF_dp_blk_move(const double * x, double * r, const int nx)	//SC copy a block of data from one address x to r
 {
 	//memmove((void*)r,(void*)x,nx*sizeof(double));
@@ -91,3 +93,111 @@ void DSPF_dp_autocor(double * r, double * x, const int & nx, const int & nr)			/
 	}
 }
 
+void gen_w_r2(double* w, int n)		//SC An FFT subroutine
+{
+	int i, j=1;
+	double pi = 4.0*atan(1.0);
+	double e = pi*2.0/n;
+	for(j=1; j < n; j <<= 1)
+	{
+		for(i=0; i < ( n>>1 ); i += j)
+		{
+			*w++ = cos(i*e);
+			*w++ = -sin(i*e);
+		}
+	}
+}
+
+void bit_rev(double* x, int n)	//SC Bit reversal: an FFT subroutine
+{
+	int i, j, k;
+	double rtemp, itemp;
+
+	j = 0;
+	for(i=1; i < (n-1); i++)
+	{
+		k = n >> 1;
+		while(k <= j)
+		{
+			j -= k;
+			k >>= 1;
+		}
+		j += k;
+		if(i < j)
+		{
+			rtemp = x[j*2];
+			x[j*2] = x[i*2];
+			x[i*2] = rtemp;
+			itemp = x[j*2+1];
+			x[j*2+1] = x[i*2+1];
+			x[i*2+1] = itemp;
+		}
+	}
+}
+
+
+void DSPF_dp_cfftr2(const int n, double * x, double * w, const int n_min)	//SC Fast Fourier transform on complex numbers
+{
+	int n2, ie, ia, i, j, k, m;
+	double rtemp, itemp, c, s;
+	n2 = n;
+
+	ie = 1;
+
+	for(k = n; k > n_min; k >>= 1)
+	{
+		n2 >>= 1;
+		ia = 0;
+		for(j=0; j < ie; j++)
+		{
+			for(i=0; i < n2; i++)
+			{
+				c = w[2*i];
+				s = w[2*i+1];
+				m = ia + n2;
+				rtemp = x[2*ia] - x[2*m];
+				x[2*ia] = x[2*ia] + x[2*m];
+				itemp = x[2*ia+1] - x[2*m+1];
+				x[2*ia+1] = x[2*ia+1] + x[2*m+1];
+				x[2*m] = c*rtemp - s*itemp;
+				x[2*m+1] = c*itemp + s*rtemp;
+				ia++;
+			}
+			ia += n2;
+		}	
+		ie <<= 1;
+		w = w + k;
+	}
+}
+
+void DSPF_dp_icfftr2(const int n, double * x, double * w, const int n_min)	//SC Inverse Fast Fourier transform on complex numbers
+{
+	int n2, ie, ia, i, j, k, m;
+	double rtemp, itemp, c, s;
+	n2 = n;
+	ie = 1;
+	for(k = n; k > n_min; k >>= 1)
+	{
+		n2 >>= 1;
+		ia = 0;
+		for(j=0; j < ie; j++)
+		{
+			for(i=0; i < n2; i++)
+			{
+				c = w[2*i];
+				s = w[2*i+1];
+				m = ia + n2;
+				rtemp = x[2*ia] - x[2*m];
+				x[2*ia] = x[2*ia] + x[2*m];
+				itemp = x[2*ia+1] - x[2*m+1];
+				x[2*ia+1] = x[2*ia+1] + x[2*m+1];
+				x[2*m] = c*rtemp + s*itemp;
+				x[2*m+1] = c*itemp - s*rtemp;
+				ia++;
+			}
+			ia += n2;
+		}
+		ie <<= 1;
+		w = w + k;
+	}
+}
