@@ -167,10 +167,6 @@ int algoCallbackFuncWavePB(char *buffer, int buffer_size, void * data)	//SC sine
 	return 0;
 }
 
-
-
-
-
 Parameter::paramType Parameter::checkParam(const char *name) {
 	string inputNameStr = string(name);
 	transform(inputNameStr.begin(), inputNameStr.end(), inputNameStr.begin(), ::tolower);
@@ -350,8 +346,8 @@ Audapter::Audapter()
 	p.fn2			= 1333; // A priori expectation of F2 (Hz)
 
 	p.nTracks			= 4;	// number of tracked formants 
-	p.nCands			= 6;	// number of possible formant candiates  ( > ntracks     but  < p.nLPC/2!!!! (choose carefully : not idiot proofed!)
-	p.trackFF			= 0.95;		
+	p.nCands			= 6;	// number of possible formant candiates  ( > ntracks     but  < p.nLPC/2!!!! (choose carefully : not idiot proofed!) //Marked
+	p.trackFF			= 0.95;		 //Marked
 
 	// booleans						
 	p.bRecord			= 1;	// record signal, should almost always be set to 1. 
@@ -458,7 +454,8 @@ Audapter::Audapter()
 
 	/* Initialize formant tracker */
 	try {
-		fmtTracker = new LPFormantTracker(p.nLPC, p.sr, p.anaLen, nFFT, p.cepsWinWidth * p.bCepsLift);
+		fmtTracker = new LPFormantTracker(p.nLPC, p.sr, p.anaLen, nFFT, p.cepsWinWidth * p.bCepsLift, 
+										  p.nTracks, p.aFact, p.bFact, p.gFact, p.fn1, p.fn2);
 	}
 	catch (LPFormantTracker::initializationError) {
 		mexErrMsgTxt("Failed to initialize formant tracker");
@@ -800,6 +797,8 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 	}
 	else if (ns == string("ntracks")) {
 		ptr = (void *)&p.nTracks;
+
+		bRemakeFmtTracker = (int)(*((dtype *)value)) != p.nTracks;
 	}
 	else if (ns == string("avglen")) {
 		ptr = (void *)&p.avgLen;
@@ -926,18 +925,28 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 	}
 	else if (ns == string("afact")) {
 		ptr = (void *)&p.aFact;
+
+		bRemakeFmtTracker = (*((dtype *)value)) != p.aFact;
 	}
 	else if (ns == string("bfact")) {
 		ptr = (void *)&p.bFact;
+
+		bRemakeFmtTracker = (*((dtype *)value)) != p.bFact;
 	}
 	else if (ns == string("gfact")) {
 		ptr = (void *)&p.gFact;
+
+		bRemakeFmtTracker = (*((dtype *)value)) != p.gFact;
 	}
 	else if (ns == string("fn1")) {
 		ptr = (void *)&p.fn1;
+
+		bRemakeFmtTracker = (*((dtype *)value)) != p.fn1;
 	}
 	else if (ns == string("fn2")) {
 		ptr = (void *)&p.fn2;
+
+		bRemakeFmtTracker = (*((dtype *)value)) != p.fn2;
 	}
 	else if (ns == string("pitchshiftratio")) {
 		ptr = (void *)p.pitchShiftRatio;
@@ -1169,7 +1178,8 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 				delete fmtTracker;
 
 			try {
-				fmtTracker = new LPFormantTracker(p.nLPC, p.sr, p.anaLen, nFFT, p.cepsWinWidth * p.bCepsLift);
+				fmtTracker = new LPFormantTracker(p.nLPC, p.sr, p.anaLen, nFFT, p.cepsWinWidth * p.bCepsLift, 
+											      p.nTracks, p.aFact, p.bFact, p.gFact, p.fn1, p.fn2);
 			}
 			catch (LPFormantTracker::initializationError) {
 				mexErrMsgTxt("Failed to initialize formant tracker");
@@ -1400,17 +1410,8 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 				wei=1; // simple moving average
 
 			weiVec[circ_counter]=wei; // weighting vector
-			//SC the core code (getAi) is here
-			//getAi(&pBuf[si], &lpcAi[0], p.anaLen, p.nLPC); // get LPC coefficients //Marked
-			//quit_hqr = hqr_roots(lpcAi, realRoots, imagRoots, Acompanion, AHess, p.nLPC); // find the roots of polynomial
-			//if (quit_hqr == 0)
-			//	mexErrMsgTxt("Error occurred during hqr_roots()");
-			//getRPhiBw(realRoots, imagRoots, amps, orgPhis, bw, p.sr, p.nLPC); // get radius and angle of sorted! roots
 
 			fmtTracker->procFrame(&pBuf[si], amps, orgPhis, bw); //TODO
-
-			if (p.bTrack)
-				trackPhi(&amps[0], &orgPhis[0], time_elapsed); // formant tracking routine
 
 			getWma(&orgPhis[0], &bw[0], &wmaPhis[0], &wmaR[0]); // weighted moving average
 
@@ -1452,9 +1453,6 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 				weiMatPhi[i0][circ_counter]=0;
 				weiMatBw[i0][circ_counter]=0;
 
-				/*realRoots[i0] = 0.0f; //Marked
-				imagRoots[i0] = 0.0f;*/
-
 				amps[i0] = 0.0f;
 				orgPhis[i0] = 0.0f;
 				bw[i0] = 0.0f;
@@ -1462,8 +1460,11 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 				wmaR[i0] = 0.0f;
 
 				fmts[i0]=0;
-				amps[i0]=0;
 			}
+
+			/* Reset roots in formant tracker */
+			if (fmtTracker)
+				fmtTracker->postSupraThreshReset();
 
 			//SC(2009/02/02) Reset after each voiced interval
 			if (bLastFrameAboveRMS==1){
@@ -2228,7 +2229,6 @@ int Audapter::getWma(dtype *phi_ptr, dtype *bw_ptr , dtype * wmaPhi_ptr, dtype *
 	int i0=0;
 	int circ_indx_sub=0;
 
-
 	circ_indx_sub=(data_counter-p.avgLen) % maxPitchLen; // points to the data to withdraw from sum 
 
 	sumWei+=weiVec[circ_counter]-weiVec[circ_indx_sub];  // update weighting sum
@@ -2380,104 +2380,7 @@ int Audapter::gainAdapt(dtype *buffer,dtype *gtot_ptr,int framelen, int frameshi
 }
 
 
-void Audapter::trackPhi(dtype *r_ptr,dtype *phi_ptr,dtype time)
-{// Dynamic programming based formant tracking (c.f., Xia and Espy-Wilson, 2000, ICSLP)
-	dtype cum_Mat[maxFmtTrackJump][maxNTracks];// cumulative cost matrix
-	dtype cost_Mat[maxFmtTrackJump][maxNTracks];// local cost Mat // just for debugging
-	dtype fmts_min[maxNTracks]={0,350,1200,2000,3000}; // defines minimal value for each formant
-	dtype fmts_max[maxNTracks]={1500,3500,4500,5000,7000};// defines maximal value for each formant
-	dtype fn[maxNTracks]={500,1500,2500,3500,4500};// neutral formant values (start formants : here vowel [a])
-	static dtype last_f[maxNTracks]={500,1500,2500,3500,4500};// last moving average estimated formants 
-	int f_list[maxNTracks]={0,0,0,0,0};
-	const int tri[maxNTracks]={0,1,2,3,4};
-	dtype this_fmt,this_bw,this_cost, this_cum_cost, low_cost,min_cost,inf_cost=10000000;
-	bool in_range=false;
-	int k=0,i0=0,j0;
-	int bound,indx=0,new_indx;
 
-	dtype a_fact, g_fact, b_fact;
-
-	k=0;
-	i0=0;
-	j0=0;
-
-	fn[0]=p.fn1;
-	fn[1]=p.fn2;
-
-	a_fact=p.aFact;
-	b_fact=p.bFact;
-	g_fact=p.gFact;
-
-
-	// loop builds the cumulative cost Matrix cum_Mat
-	// each column represents the cumulative cost for each node which will be the cost entry value for the next column
-	for (k=0;k<p.nTracks;k++)
-	{
-		low_cost=inf_cost;
-			for(i0=k;i0<(p.nCands-p.nTracks+k+2);i0++)
-			{
-				//cum_Mat[i0-k][k]=inf_cost;
-				this_cum_cost=inf_cost;
-				this_fmt=phi_ptr[i0]*p.sr/(2*M_PI);
-				this_bw=-log(r_ptr[i0])*p.sr/M_PI;
-				if((this_fmt>fmts_min[k]) && (this_fmt<fmts_max[k]))// check if actual formant is in range
-				{
-					in_range=true;
-					this_cost=a_fact*this_bw+b_fact*fabs(this_fmt-fn[k])+g_fact*fabs(this_fmt-last_f[k]);//calc local cost
-					cost_Mat[i0-k][k]=this_cost;
-					if (k==0)// build first column: cumulative cost = local cost
-						this_cum_cost=this_cost;
-					else// build all other columns: cumulative cost(this column) = cumulative cost(previous column)+local cost
-						this_cum_cost=cum_Mat[i0-k][k-1]+this_cost;
-
-					if (this_cum_cost<low_cost)
-						low_cost=this_cum_cost;// low_cost is the lowest cumulative cost of all elements in this column until element [i0] (included)
-											  // therefore, for each column :i0=0 low_cost=cumulative cost
-											  //							:i0=n low_cost=min(cumulative_cost(from 0 to [n]))                           
-				
-				}
-				if (k<p.nTracks-1)// for all columns except last
-					cum_Mat[i0-k][k]=low_cost;//ATTENTION: represents the minimal cost that serves as entry cost for the next node (same row element, but next column)
-				else// last column  
-					cum_Mat[i0-k][k]=this_cum_cost;//shows the overall accumulated cost... from here will start the viterbi traceback
-			}
-	}
-	
-	bound=p.nCands-p.nTracks+2;// VERY IMPORTANT!!! because values of cum_Mat beyond this point are not referenced !!
-	indx=0;
-	// viterbi traceback updates index vector f_list
-	// ATTENTION!!! f_list is not the definitive index vector.. has to be diagonalised
-	for(k=0;k<p.nTracks;k++)
-	{	
-		min_cost=inf_cost;
-		for(i0=0;i0<bound;i0++)
-		{
-			if(cum_Mat[i0][p.nTracks-k-1]<min_cost)
-			{
-				min_cost=cum_Mat[i0][p.nTracks-k-1];
-				indx=i0;
-			}
-		}
-		if(indx==0)
-			break;
-		else
-		{
-			bound=indx+1;
-			f_list[p.nTracks-k-1]=indx;
-		}
-	}
-
-
-	// update r, phi and last_f
-	for(k=0;k<p.nTracks;k++)
-	{
-		new_indx=f_list[k]+k;// rediagonalize index vector
-		r_ptr[k]=r_ptr[new_indx];
-		phi_ptr[k]=phi_ptr[new_indx];
-		last_f[k]=(1-p.trackFF)*phi_ptr[k]*p.sr/(2*M_PI)+p.trackFF*last_f[k];
-	}
-
-}
 
 void Audapter::formantShiftFilter(dtype *xin_ptr, dtype* xout_ptr, 
 								  dtype *oldPhi_ptr, dtype *newPhi_ptr, dtype *r_ptr, 

@@ -134,10 +134,10 @@ private:
 	static const int maxNWin = 16;
 	static const int maxNFmts = 5;
 	static const int maxNLPC = 20;
-	static const int maxNPoles = maxNLPC / 2 + 2;
-	static const int maxNLPC_squared = maxNLPC * maxNLPC;
-	static const int maxFmtTrackJump = maxNPoles;
-	static const int maxNTracks = 5;
+	static const int maxNPoles = maxNLPC / 2 + 2; //Marked
+	static const int maxNLPC_squared = maxNLPC * maxNLPC; //Marked
+	static const int maxFmtTrackJump = maxNPoles; //Marked
+	static const int maxNTracks = 5; //Marked
 	static const int maxPitchLen = 100;
 	static const int nFFT = 1024;
 	static const int max_nFFT = 4096;
@@ -398,7 +398,7 @@ private:
 		// for formant tracking algorithm
 		dtype trackFF;
 		int	   nTracks;					// number of tracked formants 
-		int    nCands;					// number of possible formant candiates  ( > ntracks     but  < p.nLPC/2!!!! (choose carefully : not idiot proofed!)
+		int    nCands;					// number of possible formant candiates  ( > ntracks     but  < p.nLPC/2!!!! (choose carefully : not idiot proofed!) //Marked
 
 		dtype trackIntroTime;          // intro tracking time 
 
@@ -506,8 +506,7 @@ private:
 
 	//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  FUNCTIONS  *****************************************************%%%%%%%%%%%	
 	dtype  getGain(dtype * r, dtype * ophi,dtype * sphi, int nfmts);
-	
-	void trackPhi(dtype *r_ptr,dtype *phi_ptr,dtype time);
+		
 	void formantShiftFilter (dtype *xin_ptr, dtype* xout_ptr,dtype *oldPhi_ptr,dtype *newPhi_ptr,dtype *r_ptr,const int size);
 	dtype calcRMS1(const dtype *xin_ptr, int size);	
 	dtype calcRMS2(const dtype *xin_ptr, int size);

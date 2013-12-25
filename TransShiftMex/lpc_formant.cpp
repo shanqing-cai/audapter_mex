@@ -20,19 +20,38 @@ inline int imax(const int &k, const int &j) {
 	return (k <= j ? j : k);
 }
 
-/* Constructor */
-/* If bCepsLift == false, set cepsWinWidth to <= 0 */
-LPFormantTracker::LPFormantTracker(const int t_nLPC, 
-								   const int t_sr, 
-								   const int t_bufferSize, 								  
-								   const int t_nFFT, 								   
-								   const int t_cepsWinWidth) :
+/* Constructor
+	
+	Input arguments:
+		t_nLPC: LPC order
+		t_sr: sampling rate of the input signal (Hz)
+		t_bufferSize: input buffer size (# of samples)
+		t_nFFT: FFT length (must be power of 2)
+		t_cepsWinWidth: cepstral liftering window width (dimensionless)
+		t_nTracks: Number of formants to be tracked
+		t_aFact: alpha parameter in the DP formant tracking algorithm (Xia and Espy-Wilson, 2000)
+		t_bFact: beta
+		t_gFact: gamma
+		t_fn1: prior value of F1 (Hz)
+		t_fn2: prior value of F2 (Hz)
+
+		If cepsWinWidth is <= 0, cepstral liftering will be disabled.
+*/
+LPFormantTracker::LPFormantTracker(const int t_nLPC, const int t_sr, const int t_bufferSize, 					 
+								   const int t_nFFT, const int t_cepsWinWidth, 
+								   const int t_nTracks, 
+								   const dtype t_aFact, const dtype t_bFact, const dtype t_gFact, 
+			   					   const dtype t_fn1, const dtype t_fn2) :
 	nLPC(t_nLPC), sr(t_sr), 
 	bufferSize(t_bufferSize), 
-	nFFT(t_nFFT), cepsWinWidth(t_cepsWinWidth)
+	nFFT(t_nFFT), cepsWinWidth(t_cepsWinWidth), 
+	nTracks(t_nTracks), 
+	aFact(t_aFact), bFact(t_bFact), gFact(t_gFact), 
+	fn1(t_fn1), fn2(t_fn2)
 {
 	/* Input sanity checks */
-	if ( (nLPC <= 0) || (bufferSize <= 0) || (nFFT <= 0) )
+	if ( (nLPC <= 0) || (bufferSize <= 0) || (nFFT <= 0) ||
+	     (nTracks <= 0) )
 		 throw initializationError();
 
 	if (nLPC > maxNLPC)
@@ -64,6 +83,16 @@ LPFormantTracker::LPFormantTracker(const int t_nLPC,
 	lpcAi = new dtype[maxNLPC + 1];
 	realRoots = new dtype[maxNLPC];
 	imagRoots = new dtype[maxNLPC];
+
+	cumMat = new dtype[maxFmtTrackJump * maxNTracks];
+	costMat = new dtype[maxFmtTrackJump * maxNTracks];
+
+	nCands = 6; 
+	/* number of possible formant candiates  
+	   (should be > ntracks but  < p.nLPC/2!!!! (choose carefully : not fool-proof) 
+	   TODO: Implement automatic checks */
+
+	trackFF = 0.95;
 
 	/* Call reset */
 	reset();
@@ -98,6 +127,19 @@ LPFormantTracker::~LPFormantTracker()
 		delete [] realRoots;
 	if (imagRoots)
 		delete [] imagRoots;
+
+	if (cumMat)
+		delete [] cumMat;
+	if (costMat)
+		delete [] costMat;
+}
+
+/* Reset after a supra-threshold interval */
+void LPFormantTracker::postSupraThreshReset() {
+	for (int i = 0; i < maxNLPC; ++i) {
+		realRoots[i] = 0.0;
+		imagRoots[i] = 0.0;
+	}
 }
 
 /* Resetting */
@@ -116,6 +158,8 @@ void LPFormantTracker::reset() {
 		Acompanion[(nLPC + 1) * i + 1] = 1.0;
 		AHess[(nLPC + 1) * i + 1] = 1.0;
 	}
+
+	postSupraThreshReset();
 }
 
 /* Levinson recursion for linear prediction (LP) */
@@ -561,6 +605,104 @@ void LPFormantTracker::getRPhiBw(dtype * wr, dtype * wi,
 	}
 }
 
+
+/* Dynamic programming based formant tracking (Xia and Espy-Wilson, 2000, ICSLP) 
+	Input: r_ptr: array of amplitudes of the roots
+		   phi_ptr: array of phase angles of the roots
+		   
+		   In-place operations are done on r_ptr and phi_ptr.
+*/
+void LPFormantTracker::trackPhi(dtype *r_ptr, dtype *phi_ptr)
+{
+	//dtype cumMat[maxFmtTrackJump][maxNTracks];// cumulative cost matrix
+	//dtype costMat[maxFmtTrackJump][maxNTracks];// local cost Mat // just for debugging
+	const dtype fmts_min[maxNTracks] = {0, 350, 1200, 2000, 3000}; // defines minimal value for each formant
+	const dtype fmts_max[maxNTracks] = {1500, 3500, 4500, 5000, 7000};// defines maximal value for each formant
+	dtype fn[maxNTracks] = {500, 1500, 2500, 3500, 4500};// neutral formant values (start formants : here vowel [a])
+	static dtype last_f[maxNTracks]={500,1500,2500,3500,4500};// last moving average estimated formants 
+	int f_list[maxNTracks] = {0, 0, 0, 0, 0};
+	const int tri[maxNTracks] = {0, 1, 2, 3, 4};
+	dtype this_fmt, this_bw, this_cost, this_cum_cost, low_cost, min_cost, inf_cost=10000000;
+	bool in_range = false;
+	int k = 0, i0 = 0, j0;
+	int bound, indx = 0, new_indx;
+
+	k = 0;
+	i0 = 0;
+	j0 = 0;
+
+	fn[0] = fn1;
+	fn[1] = fn2;
+
+	// loop builds the cumulative cost Matrix cumMat
+	// each column represents the cumulative cost for each node which will be the cost entry value for the next column
+	for (k = 0; k < nTracks; k++)
+	{
+		low_cost=inf_cost;
+			for(i0=k;i0<(nCands-nTracks+k+2);i0++)
+			{
+				//cumMat[i0-k][k]=inf_cost;
+				this_cum_cost=inf_cost;
+				this_fmt=phi_ptr[i0]*sr/(2*M_PI);
+				this_bw=-log(r_ptr[i0])*sr/M_PI;
+				if((this_fmt>fmts_min[k]) && (this_fmt<fmts_max[k]))// check if actual formant is in range
+				{
+					in_range=true;
+					this_cost=aFact*this_bw+bFact*fabs(this_fmt-fn[k])+gFact*fabs(this_fmt-last_f[k]);//calc local cost
+					costMat[(i0 - k) + k * maxFmtTrackJump]=this_cost;
+					if (k==0)// build first column: cumulative cost = local cost
+						this_cum_cost=this_cost;
+					else// build all other columns: cumulative cost(this column) = cumulative cost(previous column)+local cost
+						this_cum_cost = cumMat[(i0 - k) + (k - 1) * maxFmtTrackJump] + this_cost;
+
+					if (this_cum_cost<low_cost)
+						low_cost=this_cum_cost;// low_cost is the lowest cumulative cost of all elements in this column until element [i0] (included)
+											  // therefore, for each column :i0=0 low_cost=cumulative cost
+											  //							:i0=n low_cost=min(cumulative_cost(from 0 to [n]))                           
+				
+				}
+				if (k<nTracks-1)// for all columns except last
+					cumMat[(i0 - k) + k * maxFmtTrackJump] = low_cost;//ATTENTION: represents the minimal cost that serves as entry cost for the next node (same row element, but next column)
+				else// last column  
+					cumMat[(i0 - k) + k * maxFmtTrackJump] = this_cum_cost;//shows the overall accumulated cost... from here will start the viterbi traceback
+			}
+	}
+	
+	bound=nCands-nTracks+2;// VERY IMPORTANT!!! because values of cumMat beyond this point are not referenced !!
+	indx=0;
+	// viterbi traceback updates index vector f_list
+	// ATTENTION!!! f_list is not the definitive index vector.. has to be diagonalised
+	for(k=0;k<nTracks;k++)
+	{	
+		min_cost=inf_cost;
+		for(i0=0;i0<bound;i0++)
+		{
+			if(cumMat[i0 + (nTracks - k - 1) * maxFmtTrackJump] < min_cost)
+			{
+				min_cost=cumMat[i0 + (nTracks - k - 1) * maxFmtTrackJump];
+				indx=i0;
+			}
+		}
+		if(indx==0)
+			break;
+		else
+		{
+			bound=indx+1;
+			f_list[nTracks-k-1]=indx;
+		}
+	}
+
+
+	// update r, phi and last_f
+	for(k=0;k<nTracks;k++)
+	{
+		new_indx = f_list[k]+k;// rediagonalize index vector
+		r_ptr[k] = r_ptr[new_indx];
+		phi_ptr[k] = phi_ptr[new_indx];
+		last_f[k] = (1 - trackFF) * phi_ptr[k] * sr / (2 * M_PI) + trackFF * last_f[k];
+	}
+}
+
 /* Public interface: process incoming frame 
 
 */
@@ -574,6 +716,23 @@ void LPFormantTracker::procFrame(dtype * xx, dtype * radius, dtype * phi, dtype 
 	int quit_hqr = hqr_roots(lpcAi, realRoots, imagRoots);
 
 	getRPhiBw(realRoots, imagRoots, radius, phi, bandwidth);
+
+	/* DEBUG */
+	//dtype * n_radius = new dtype[maxNPoles];
+	//dtype * n_phi = new dtype[maxNPoles];
+
+	//for (int i = 0; i < maxNPoles; ++i) {
+	//	n_radius[i] = radius[i];
+	//	n_phi[i] = phi[i];
+	//}
+	//
+	//trackPhi(n_radius, n_phi); /* DEBUG */
+	//
+	///* DEBUG */
+	//delete [] n_radius;
+	//delete [] n_phi;
+	
+	trackPhi(radius, phi);
 }
 
 
