@@ -346,7 +346,6 @@ Audapter::Audapter()
 	p.fn2			= 1333; // A priori expectation of F2 (Hz)
 
 	p.nTracks			= 4;	// number of tracked formants 
-	p.nCands			= 6;	// number of possible formant candiates  ( > ntracks     but  < p.nLPC/2!!!! (choose carefully : not idiot proofed!) //Marked
 	p.trackFF			= 0.95;		 //Marked
 
 	// booleans						
@@ -455,7 +454,8 @@ Audapter::Audapter()
 	/* Initialize formant tracker */
 	try {
 		fmtTracker = new LPFormantTracker(p.nLPC, p.sr, p.anaLen, nFFT, p.cepsWinWidth * p.bCepsLift, 
-										  p.nTracks, p.aFact, p.bFact, p.gFact, p.fn1, p.fn2);
+										  p.nTracks, p.aFact, p.bFact, p.gFact, p.fn1, p.fn2, 
+										  static_cast<bool>(p.bWeight), p.avgLen);
 	}
 	catch (LPFormantTracker::initializationError) {
 		mexErrMsgTxt("Failed to initialize formant tracker");
@@ -650,18 +650,18 @@ void Audapter::reset()
 //*****************************************************  getWma    *****************************************************
 
 	// initialize weight matrix and moving sum
-	for(j0=0;j0<maxNTracks;j0++)
-	{
-		sumWeiPhi[j0]=0;
-		sumWeiBw[j0]=0;
-		for(i0=0;i0<maxPitchLen;i0++)
-		{
-			weiVec[i0]=0;
-			weiMatPhi[j0][i0]=0;
-			weiMatBw[j0][i0]=0;
-		}
-	}
-	sumWei=0;
+	//for(j0=0;j0<maxNTracks;j0++) //Marked
+	//{
+	//	sumWeiPhi[j0]=0;
+	//	sumWeiBw[j0]=0;
+	//	for(i0=0;i0<maxPitchLen;i0++)
+	//	{
+	//		weiVec[i0]=0;
+	//		weiMatPhi[j0][i0]=0;
+	//		weiMatBw[j0][i0]=0;
+	//	}
+	//}
+	//sumWei=0; //Marked
 
 	//SC(2009/02/02)
 	bLastFrameAboveRMS=0;
@@ -1179,7 +1179,8 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 
 			try {
 				fmtTracker = new LPFormantTracker(p.nLPC, p.sr, p.anaLen, nFFT, p.cepsWinWidth * p.bCepsLift, 
-											      p.nTracks, p.aFact, p.bFact, p.gFact, p.fn1, p.fn2);
+											      p.nTracks, p.aFact, p.bFact, p.gFact, p.fn1, p.fn2, 
+												  static_cast<bool>(p.bWeight), p.avgLen);
 			}
 			catch (LPFormantTracker::initializationError) {
 				mexErrMsgTxt("Failed to initialize formant tracker");
@@ -1404,19 +1405,13 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 		/*if(above_rms)*/
 		if (bDoFmts) /* DEBUG: Ad hoc */
 		{
-			if (p.bWeight)	//SC bWeight: weighted moving averaging of the formants
+			if (p.bWeight)	//SC bWeight: weighted moving averaging of the formants //Marked
 				wei=rms_s; // weighted moving average over short time rms
 			else
 				wei=1; // simple moving average
 
-			weiVec[circ_counter]=wei; // weighting vector
-
-			fmtTracker->procFrame(&pBuf[si], amps, orgPhis, bw); //TODO
-
-			getWma(&orgPhis[0], &bw[0], &wmaPhis[0], &wmaR[0]); // weighted moving average
-
-			for (i0=0;i0<p.nTracks;i0++)		
-				fmts[i0] = wmaPhis[i0]*p.sr/(2*M_PI);
+			//weiVec[circ_counter]=wei; // weighting vector // Marked
+			fmtTracker->procFrame(&pBuf[si], rms_s, amps, wmaPhis, bw, fmts);
 
 			//SC Convert to mel. The perturbation field variables (F2Min, F2Max, pertF2, etc.) are all in mel. 			
 			if (p.bMelShift){
@@ -1447,12 +1442,8 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 		else
 		{
 			time_elapsed=0;
-			weiVec[circ_counter]=0;
-			for (i0 = 0; i0 < p.nTracks; i0++)		//SC Put zeros in formant frequency and amplitude for unvoiced portion
-			{
-				weiMatPhi[i0][circ_counter]=0;
-				weiMatBw[i0][circ_counter]=0;
-
+			//weiVec[circ_counter]=0;  // Marked, TODO
+			for (i0 = 0; i0 < p.nTracks; i0++) {		//SC Put zeros in formant frequency and amplitude for unvoiced portion
 				amps[i0] = 0.0f;
 				orgPhis[i0] = 0.0f;
 				bw[i0] = 0.0f;
@@ -1466,24 +1457,7 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 			if (fmtTracker)
 				fmtTracker->postSupraThreshReset();
 
-			//SC(2009/02/02) Reset after each voiced interval
-			if (bLastFrameAboveRMS==1){
-				for(int jj = 0;jj < maxNTracks; jj++)
-				{
-					sumWeiPhi[jj]=0;
-					sumWeiBw[jj]=0;
-					for(int ii = 0; ii < maxPitchLen; ii++)
-					{
-						weiVec[ii]=0;
-						weiMatPhi[jj][ii]=0;
-						weiMatBw[jj][ii]=0;
-					}
-				}
-				sumWei=0;
-			}
-
 			bLastFrameAboveRMS=0;
-
 		}
 
 		a_rms_o[data_counter] = rms_o;
@@ -1503,10 +1477,6 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 			else {
 				during_trans = (pertCfg.fmtPertAmp[stat] != 0);
 			}
-
-			/* if (during_trans) {
-				during_trans = during_trans;
-			} */
 
 			if(during_trans && bDoFmts) // Determine whether the current point in perturbation field
 			{// yes : windowed deviation over x coordinate
@@ -2223,38 +2193,8 @@ int Audapter::handleBufferWavePB(dtype *inFrame_ptr, dtype *outFrame_ptr, int fr
 }
 
 
-int Audapter::getWma(dtype *phi_ptr, dtype *bw_ptr , dtype * wmaPhi_ptr, dtype * wmaR_ptr)
-{// computational efficient weithed moving average 
-
-	int i0=0;
-	int circ_indx_sub=0;
-
-	circ_indx_sub=(data_counter-p.avgLen) % maxPitchLen; // points to the data to withdraw from sum 
-
-	sumWei+=weiVec[circ_counter]-weiVec[circ_indx_sub];  // update weighting sum
 
 
-	for (i0=0;i0<p.nTracks;i0++)
-		{						
-			weiMatPhi[i0][circ_counter]=weiVec[circ_counter]*phi_ptr[i0];
-			weiMatBw[i0][circ_counter]=weiVec[circ_counter]*bw_ptr[i0];
-
-			sumWeiPhi[i0]+=weiMatPhi[i0][circ_counter]-weiMatPhi[i0][circ_indx_sub];
-
-			sumWeiBw[i0]+=weiMatBw[i0][circ_counter]-weiMatBw[i0][circ_indx_sub];
-
-			if (sumWei>0.0000001)
-			{
-				wmaPhi_ptr[i0]=sumWeiPhi[i0]/sumWei;
-				wmaR_ptr[i0]=pow(10.0, (-(sumWeiBw[i0]/sumWei)*M_PI/(dtype(p.sr))));
-			}
-			else
-				return 1;
-
-		}	
-
-	return 0;
-}
 int Audapter::getDFmt(dtype *fmt_ptr,dtype *dFmt_ptr, dtype time)
 {// calculates the formant derivatives [Hz/ms] smoothed with forgetting factor 
 	int i0=0;
@@ -2993,3 +2933,4 @@ void Audapter::readOSTTab(int bVerbose) {
 void Audapter::readPIPCfg(int bVerbose) {
 	pertCfg.readFromFile(string(pertCfgFN), bVerbose);
 }
+

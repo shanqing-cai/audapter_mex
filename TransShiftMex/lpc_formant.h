@@ -19,12 +19,21 @@ typedef double dtype;
 #define RSL(INTEGER,SHIFT) (int)( ( (unsigned)INTEGER ) >> SHIFT )
 
 class LPFormantTracker {
+	//TODO:
+	//		resetting properly
+	//		confirm temp_fame and R size issue
+	//		incorporate trackPhi()
+	//		below-RMS-thresh reset for realRoots, etc.
+	//		Constructor t_nFFT power of 2 check
+	//		Check that avgLen is shorter than maxAvgLen (i.e., maxPitchLen)
+
 private:
 	/* Constants */
 	static const int maxNLPC = 20;
 	static const int maxNPoles = maxNLPC / 2 + 2;
 	static const int maxFmtTrackJump = maxNPoles;
 	static const int maxNTracks = 5;	
+	static const int maxAvgLen = 100;
 	
 	/* Linear prediction parameters */
 	int nLPC;		/* Order of LP */
@@ -35,13 +44,17 @@ private:
 
 	/* Parameters related to cepstral liftering */
 	bool bCepsLift;
-	int cepsWinWidth;
+	int cepsWinWidth;	
 
 	/* DP algorithm parameters */
 	int nTracks;
 	int nCands;
 	dtype aFact, bFact, gFact;
 	dtype fn1, fn2;
+
+	/* Moving weighted average (MWA) parameters */
+	bool bMWA;
+	int avgLen;	
 
 	dtype trackFF;
 
@@ -68,33 +81,40 @@ private:
 	dtype * cumMat;
 	dtype * costMat;
 
-	//TODO:
-	//		resetting properly
-	//		confirm temp_fame and R size issue
-	//		incorporate trackPhi()
-	//		below-RMS-thresh reset for realRoots, etc.
-	//		Constructor t_nFFT power of 2 check
+	dtype * weiMatPhi;
+	dtype * weiMatBw;
+	dtype * weiVec;
+	dtype * sumWeiPhi;
+	dtype * sumWeiBw;
+	dtype sumWei;
+
+	dtype * radius_us;		/* Unsmoothed pole radii */
+	dtype * phi_us;			/* Unsmoothed pole angles */
+	dtype * bandwidth_us;	/* Unsmoothed pole bandwidths */
+	//dtype * phi_s;			/* Smoothed pole angles */
+
+	int mwaCtr;		/* Moving average counter */
+	int mwaCircCtr; /* Moving average circular counter */
 	
 	/* Private member functions */
-	/* LPC */
+	/* LPC and formant tracking subroutines */
 	/* Levinson-Durbin recursion */
 	void levinson(dtype * R, dtype * aa, const int size);
-	/*void levinson(dtype * R, dtype * aa, const int & size);*/
 
 	/* Solve for the roots of a polynomial */
 	int hqr_roots(dtype * c, dtype * wr, dtype * wi);
-	//int hqr_roots(dtype *c, dtype *wr, dtype *wi, dtype *Acompanion, dtype *AHess, const int & nLPC);
 
 	void getAi(dtype * xx, dtype * aa);
-	/* void Audapter::getAi(dtype * xx, dtype * aa, const int & size, const int & nlpc); */
 
 	/* Get the angle (Phi) and magnitude (Bw) of the roots  */
 	void getRPhiBw(dtype * wr, dtype * wi, 
 				   dtype * radius, dtype * phi, dtype * bandwith);
-	//void getRPhiBw(dtype *wr, dtype *wi, dtype *radius, dtype *phi, dtype *bandwith, const dtype & sr, const int & nLPC);
 
 	/* DP formant tracking */
 	void trackPhi(dtype * r_ptr, dtype * phi_ptr);
+
+	/* Weighted moving average (mwa) of phi and R */
+	int mwa(dtype * phi_ptr, dtype * bw_ptr , dtype * wmaPhi_ptr);
 
 	void genHanningWindow();
 
@@ -106,7 +126,8 @@ public:
 					 const int t_nFFT, const int t_cepsWinWidth, 
 					 const int t_nTracks, 
 					 const dtype t_aFact, const dtype t_bFact, const dtype t_gFact, 
-					 const dtype t_fn1, const dtype t_fn2);
+					 const dtype t_fn1, const dtype t_fn2, 
+					 const bool t_bMWA, const int t_avgLen);
 
 	/* Destructor */
 	~LPFormantTracker();
@@ -124,7 +145,10 @@ public:
 	void reset();	
 
 	/* LPC */
-	void procFrame(dtype * xx, dtype * radius, dtype * phi, dtype * bandwidth);
+	//void procFrame(dtype * xx, dtype st_rms, dtype * radius, dtype * phi, dtype * bandwidth);
+	void procFrame(dtype * xx, dtype st_rms, 
+				   dtype * radius, dtype * phi, dtype * bandwidth, 
+				   dtype * fmts);
 
 	/* Setters and getters (inline) */
 	void setNLPC(const int t_nLPC);

@@ -41,13 +41,15 @@ LPFormantTracker::LPFormantTracker(const int t_nLPC, const int t_sr, const int t
 								   const int t_nFFT, const int t_cepsWinWidth, 
 								   const int t_nTracks, 
 								   const dtype t_aFact, const dtype t_bFact, const dtype t_gFact, 
-			   					   const dtype t_fn1, const dtype t_fn2) :
+			   					   const dtype t_fn1, const dtype t_fn2, 
+								   const bool t_bMWA, const int t_avgLen) :
 	nLPC(t_nLPC), sr(t_sr), 
 	bufferSize(t_bufferSize), 
 	nFFT(t_nFFT), cepsWinWidth(t_cepsWinWidth), 
 	nTracks(t_nTracks), 
 	aFact(t_aFact), bFact(t_bFact), gFact(t_gFact), 
-	fn1(t_fn1), fn2(t_fn2)
+	fn1(t_fn1), fn2(t_fn2), 
+	bMWA(t_bMWA), avgLen(t_avgLen)	
 {
 	/* Input sanity checks */
 	if ( (nLPC <= 0) || (bufferSize <= 0) || (nFFT <= 0) ||
@@ -92,7 +94,18 @@ LPFormantTracker::LPFormantTracker(const int t_nLPC, const int t_sr, const int t
 	   (should be > ntracks but  < p.nLPC/2!!!! (choose carefully : not fool-proof) 
 	   TODO: Implement automatic checks */
 
+	weiMatPhi = new dtype[nTracks * maxAvgLen];
+	weiMatBw = new dtype[nTracks * maxAvgLen];
+	weiVec = new dtype[maxAvgLen];
+	sumWeiPhi = new dtype[nTracks];
+	sumWeiBw = new dtype[nTracks];
+
 	trackFF = 0.95;
+
+	radius_us = new dtype[maxNLPC]; /* TODO: Tighten the size */
+	phi_us = new dtype[maxNLPC];
+	bandwidth_us = new dtype[maxNLPC];
+	//phi_s = new dtype[maxNLPC];
 
 	/* Call reset */
 	reset();
@@ -132,6 +145,26 @@ LPFormantTracker::~LPFormantTracker()
 		delete [] cumMat;
 	if (costMat)
 		delete [] costMat;
+
+	if (weiMatPhi)
+		delete [] weiMatPhi;
+	if (weiMatBw)
+		delete [] weiMatBw;
+	if (weiVec)
+		delete [] weiVec;
+	if (sumWeiPhi)
+		delete [] sumWeiPhi;
+	if (sumWeiBw)
+		delete [] sumWeiBw;
+
+	if (radius_us)
+		delete [] radius_us;
+	if (phi_us)
+		delete [] phi_us;
+	if (bandwidth_us)
+		delete [] bandwidth_us;
+	/*if (phi_s)
+		delete [] phi_s;*/
 }
 
 /* Reset after a supra-threshold interval */
@@ -140,6 +173,25 @@ void LPFormantTracker::postSupraThreshReset() {
 		realRoots[i] = 0.0;
 		imagRoots[i] = 0.0;
 	}
+
+	for(int j0 = 0; j0 < nTracks; ++j0)
+	{
+		sumWeiPhi[j0] = 0.0;
+		sumWeiBw[j0] = 0.0;
+		for(int i0 = 0; i0 < maxAvgLen; ++i0)
+		{
+			weiMatPhi[j0 + nTracks * i0] = 0.0;
+			weiMatBw[j0 + nTracks * i0] = 0.0;
+		}
+	}
+
+	for(int i0 = 0; i0 < maxAvgLen; ++i0)
+		weiVec[i0]=0.0;
+	//weiVec[mwaCircCtr] = 0.0;
+	sumWei = 0.0;
+
+	mwaCtr = 0;
+	mwaCircCtr = 0;
 }
 
 /* Resetting */
@@ -158,6 +210,24 @@ void LPFormantTracker::reset() {
 		Acompanion[(nLPC + 1) * i + 1] = 1.0;
 		AHess[(nLPC + 1) * i + 1] = 1.0;
 	}
+
+
+	for(int j0 = 0; j0 < nTracks; ++j0)
+	{
+		sumWeiPhi[j0] = 0.0;
+		sumWeiBw[j0] = 0.0;
+		for(int i0 = 0; i0 < maxAvgLen; ++i0)
+		{
+			
+			weiMatPhi[j0 + nTracks * i0] = 0.0;
+			weiMatBw[j0 + nTracks * i0] = 0.0;
+		}
+	}
+
+	for(int i0 = 0; i0 < maxAvgLen; ++i0)
+		weiVec[i0]=0.0;
+
+	sumWei = 0.0;
 
 	postSupraThreshReset();
 }
@@ -548,7 +618,7 @@ void LPFormantTracker::getAi(dtype* xx, dtype* aa) {
 	phi: root angle (output)
 	bandwidth: root bandwidth (output) */
 void LPFormantTracker::getRPhiBw(dtype * wr, dtype * wi, 
-								 dtype * radius, dtype * phi, dtype * bandwith) {
+								 dtype * radius, dtype * phi, dtype * bandwidth) {
   /* The following sorts the roots in wr and wi.  It is adapted from a matlab script that Reiner wrote */
 	/*const int maxNLPC = 64;*/
 
@@ -600,7 +670,7 @@ void LPFormantTracker::getRPhiBw(dtype * wr, dtype * wi,
 
 	for (i0=0; i0<numroots; i0++) {
 		radius[i0]=mag2[i0];
-		bandwith[i0] = -log(mag2[i0]) * dtype(sr) / M_PI;
+		bandwidth[i0] = -log(mag2[i0]) * dtype(sr) / M_PI;
 		phi[i0]=arc2[i0];
 	}
 }
@@ -692,7 +762,6 @@ void LPFormantTracker::trackPhi(dtype *r_ptr, dtype *phi_ptr)
 		}
 	}
 
-
 	// update r, phi and last_f
 	for(k=0;k<nTracks;k++)
 	{
@@ -703,10 +772,59 @@ void LPFormantTracker::trackPhi(dtype *r_ptr, dtype *phi_ptr)
 	}
 }
 
-/* Public interface: process incoming frame 
+/* Computational efficient weithed moving average 
+	Input arguments: 
+		phi_ptr: unaveraged phi
+		bw_ptr: unaveraged bw
+		wmaPhi_ptr: moving-averaged phi
 
+	Return value:
+		
 */
-void LPFormantTracker::procFrame(dtype * xx, dtype * radius, dtype * phi, dtype * bandwidth) {
+int LPFormantTracker::mwa(dtype * phi_ptr, dtype * bw_ptr, dtype * wmaPhi_ptr)
+{
+	int circ_indx_sub = 0;
+
+	circ_indx_sub = (mwaCtr++ - avgLen) % maxAvgLen; // points to the data to withdraw from sum 
+	if (circ_indx_sub < 0)
+		circ_indx_sub += maxAvgLen;
+
+	sumWei += weiVec[mwaCircCtr] - weiVec[circ_indx_sub];  // update weighting sum
+
+	for (int i0 = 0; i0 < nTracks; ++i0) {
+		weiMatPhi[i0 + nTracks * mwaCircCtr] = weiVec[mwaCircCtr] * phi_ptr[i0];
+		weiMatBw[i0 + nTracks * mwaCircCtr] = weiVec[mwaCircCtr] * bw_ptr[i0];
+			
+		sumWeiPhi[i0] += weiMatPhi[i0 + nTracks * mwaCircCtr] - weiMatPhi[i0 + nTracks * circ_indx_sub];
+
+		sumWeiBw[i0] += weiMatBw[i0 + nTracks * mwaCircCtr] - weiMatBw[i0 + nTracks * circ_indx_sub];
+
+		if (sumWei > 0.0000001) {
+			wmaPhi_ptr[i0] = sumWeiPhi[i0] / sumWei;
+		}
+		else {
+			mwaCircCtr = mwaCtr % maxAvgLen;
+			return 1;
+		}
+	}
+
+	mwaCircCtr = mwaCtr % maxAvgLen;
+	return 0;
+}
+
+/* Public interface: process incoming frame 
+	Input arguments: 
+		xx: input signal frame (assume length == bufferSize)
+		st_rms: short-time RMS intensity, 
+		        used by the moving weighted average algorithm if bMWA == true
+
+		TODO: radius, phi, bandwidth
+
+		fmts: (output) formant frequencies
+*/
+void LPFormantTracker::procFrame(dtype * xx, dtype st_rms, 
+							     dtype * radius, dtype * phi, dtype * bandwidth, 
+								 dtype * fmts) { //Marked
 	for (int i0 = 0; i0 < nLPC + 1; i0++) {		//SC Initialize the order LPC coefficients
 		lpcAi[i0] = 0.0; // TODO: Incorporate into fmtTracker
 	}
@@ -715,8 +833,27 @@ void LPFormantTracker::procFrame(dtype * xx, dtype * radius, dtype * phi, dtype 
 
 	int quit_hqr = hqr_roots(lpcAi, realRoots, imagRoots);
 
-	getRPhiBw(realRoots, imagRoots, radius, phi, bandwidth);
+	/*getRPhiBw(realRoots, imagRoots, radius, phi, bandwidth);*/
+	getRPhiBw(realRoots, imagRoots, radius, phi_us, bandwidth);
 
+	/*trackPhi(radius, phi);*/
+	trackPhi(radius, phi_us);
+
+	/* Moving window average (MWA) (Optional, but highly recommended) */
+	weiVec[mwaCircCtr] = st_rms;
+	if (bMWA) {
+		mwa(phi_us, bandwidth, phi);
+	}
+	else {
+		/* Copy from phi_us to phi */
+		for (int i = 0; i < nTracks; ++i) {
+			phi[i] = phi_us[i];
+		}
+	}
+
+	for (int i = 0; i < nTracks; ++i) //Marked
+		fmts[i] = phi[i] * sr /(2 * M_PI);
+	
 	/* DEBUG */
 	//dtype * n_radius = new dtype[maxNPoles];
 	//dtype * n_phi = new dtype[maxNPoles];
@@ -732,7 +869,6 @@ void LPFormantTracker::procFrame(dtype * xx, dtype * radius, dtype * phi, dtype 
 	//delete [] n_radius;
 	//delete [] n_phi;
 	
-	trackPhi(radius, phi);
 }
 
 

@@ -134,10 +134,8 @@ private:
 	static const int maxNWin = 16;
 	static const int maxNFmts = 5;
 	static const int maxNLPC = 20;
-	static const int maxNPoles = maxNLPC / 2 + 2; //Marked
-	static const int maxNLPC_squared = maxNLPC * maxNLPC; //Marked
-	static const int maxFmtTrackJump = maxNPoles; //Marked
-	static const int maxNTracks = 5; //Marked
+	static const int maxNPoles = maxNLPC / 2 + 2;
+	static const int maxNTracks = 5;
 	static const int maxPitchLen = 100;
 	static const int nFFT = 1024;
 	static const int max_nFFT = 4096;
@@ -243,13 +241,6 @@ private:
 
 	dtype newPhis[maxNPoles];						// new (shifted) pole angles 
 	dtype gtot[maxNWin];							// gain factor (for gain adaption)
-
-	dtype weiMatPhi[maxNTracks][maxPitchLen];	// weithed matrix of past pole angles (for moving average formant smoothing)
-	dtype weiMatBw[maxNTracks][maxPitchLen];		// weithed matrix of past bandwith (for moving average formant smoothing)
-	dtype weiVec[maxPitchLen];					// weigthing vector of past weigths (default weigth : short time rms ... )
-	dtype sumWeiPhi[maxNTracks];					// sum of past weights (rms) *  angles (over avglen )
-	dtype sumWeiBw[maxNTracks];                   // sum of past weights (rms) *  angles (over avglen )
-	dtype sumWei;									// sum of weigths (over pitchlen)
 
 	dtype wmaPhis[maxNTracks];					// weighted moving average pole angles
 	dtype wmaR[maxNTracks];						// weighted moving average pole radius
@@ -398,7 +389,6 @@ private:
 		// for formant tracking algorithm
 		dtype trackFF;
 		int	   nTracks;					// number of tracked formants 
-		int    nCands;					// number of possible formant candiates  ( > ntracks     but  < p.nLPC/2!!!! (choose carefully : not idiot proofed!) //Marked
 
 		dtype trackIntroTime;          // intro tracking time 
 
@@ -510,8 +500,7 @@ private:
 	void formantShiftFilter (dtype *xin_ptr, dtype* xout_ptr,dtype *oldPhi_ptr,dtype *newPhi_ptr,dtype *r_ptr,const int size);
 	dtype calcRMS1(const dtype *xin_ptr, int size);	
 	dtype calcRMS2(const dtype *xin_ptr, int size);
-	dtype calcRMS_fb(const dtype *xin_ptr, int size, bool above_rms);
-	int getWma(dtype *phi_ptr, dtype *bw_ptr , dtype * wmaPhi_ptr, dtype * wmaR_ptr);
+	dtype calcRMS_fb(const dtype *xin_ptr, int size, bool above_rms);	
 	
 	int gainAdapt(dtype *buffer,dtype *gtot_ptr,int framelen, int frameshift);
 	int gainPerturb(dtype *buffer,dtype *gtot_ptr,int framelen, int frameshift);
