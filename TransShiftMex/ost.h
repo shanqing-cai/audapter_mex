@@ -9,6 +9,7 @@
 #define OST_H
 
 #include <string>
+#include <map>
 
 class OST_TAB {
 private:
@@ -24,7 +25,31 @@ private:
 	double *prm2; // Second parameter
 	double *prm3; // Third parameter
 
+	/* OST heuristic modes */
+	typedef enum {
+		OST_END = 0, 
+		ELAPSED_TIME = 1, 
+		INTENSITY_RISE_HOLD = 5, 
+		INTENSITY_RISE_HOLD_POS_SLOPE = 6, 
+		POS_INTENSITY_SLOPE_STRETCH = 10, 
+		NEG_INTENSITY_SLOPE_STRETCH_SPAN = 11, 
+		INTENSITY_FALL = 20, 
+		INTENSITY_RATIO_RISE = 30, 
+		INTENSITY_RATIO_FALL_HOLD = 31
+	} OST_MODE_NAME;
+
+	std::map<std::string, int> ostModeMap;
+
 public:
+	/* Error classes */
+	class unrecognizedOSTModeError {
+	public:
+		std::string modeStr;
+
+		unrecognizedOSTModeError(std::string t_modeStr) 
+			: modeStr(t_modeStr) {};
+	};
+
 	double rmsSlopeWin;
 	int *statOnsetIndices; /* Onset index of all state numbers. By definition, statOnsets[0] = 0 */
 
@@ -50,7 +75,8 @@ public:
 	OST_TAB();
 
 	/* Reading from a file */
-	void readFromFile(const std::string ostFN, const int bVerbose);
+	void readFromFile(const std::string ostFN, const int bVerbose) 
+		throw(unrecognizedOSTModeError);
 
 	/* Main function: online status tracking */
 	int osTrack(const int stat, const int data_counter, const int frame_counter, 

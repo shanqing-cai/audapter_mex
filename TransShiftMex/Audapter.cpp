@@ -1415,12 +1415,12 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 
 			//SC Convert to mel. The perturbation field variables (F2Min, F2Max, pertF2, etc.) are all in mel. 			
 			if (p.bMelShift){
-				f1m=hz2mel(fmts[0]);
-				f2m=hz2mel(fmts[1]);
+				f1m = hz2mel(fmts[0]);
+				f2m = hz2mel(fmts[1]);
 			}
 			else{
-				f1m=fmts[0];
-				f2m=fmts[1];
+				f1m = fmts[0];
+				f2m = fmts[1];
 			}
 
 			getDFmt(&fmts[0], &dFmts[0], time_elapsed); // formant derivatives (note utilized in the current version, but may be useful in the future)
@@ -2926,7 +2926,14 @@ int Audapter::handleBufferToneSeq(dtype *inFrame_ptr, dtype *outFrame_ptr, int f
 }
 
 void Audapter::readOSTTab(int bVerbose) {
-	ostTab.readFromFile(string(ostFN), bVerbose);
+	try {
+		ostTab.readFromFile(string(ostFN), bVerbose);
+	}
+	catch (OST_TAB::unrecognizedOSTModeError err) {
+		std::string errMsgTxt("Unrecognized OST heuristic mode: ");
+		errMsgTxt += err.modeStr;
+		mexErrMsgTxt(errMsgTxt.c_str());
+	}
 	this->rmsSlopeWin = ostTab.rmsSlopeWin;
 }
 

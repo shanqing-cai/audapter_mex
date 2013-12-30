@@ -31,6 +31,17 @@ OST_TAB::OST_TAB() {
 	maxIOICfg.stat1 = NULL;
 
 	stretchCnt = 0;
+
+	/* Create map for OST modes */
+	ostModeMap[string("OST_END")] = OST_END;
+	ostModeMap[string("ELAPSED_TIME")] = ELAPSED_TIME;
+	ostModeMap[string("INTENSITY_RISE_HOLD")] = INTENSITY_RISE_HOLD;
+	ostModeMap[string("INTENSITY_RISE_HOLD_POS_SLOPE")] = INTENSITY_RISE_HOLD_POS_SLOPE;
+	ostModeMap[string("POS_INTENSITY_SLOPE_STRETCH")] = POS_INTENSITY_SLOPE_STRETCH;
+	ostModeMap[string("NEG_INTENSITY_SLOPE_STRETCH_SPAN")] = NEG_INTENSITY_SLOPE_STRETCH_SPAN;
+	ostModeMap[string("INTENSITY_FALL")] = INTENSITY_FALL;
+	ostModeMap[string("INTENSITY_RATIO_RISE")] = INTENSITY_RATIO_RISE;
+	ostModeMap[string("INTENSITY_RATIO_FALL_HOLD")] = INTENSITY_RATIO_FALL_HOLD;
 }
 
 /* Destructor */
@@ -81,7 +92,9 @@ void OST_TAB::reset() {
 	stretchSpanAccum = 0.0;
 }
 
-void OST_TAB::readFromFile(const string ostFN, const int bVerbose) {
+void OST_TAB::readFromFile(const string ostFN, const int bVerbose) 
+	throw(unrecognizedOSTModeError) 
+{
 	FILE *fp;
 	int i0, t_n;
 	static int maxStatesPerLine = 4;
@@ -174,6 +187,18 @@ void OST_TAB::readFromFile(const string ostFN, const int bVerbose) {
 		/*fscanf(fp, "%s", c0);*/
 		fscanf_s(fp, "%s", c0, sizeof(c0));
 		mode[i0] = atoi(c0);
+		if ( (mode[i0] == 0) && strcmp(c0, "0") && strcmp(c0, "OST_END") ) {
+			/* Test if the string is in the ostModeMap */
+			string modeStr(c0);
+
+			try {
+				mode[i0] = ostModeMap.at(modeStr); /* WARNING: Assume C++11 is available */
+			}
+			catch (out_of_range) {
+				fclose(fp);
+				throw unrecognizedOSTModeError(modeStr);
+			}
+		}
 		//printf("\tmode[%d] = %d\n", i0, mode[i0]);
 
 		/*fscanf(fp, "%s", c0);*/
@@ -309,13 +334,13 @@ int OST_TAB::osTrack(const int stat, const int data_counter, const int frame_cou
 		t_stat0 = stat0[k];
 		t_mode = mode[k];
 
-		if (t_mode == 1) { // (+1) Elapsed time from previous state. prm1: duration (s)
+		if (t_mode == ELAPSED_TIME) { // (+1) Elapsed time from previous state. prm1: duration (s)
 			if ((data_counter - statOnsetIndices[stat]) * frameDur > prm1[k]) {
 				stat_out = stat + 1;
 				statOnsetIndices[stat_out] = frame_counter;
 			}
 		}
-		else if (t_mode == 5) { // (+2) Crossing an rmsThresh (from below) and hold. prm1: rmsThresh; prm2: minHoldDur (s)			
+		else if (t_mode == INTENSITY_RISE_HOLD) { // (+2) Crossing an rmsThresh (from below) and hold. prm1: rmsThresh; prm2: minHoldDur (s)			
 			if (stat == t_stat0) {
 				if (rms_o > prm1[k]) {
 					stat_out = stat + 1;
@@ -340,7 +365,7 @@ int OST_TAB::osTrack(const int stat, const int data_counter, const int frame_cou
 			}
 
 		}
-		else if (t_mode == 6) { // (+2) Crossing an rmsThresh (from below) and hold, during positive RMS slopes. prm1: rmsThresh; prm2: minHoldDur (s)			
+		else if (t_mode == INTENSITY_RISE_HOLD_POS_SLOPE) { // (+2) Crossing an rmsThresh (from below) and hold, during positive RMS slopes. prm1: rmsThresh; prm2: minHoldDur (s)			
 			if (stat == t_stat0) {
 				if (rms_o > prm1[k] && 
 					rms_o_slp > 0) {
@@ -367,7 +392,7 @@ int OST_TAB::osTrack(const int stat, const int data_counter, const int frame_cou
 			}
 
 		}
-		else if (t_mode == 10) { // (+2) Stretch of of positive rms slope, with only a stretch count threshold
+		else if (t_mode == POS_INTENSITY_SLOPE_STRETCH) { // (+2) Stretch of of positive rms slope, with only a stretch count threshold
 			if (stat == t_stat0) {
 				if (rms_o_slp > 0) {
 					stat_out = stat + 1;
@@ -390,7 +415,7 @@ int OST_TAB::osTrack(const int stat, const int data_counter, const int frame_cou
 			}
 
 		}
-		else if (t_mode == 11) { // Stretch of negative rms slope, with a stretch count thresold and a stretch span threshold
+		else if (t_mode == NEG_INTENSITY_SLOPE_STRETCH_SPAN) { // Stretch of negative rms slope, with a stretch count thresold and a stretch span threshold
 			if (stat == t_stat0) {
 				if (rms_o_slp < 0) {
 					stat_out = stat + 1;
@@ -416,7 +441,7 @@ int OST_TAB::osTrack(const int stat, const int data_counter, const int frame_cou
 			}
 
 		}
-		else if (t_mode == 20) { // (+1) Fall from a certain RMS threshold
+		else if (t_mode == INTENSITY_FALL) { // (+1) Fall from a certain RMS threshold
 			minDurN = static_cast<int>(floor(prm2[k] / frameDur + 0.5));
 
 			bIsGOET = 0;
@@ -438,7 +463,7 @@ int OST_TAB::osTrack(const int stat, const int data_counter, const int frame_cou
 			}
 
 		}
-		else if (t_mode == 30) { // (+2) RMS ratio cross, hold and fall. prm1: rms_ratio threshold; prm2: minDurN
+		else if (t_mode == INTENSITY_RATIO_RISE) { // (+2) RMS ratio cross, hold and fall. prm1: rms_ratio threshold; prm2: minDurN
 			if (stat == t_stat0) {
 				if (1. / rms_ratio > prm1[k]) {
 					stat_out = stat + 1;
@@ -468,7 +493,7 @@ int OST_TAB::osTrack(const int stat, const int data_counter, const int frame_cou
 				}
 			}			
 		}
-		else if (t_mode == 31) { // (+2) RMS ratio fall from a threshold, hold and fall. prm1: rms_ratio threshold; prm2: minDurN
+		else if (t_mode == INTENSITY_RATIO_FALL_HOLD) { // (+2) RMS ratio fall from a threshold, hold and fall. prm1: rms_ratio threshold; prm2: minDurN
 			if (stat == t_stat0) {
 				if (1. / rms_ratio < prm1[k]) {
 					stat_out = stat + 1;
