@@ -45,6 +45,7 @@ Speech Laboratory, Boston University
 #include "pcf.h"
 #include "DSPF.h"
 #include "lpc_formant.h"
+#include "phase_vocoder.h"
 
 typedef double dtype;
 
@@ -197,6 +198,9 @@ private:
 	/* LP formant tracker object */
 	LPFormantTracker * fmtTracker;
 
+	/* Phase vocoder object */
+	PhaseVocoder *pVoc;
+
 	// 
 	dtype time_step;       // process time unit 
 	dtype ma_rms1;			// moving average rms 
@@ -233,7 +237,7 @@ private:
 
 
 	// other buffers : process rate = downsampled rate * nWin		
-	dtype hwin2[maxBufLen];						// Hanning window for frequency/pitch shifting
+	dtype hwin2[maxBufLen];						// Hanning window for frequency/pitch shifting //Marked
 
 	dtype amps[maxNPoles];						// radius of poles
 	dtype orgPhis[maxNPoles];						// angle of original poles
@@ -282,10 +286,10 @@ private:
 	dtype ftBuf2ps[2][max_nFFT * 2]; // For frequency/pitch shifting: (Normal / nps)	
 
 	//SC(2012/03/05): Pitch Shifting
-	dtype lastPhase[2][max_nFFT]; // (Normal | nps)
+	dtype lastPhase[2][max_nFFT]; // (Normal | nps) //Marked
 	dtype lastPhase_ntw[max_nFFT]; // ntw: no time warping	
 	dtype sumPhase[2][maxNVoices][max_nFFT]; // (Normal | nps)	
-	dtype outputAccum[max_nFFT];
+	/*dtype outputAccum[max_nFFT];*/
 
 	dtype phase0, phase1;
 
@@ -353,8 +357,9 @@ private:
 		int    nDelay;					// number of delayed framas (of size framelen) before an incoming frame is sent back
 		// thus the overall process latency (without souncard) is :Tproc=nDelay*frameLen/sr
 		int	   anaLen;					// size of lpc analysis (symmetric around window to be processed)
-		int	   pvocFrameLen;			// size of analysis window for pitch shifting (aim for power of 2) 
-		int	   pvocHop;					// step size of analysis window (must be multiples of frameLen)
+
+		int	   pvocFrameLen;			// size of analysis window for pitch shifting (aim for power of 2)  //Marked
+		int	   pvocHop;					// step size of analysis window (must be multiples of frameLen) //Marked
 
 		int    avgLen;				// length of smoothing ( should be approx one pitch period, 
 		// can be greater /shorter if you want more / lesss moothing)
@@ -519,7 +524,6 @@ private:
 
 	void	DSPF_dp_cfftr2(int n, dtype * x, dtype * w, int n_min);
 	void	DSPF_dp_icfftr2(int n, double * x, double * w, int n_min);
-	/*void	gen_w_r2(double* w, int n);*/
 	void	bit_rev(double* x, int n);
 
 	void	smbFft(dtype *fftBuffer, double fftFrame_Size, int sign);
@@ -565,7 +569,8 @@ public:
 	//void writeSignalsToWavFile(char *wavfn_input, char *wavfn_output);
 	void writeSignalsToWavFile();
 
-	static unsigned __stdcall Audapter::thrStatEntPnt(void *pThrStruct) { // For threading: writing to wav files
+	/* For threading: writing to wav files */
+	static unsigned __stdcall Audapter::thrStatEntPnt(void *pThrStruct) { 
 		thrWriteWavStruct *thrStruct = (thrWriteWavStruct *)pThrStruct;
 		Audapter *p_this = (Audapter *)(thrStruct->pThis);
 			

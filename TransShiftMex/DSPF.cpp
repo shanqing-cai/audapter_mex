@@ -8,7 +8,8 @@ DSP functions
 
 #include "DSPF.h"
 
-void DSPF_dp_blk_move(const double * x, double * r, const int nx)	//SC copy a block of data from one address x to r
+/* copy a block of data from one address x to r */
+void DSPF_dp_blk_move(const double * x, double * r, const int nx)	
 {
 	//memmove((void*)r,(void*)x,nx*sizeof(double));
 	//memcpy((void*)r,(void*)x,nx*sizeof(double));

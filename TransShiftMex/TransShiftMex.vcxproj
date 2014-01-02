@@ -1386,6 +1386,7 @@
     <ClCompile Include="mexLibrary.cpp" />
     <ClCompile Include="ost.cpp" />
     <ClCompile Include="pcf.cpp" />
+    <ClCompile Include="phase_vocoder.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\audioIO\audioIO.vcxproj">
@@ -1400,6 +1401,7 @@
     <ClInclude Include="lpc_formant.h" />
     <ClInclude Include="ost.h" />
     <ClInclude Include="pcf.h" />
+    <ClInclude Include="phase_vocoder.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
