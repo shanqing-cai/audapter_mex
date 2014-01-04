@@ -9,11 +9,23 @@ class PhaseVocoder {
 	/* TODOs: */
 
 public:
+	typedef enum {
+		PITCH_SHIFT_ONLY,
+		TIME_WARP_ONLY, 
+		TIME_WARP_WITH_FIXED_PITCH_SHIFT, 
+	} operMode; /* Mode of operation */
+
+	operMode mode;
+
 	/* Error classes */
 	class initializationError {};
+	class timeWarpFuturePredError {};
+	class fixedPitchShiftNotSpecifiedErr {};
 
 	/* Constructor */
-	PhaseVocoder(const dtype t_sr, 
+	PhaseVocoder(operMode t_operMode, 
+				 const int t_nDelay, 
+				 const dtype t_sr, 
 				 const int t_frameLen, 
 				 const int t_pvocFrameLen, 
 				 const int t_pvocHop);
@@ -27,17 +39,33 @@ public:
 	/* Status reset */
 	void reset();
 
+	/* Getters */
+	const operMode getMode() const;
+
+	/* Setters */
+	void setFixedPitchShiftST(const dtype t_fixedPitchShiftST);
+
 private:
 	/* Parameters */
+	int nDelay;			/* Amount of global delay (# of frames) */
+
 	dtype sr;			  /* Sampling rate */
 	int frameLen;	  /* Length of individual input frames */
 	int pvocFrameLen; /* Phase vocoder frame length: must be power of 2 and be multiples of frameLen) */
 	int	pvocHop;	  /* Step size of analysis window (must be multiples of frameLen) */
 
 	int internalBufLen;
+	int maxNDelayFrames;
+
 	int outFrameBuf_circPtr;
 
+	/* Fixed pitch shift (semitones) 
+		For operMode TIME_WARP_WITH_FIXED_PITCH_SHIFT */
+	dtype fixedPitchShiftST; 
+
 	/* Internal variables */
+	int pvCtr;	/* Phase vocoder call counter */ 
+
 	dtype expct;
 	dtype osamp;
 	dtype freqPerBin;
@@ -54,11 +82,11 @@ public: /* DEBUG */
 	dtype * ftBuf2;
 
 private: /* DEBUG */
-	dtype * pvocWarpCache;	/* Cache for time warping */
-
 	dtype * lastPhase;
 	dtype * lastPhase_ntw;	/* No time warp version of lastPhase */
 	dtype * sumPhase;
+
+	bool lastPhasePrimed;
 
 	dtype * outFrameBufPV;	/* Phase vocoder output buffer */
 
@@ -69,8 +97,15 @@ private: /* DEBUG */
 	dtype * synMagn;
 	dtype * synFreq;
 
+	/* For time-warping only */
+	dtype * warpCacheMagn;		/* Cache for time warping */
+	dtype * warpCachePhase;	/* Cache for time warping */
+
 	dtype * outFrameBuf;
 
+	/* Status variables */
+	bool bWarp_prev;
+	bool bWarp;
 };
 
 /* Non-member utility functions */

@@ -379,7 +379,7 @@ void mexFunction( int nlhs, mxArray *plhs[],
 				strcpy_s(audapter.pertCfgFN, sizeof(audapter.pertCfgFN), mxArrayToString(prhs[1]));				
 				if (bVerbose)
 					printf("pertCfgFN = %s\n", audapter.pertCfgFN);
-				audapter.readPIPCfg(bVerbose);
+				audapter.readPertCfg(bVerbose);
 			}
 			else {
 				printf("Syntax error.\n");

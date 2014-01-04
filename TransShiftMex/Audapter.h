@@ -590,7 +590,7 @@ public:
 	bool duringPitchShift, duringPitchShift_prev;
 
 	void Audapter::readOSTTab(int bVerbose);
-	void Audapter::readPIPCfg(int bVerbose);
+	void Audapter::readPertCfg(int bVerbose);
 
 	dtype tsg_wf[maxToneSeqRecLen];
 	int tsgRecCounter;

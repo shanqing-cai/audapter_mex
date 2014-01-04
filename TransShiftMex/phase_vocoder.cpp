@@ -3,19 +3,26 @@
 #include "phase_vocoder.h"
 #include "DSPF.h"
 
-/* Constructor */
-PhaseVocoder :: PhaseVocoder(const dtype t_sr, 
+/* Constructor 
+	Input argument:
+		t_operMode:		operation mode of the phase vocoder
+		nDelay:			amount of global delay (# of frames)
+		t_sr:			sampling rate (Hz) 
+		t_frameLen:		frame length (# of samples) 
+		t_pvocFrameLen: phase vocoder frame length (# of samples) 
+		t_pvocHop:		phase vocoder frame hop (# of samples, < t_pvocFrameLen 
+							and be one of its divisors) 
+*/
+PhaseVocoder :: PhaseVocoder(const operMode t_operMode, 
+							 const int t_nDelay, 
+							 const dtype t_sr, 
 							 const int t_frameLen, 
 							 const int t_pvocFrameLen, 
-							 const int t_pvocHop) 
-	//: sr(t_sr), frameLen(t_frameLen), 
-	//  pvocFrameLen(t_pvocFrameLen), pvocHop(t_pvocHop)
+							 const int t_pvocHop) :
+	mode(t_operMode), nDelay(t_nDelay), 
+	sr(t_sr), frameLen(t_frameLen), 
+	pvocFrameLen(t_pvocFrameLen), pvocHop(t_pvocHop)
 {
-	sr = t_sr;
-	frameLen = t_frameLen;
-	pvocFrameLen = t_pvocFrameLen;
-	pvocHop = t_pvocHop;
-
 	/* Input sanity checks */
 	if ( sr <= 0 )
 		throw initializationError();
@@ -70,7 +77,23 @@ PhaseVocoder :: PhaseVocoder(const dtype t_sr,
 	osamp = pvocFrameLen / pvocHop; /* Oversampling factor */
 	freqPerBin = sr / pvocFrameLen; /* Frequency per bin */
 
+	if (mode == TIME_WARP_ONLY || 
+		mode == TIME_WARP_WITH_FIXED_PITCH_SHIFT) {
+		maxNDelayFrames = pvocFrameLen * 8;	/* TODO: Check that the delay doesn't exceed this limit */
 
+		warpCacheMagn = new dtype[maxNDelayFrames * pvocFrameLen];
+		warpCachePhase = new dtype[maxNDelayFrames * pvocFrameLen];
+	}
+	else {
+		maxNDelayFrames = 0;
+
+		warpCacheMagn = 0;
+		warpCachePhase = 0;
+	}
+
+	if (mode == TIME_WARP_WITH_FIXED_PITCH_SHIFT) {
+		fixedPitchShiftST = static_cast<dtype>(0xffffffff); /* NAN */
+	}
 
 	reset();
 }
@@ -96,6 +119,9 @@ PhaseVocoder :: ~PhaseVocoder() {
 	if (synMagn)		delete [] synMagn;
 	if (synFreq)		delete [] synFreq;
 
+	if (warpCacheMagn)	delete [] warpCacheMagn;
+	if (warpCachePhase)	delete [] warpCachePhase;
+
 	if (outFrameBuf)	delete [] outFrameBuf;
 }
 
@@ -109,7 +135,7 @@ PhaseVocoder :: ~PhaseVocoder() {
 void PhaseVocoder :: procFrame(const dtype * inBuf, const dtype shift) {
 	/* Declaration of local variables */
 	dtype ms_in = 0.0;
-	dtype p_tmp, magn, phase;
+	dtype p_tmp, magn, phase, dp;
 	int qpd, index;
 
 	/* Multiply the input frame with the window */
@@ -136,81 +162,224 @@ void PhaseVocoder :: procFrame(const dtype * inBuf, const dtype shift) {
 		X_phase[i] = atan2(ftBuf1[i * 2 + 1], ftBuf1[i * 2]);
 	}
 
-	/* Calculate the pitch shift ratio 
-	      Convert semitones to pitch ratio */
-	dtype pitchShiftRatio = pow(2.0, shift / 12.0);
+	/* Record data into warpCache */
+	int cidx0 = 0;
+	if (mode == TIME_WARP_ONLY) {
+		cidx0 = pvCtr;
+		//cidx0 = pvCtr / (pvocHop / frameLen);
 
-	for (int i0 = 0; i0 <= pvocFrameLen / 2; ++i0){
-		/*for (int i1 = 0; i1 < 2; ++i1) {*/
-		p_tmp = X_phase[i0] - lastPhase[i0];
-
-		p_tmp -= (dtype)i0 * expct;
-
-		qpd = static_cast<int>(p_tmp / M_PI);
-
-		if (qpd >= 0) 
-			qpd += qpd&1;
-		else 
-			qpd -= qpd&1;
-
-		p_tmp -= M_PI * (dtype)qpd;
-
-		p_tmp = osamp * p_tmp / (2. * M_PI);
-		p_tmp = (dtype)i0 * freqPerBin + p_tmp * freqPerBin;
-
-		anaMagn[i0] = X_magn[i0];
-		anaFreq[i0] = p_tmp;
-
-		//if (i1 == 0) { // DEBUG: amp
-		//	ss_anaMagn += anaMagn[i1][i0] * anaMagn[i1][i0];
-		//} 
-
-		lastPhase[i0] = X_phase[i0];
-		//}						
-	}
-
-	/* Pitch shifting synthesis */
-	for (int i0 = 0; i0 < pvocFrameLen; ++i0){
-		synMagn[i0] = 0.0;
-		synFreq[i0] = 0.0;
-	}
-
-	for (int i0 = 0; i0 <= pvocFrameLen / 2; ++i0){
-		//for (int i1 = 0; i1 < 2; i1++) {
-		//if (i1 == 0)
-			index = static_cast<int>(i0 / pitchShiftRatio);
-		//else
-			//index[i1] = i0;
-							
-		if (index <= pvocFrameLen / 2) {
-			synMagn[i0] += anaMagn[index];
-
-			//if (i1 == 0)
-			synFreq[i0] = anaFreq[index] * pitchShiftRatio;
-			//else
-				//synFreq[i1][i0] = anaFreq[i1][index[i1]];
+		for (int i = 0; i < pvocFrameLen; ++i){
+			warpCacheMagn[(cidx0 % maxNDelayFrames) + i * maxNDelayFrames] = X_magn[i];
+			warpCachePhase[(cidx0 % maxNDelayFrames) + i * maxNDelayFrames] = X_phase[i];
 		}
-		//}
 	}
 
-	for (int i0 = 0; i0 <= pvocFrameLen / 2; ++i0) {
-		//for (int i1 = 0; i1 < 2; i1++) {
-		magn = synMagn[i0]; // get magnitude and true frequency from synthesis arrays						
+	if (mode == PITCH_SHIFT_ONLY || mode == TIME_WARP_WITH_FIXED_PITCH_SHIFT) {  /* TODO: combined tWarp and pShift */
+		/*------------------------*/
+		/* Perform pitch shifting */
+		/*------------------------*/
 
-		p_tmp = synFreq[i0];
-							
-		p_tmp -= static_cast<dtype>(i0) * freqPerBin;	// subtract bin mid frequency		
-		p_tmp /= freqPerBin;	// get bin deviation from freq deviation
-		p_tmp = 2. * M_PI * p_tmp / osamp;	// take osamp into account
-		p_tmp += static_cast<double>(i0) * expct;		// add the overlap phase advance back in
-							
-		sumPhase[i0] += p_tmp;		// accumulate delta phase to get bin phase
-		phase = sumPhase[i0];
+		/* Calculate the pitch shift ratio 
+			Convert semitones to pitch ratio */
+		dtype pitchShiftRatio;
+		if (mode == PITCH_SHIFT_ONLY) {
+			pitchShiftRatio = pow(2.0, shift / 12.0);
+		}
+		else {
+			if (fixedPitchShiftST == static_cast<dtype>(0xffffffff)) { /* Test for NaN */
+				throw fixedPitchShiftNotSpecifiedErr();
+			}
+			pitchShiftRatio = pow(2.0, fixedPitchShiftST / 12.0);
+		}
 
-		/* get real and imag part and re-interleave */
-		ftBuf2[2 * i0] = magn * cos(phase);
-		ftBuf2[2 * i0 + 1] = magn * sin(phase);			// What causes the sign reversal here?
-		//}
+		for (int i0 = 0; i0 <= pvocFrameLen / 2; ++i0){
+			/*for (int i1 = 0; i1 < 2; ++i1) {*/
+			p_tmp = X_phase[i0] - lastPhase[i0];
+
+			p_tmp -= (dtype)i0 * expct;
+
+			qpd = static_cast<int>(p_tmp / M_PI);
+
+			if (qpd >= 0) 
+				qpd += qpd & 1;
+			else 
+				qpd -= qpd & 1;
+
+			p_tmp -= M_PI * static_cast<dtype>(qpd);
+
+			p_tmp = osamp * p_tmp / (2. * M_PI);
+			p_tmp = (dtype)i0 * freqPerBin + p_tmp * freqPerBin;
+
+			anaMagn[i0] = X_magn[i0];
+			anaFreq[i0] = p_tmp;
+
+			//if (i1 == 0) { // DEBUG: amp
+			//	ss_anaMagn += anaMagn[i1][i0] * anaMagn[i1][i0];
+			//} 
+
+			lastPhase[i0] = X_phase[i0];
+			//}						
+		}
+
+		/* Pitch shifting synthesis */
+		for (int i0 = 0; i0 < pvocFrameLen; ++i0){
+			synMagn[i0] = 0.0;
+			synFreq[i0] = 0.0;
+		}
+
+		for (int i0 = 0; i0 <= pvocFrameLen / 2; ++i0){
+			//for (int i1 = 0; i1 < 2; i1++) {
+			//if (i1 == 0)
+				index = static_cast<int>(i0 / pitchShiftRatio);
+			//else
+				//index[i1] = i0;
+							
+			if (index <= pvocFrameLen / 2) {
+				synMagn[i0] += anaMagn[index];
+
+				//if (i1 == 0)
+				synFreq[i0] = anaFreq[index] * pitchShiftRatio;
+				//else
+					//synFreq[i1][i0] = anaFreq[i1][index[i1]];
+			}
+			//}
+		}
+
+		
+
+		for (int i0 = 0; i0 <= pvocFrameLen / 2; ++i0) {
+			//for (int i1 = 0; i1 < 2; i1++) {
+			magn = synMagn[i0]; // get magnitude and true frequency from synthesis arrays						
+
+			p_tmp = synFreq[i0];
+							
+			p_tmp -= static_cast<dtype>(i0) * freqPerBin;	// subtract bin mid frequency		
+			p_tmp /= freqPerBin;	// get bin deviation from freq deviation
+			p_tmp = 2. * M_PI * p_tmp / osamp;	// take osamp into account
+			p_tmp += static_cast<double>(i0) * expct;		// add the overlap phase advance back in
+							
+			sumPhase[i0] += p_tmp;		// accumulate delta phase to get bin phase
+			phase = sumPhase[i0];
+
+			/* get real and imag part and re-interleave */
+			ftBuf2[2 * i0] = magn * cos(phase);
+			ftBuf2[2 * i0 + 1] = magn * sin(phase);			// What causes the sign reversal here?
+			//}
+		}
+
+		/* Time warping on top of a fixed pitch shift 
+		      (specified in fixedPitchShiftST) */
+		if (mode == TIME_WARP_WITH_FIXED_PITCH_SHIFT) {
+			cidx0 = pvCtr;
+			//cidx0 = pvCtr / (pvocHop / frameLen);
+
+			for (int i = 0; i < pvocFrameLen; ++i){
+				warpCacheMagn[(cidx0 % maxNDelayFrames) + i * maxNDelayFrames] = synMagn[i];
+				warpCachePhase[(cidx0 % maxNDelayFrames) + i * maxNDelayFrames] = sumPhase[i];
+			}
+		} /* TODO: Finish and test it */
+
+	}
+	
+	if (mode == TIME_WARP_ONLY || mode == TIME_WARP_WITH_FIXED_PITCH_SHIFT) {
+		/*----------------------*/
+		/* Perform time warping */
+		/*----------------------*/
+
+		dtype warp_t = shift;
+		if (warp_t > 0.0)
+			throw timeWarpFuturePredError();
+		
+		int cidx1;
+		dtype cidx1_f;
+		if (warp_t != 0.0) {
+			/* Each PVOC hop takes a period of (pvocHop / sr) */
+			dtype warp_i = 
+				warp_t * sr / static_cast<dtype>(pvocHop);
+			dtype cidx1_d = static_cast<dtype>(cidx0) + warp_i;
+			cidx1 = static_cast<int>(floor(cidx1_d));
+			cidx1_f = cidx1_d - static_cast<dtype>(cidx1);
+
+			bWarp = true;
+		}
+		else {
+			if (bWarp_prev) {
+				 /* Recover from the last interval of time warping */ 
+				for (int i = 0; i < pvocFrameLen / 2; ++i) {
+					lastPhase[i] = lastPhase_ntw[i];
+				}
+			}
+
+			cidx1 = cidx0;
+			cidx1_f = 0.0;
+
+			bWarp = false;
+		}
+
+		while (cidx1 < 0)
+			cidx1 += maxNDelayFrames;
+
+		int k0, k1;
+		k0 = cidx1 % maxNDelayFrames;
+		k1 = (cidx1 + 1) % maxNDelayFrames;
+
+		for (int i0 = 0; i0 <= pvocFrameLen / 2; ++i0) {
+			magn = warpCacheMagn[k0 + i0 * maxNDelayFrames] * (1 - cidx1_f) + 
+				   warpCacheMagn[k1 + i0 * maxNDelayFrames] * cidx1_f;
+			/* No time warp */
+			/*magn = pvocWarpCache[cidx0 % (internalBufLen / 64)][i0];*/
+
+			if (!lastPhasePrimed) {
+				lastPhase[i0] = warpCachePhase[k0 + i0 * maxNDelayFrames];
+			}
+
+			ftBuf2[2 * i0] = 0.5 * magn * cos(lastPhase[i0]);
+			ftBuf2[2 * i0 + 1] = 0.5 * magn * sin(lastPhase[i0]);
+
+			if (cidx1_f == 0.0) {
+				dtype interpPhase 
+					= warpCachePhase[k0 + i0 * maxNDelayFrames] * (1 - cidx1_f) + 
+   					  warpCachePhase[k1 + i0 * maxNDelayFrames] * cidx1_f;
+				dp = interpPhase - lastPhase[i0];
+			}
+			else {
+				dp = warpCachePhase[k1 + i0 * maxNDelayFrames] -
+					 warpCachePhase[k0 + i0 * maxNDelayFrames];
+			}
+						
+			dp -= static_cast<dtype>(i0) * expct;
+						
+			qpd = (int)(dp / M_PI);
+			if (qpd >= 0) 
+				qpd += qpd & 1;
+			else 
+				qpd -= qpd & 1;
+			dp -= M_PI * static_cast<dtype>(qpd);
+
+			/* DEBUG */
+			/*ftBuf2[2 * i0] = ftBuf1[2 * i0];
+			ftBuf2[2 * i0 + 1] = ftBuf1[2 * i0 + 1];*/
+			/* ~DEBUG */
+
+			/* No time warp */
+			/*ftBuf2ps[2 * i0] = magn * cos(X_phase[i0]);
+			ftBuf2ps[2 * i0 + 1] = magn * sin(X_phase[i0]);*/
+
+			lastPhase[i0] += static_cast<dtype>(i0) * expct + dp;
+
+			/* No time warp */
+			/*lastPhase[i0] = X_phase[i0];*/
+
+			/* No-time-warp backup */
+			lastPhase_ntw[i0] = X_phase[i0];
+			sumPhase[i0] = X_phase[i0];
+		}
+
+		if (!lastPhasePrimed)
+			lastPhasePrimed = true;
+
+		/* Record time warp status during the current frame */
+		bWarp_prev = bWarp;
 	}
 
 	for (int i0 = pvocFrameLen + 1; i0 < pvocFrameLen * 2; ++i0)
@@ -246,6 +415,8 @@ void PhaseVocoder :: procFrame(const dtype * inBuf, const dtype shift) {
 	//for (int i0 = 1; i0 <= p.pvocHop; i0++){ // Ad hoc alert!
 	//	outFrameBuf[(outFrameBuf_circPtr - i0) % (internalBufLen)] = 0.;						
 	//}
+
+	pvCtr++;
 }
 
 /* Status reset */
@@ -267,6 +438,19 @@ void PhaseVocoder :: reset() {
 		outFrameBuf[i] = 0.0;
 	}
 	outFrameBuf_circPtr = 0;
+
+	if (maxNDelayFrames > 0) {
+		for (int i = 0; i < maxNDelayFrames * pvocFrameLen; ++i) {
+			warpCacheMagn[i] = 0.0;
+			warpCachePhase[i] = 0.0;
+		}
+	}
+
+	bWarp = false;
+	bWarp_prev = false;	
+	lastPhasePrimed = false;
+
+	pvCtr = 0;
 }
 
 const bool check_power2(const int & x) {
@@ -282,4 +466,13 @@ const bool check_power2(const int & x) {
   }
 
   return (nnzb == 1);
+}
+
+
+const PhaseVocoder::operMode PhaseVocoder::getMode() const {
+	return mode;
+}
+
+void PhaseVocoder::setFixedPitchShiftST(const dtype t_fixedPitchShiftST) {
+	fixedPitchShiftST = t_fixedPitchShiftST;
 }

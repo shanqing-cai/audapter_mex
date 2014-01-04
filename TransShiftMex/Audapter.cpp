@@ -467,7 +467,9 @@ Audapter :: Audapter()
 
 	/* Initialize phase vocoder */
 	try {
-		pVoc = new PhaseVocoder(static_cast<dtype>(p.sr), p.frameLen, p.pvocFrameLen, p.pvocHop);
+		pVoc = new PhaseVocoder(PhaseVocoder::PITCH_SHIFT_ONLY, p.nDelay, 
+								static_cast<dtype>(p.sr), p.frameLen, 
+								p.pvocFrameLen, p.pvocHop);
 	}
 	catch (PhaseVocoder::initializationError) {
 		mexErrMsgTxt("Failed to initialize phase vocoder");
@@ -695,7 +697,7 @@ void Audapter::reset()
 	dataFileCnt = 0;
 
 	//SC(2012/03/13) PVOC time warp
-	for (int i0 = 0; i0 < internalBufLen / 64; i0++){
+	for (int i0 = 0; i0 < internalBufLen / 64; i0++){	//Marked
 		for (int i1 = 0; i0 < 1024 * 2; i0++){
 			pvocWarpCache[i0][i1] = 0;
 		}
@@ -1233,11 +1235,15 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 
 		/* Re-initialize phase vocoder */
 		if (bRemakePVoc) {
+			PhaseVocoder::operMode t_operMode = pVoc->getMode();
+
 			if (pVoc)
 				delete pVoc;
 
 			try {
-				pVoc = new PhaseVocoder(static_cast<dtype>(p.sr), p.frameLen, p.pvocFrameLen, p.pvocHop);
+				pVoc = new PhaseVocoder(t_operMode, p.nDelay, 
+										static_cast<dtype>(p.sr), p.frameLen, 
+										p.pvocFrameLen, p.pvocHop);
 			}
 			catch (PhaseVocoder::initializationError) {
 				mexErrMsgTxt("Failed to initialize phase vocoder");
@@ -1744,6 +1750,40 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 			duringTimeWarp = pertCfg.procTimeWarp(stat, ostTab.statOnsetIndices, 
 												  p.nDelay, static_cast<double>(p.frameLen) / static_cast<double>(p.sr), 
 									    		  t0, t1);
+			
+			/* Call phase vocoder */
+			try {
+				if (pVoc->getMode() == PhaseVocoder::TIME_WARP_ONLY) {
+					dtype warp_t;
+					if (duringTimeWarp) {
+						warp_t = t1 - t0; /* Expected to be negative */	
+					}
+					else {
+						warp_t = 0.0;
+					}
+					
+					pVoc->procFrame(xBuf, warp_t);
+					/* DEBUG */
+					/*pVoc->procFrame(xBuf, 0.0);*/
+				}
+				else { /* TODO */
+					if (pertCfg.pitchShift && stat < pertCfg.n) {
+						pVoc->procFrame(xBuf, pertCfg.pitchShift[stat]);
+					}
+					else {
+						pVoc->procFrame(xBuf, 0.0);
+					}					
+				}
+			}
+			catch (PhaseVocoder::timeWarpFuturePredError) {
+				mexErrMsgTxt("Error occurred during phase-vocoder "
+					         "time warping: predicting the future is impossible");
+			}
+			catch (PhaseVocoder::fixedPitchShiftNotSpecifiedErr) {
+				mexErrMsgTxt("Phase vocoder error: "
+					         "Fixed pitch shift not specified under mode "
+							 "TIME_WARP_WITH_FIXED_PITCH_SHIFT");
+			}
 
 			if (duringTimeWarp){
 				duringPitchShift = false;
@@ -1753,7 +1793,7 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 				cidx1 = (int)floor(cidx1_d);
 				cidx1_f = cidx1_d - (dtype)cidx1;
 					
-				/* For no-time-warp backup */					
+				/* For no-time-warp backup */
 
 				for (i0 = 0; i0 <= p.pvocFrameLen / 2; i0++) {
 					int k0 = cidx1 % (internalBufLen / 64);
@@ -1788,8 +1828,6 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 				}
 			}
 			else { /* Pitch shifting */
-				pVoc->procFrame(xBuf, pertCfg.pitchShift[stat]);
-
 				if (duringTimeWarp_prev && !duringTimeWarp) { /* Recover from time warping */ 
 					for (i0 = 0; i0 <= p.pvocFrameLen / 2; i0++) {
 						lastPhase[0][i0] = lastPhase_ntw[i0];
@@ -1917,6 +1955,7 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 					outFrameBufPS[ifb][(outFrameBuf_circPtr + i0) % (internalBufLen)] + 
 					2 * ftBuf2ps[0][2 * i0] * hwin2[i0] / (osamp / 2);*/
 
+				/* Using pVoc results */
 				outFrameBufPS[ifb][(outFrameBuf_circPtr + i0) % (internalBufLen)] = 
 					outFrameBufPS[ifb][(outFrameBuf_circPtr + i0) % (internalBufLen)] + 
 					pVoc->ftBuf2[2 * i0];
@@ -2916,7 +2955,7 @@ int Audapter::gainPerturb(dtype *buffer,dtype *gtot_ptr,int framelen, int frames
 int Audapter::handleBufferToneSeq(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_size)	// Tone sequence generator
 {
 	int n,m;
-	double dt=0.00002083333333333333;
+	double dt=0.00002083333333333333; /* TODO: Make not ad hoc */
 	double rt,sineVal,envVal;
 
 	for (n=0;n<frame_size;n++) {
@@ -2960,7 +2999,42 @@ void Audapter::readOSTTab(int bVerbose) {
 	this->rmsSlopeWin = ostTab.rmsSlopeWin;
 }
 
-void Audapter::readPIPCfg(int bVerbose) {
+void Audapter::readPertCfg(int bVerbose) {
 	pertCfg.readFromFile(string(pertCfgFN), bVerbose);
+
+	/* Re-initialize phase vocoder according to perturbation config */
+	bool bIsPitchShift = false;
+	for (int i = 0; i < pertCfg.n; ++i) {
+		if (pertCfg.pitchShift[i] != 0.0) {
+			bIsPitchShift = true;
+			break;
+		}
+	}
+
+	/* If no pitch shift or time warp is involved,
+	   an arbitrary default mode will be used */
+	PhaseVocoder::operMode pVocMode = PhaseVocoder::PITCH_SHIFT_ONLY;
+	if (pertCfg.warpCfg.size() > 0 && !bIsPitchShift) {
+		pVocMode = PhaseVocoder::TIME_WARP_ONLY;
+	}
+	else if (pertCfg.warpCfg.size() == 0 && bIsPitchShift) {
+		pVocMode = PhaseVocoder::PITCH_SHIFT_ONLY;
+	}
+	else if (pertCfg.warpCfg.size() > 0 && !bIsPitchShift) {
+		pVocMode = PhaseVocoder::TIME_WARP_WITH_FIXED_PITCH_SHIFT;
+	}
+
+	if (pVoc)
+		delete pVoc;
+
+	try {
+		pVoc = new PhaseVocoder(pVocMode, p.nDelay, 
+								static_cast<dtype>(p.sr), p.frameLen, 
+								p.pvocFrameLen, p.pvocHop);
+	}
+	catch (PhaseVocoder::initializationError) {
+		mexErrMsgTxt("Failed to initialize phase vocoder");
+	}
 }
+
 
