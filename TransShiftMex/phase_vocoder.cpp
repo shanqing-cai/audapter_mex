@@ -58,6 +58,7 @@ PhaseVocoder :: PhaseVocoder(const operMode t_operMode,
 	ftBuf2 = new dtype[pvocFrameLen * 2];
 
 	lastPhase = new dtype[pvocFrameLen]; /* TODO: Check size bound is tight */
+	lastPhase_nps = new dtype[pvocFrameLen];
 	lastPhase_ntw = new dtype[pvocFrameLen];
 	sumPhase = new dtype[pvocFrameLen];
 
@@ -108,6 +109,7 @@ PhaseVocoder :: ~PhaseVocoder() {
 	if (ftBuf2)	delete [] ftBuf2;
 
 	if (lastPhase)		delete [] lastPhase;
+	if (lastPhase_nps)	delete [] lastPhase_nps;
 	if (lastPhase_ntw)	delete [] lastPhase_ntw;
 	if (sumPhase)		delete [] sumPhase;
 	if (outFrameBufPV)	delete [] outFrameBufPV;
@@ -192,6 +194,15 @@ void PhaseVocoder :: procFrame(const dtype * inBuf, const dtype shift) {
 			pitchShiftRatio = pow(2.0, fixedPitchShiftST / 12.0);
 		}
 
+		bPitchShift = (pitchShiftRatio != 1.0);
+
+		if ( !bPitchShift && bPitchShift_prev ) {
+			/* Recover from the last interval of pitch shifting */ 
+			for (int i = 0; i <= pvocFrameLen / 2; ++i) {
+				sumPhase[i] = lastPhase[i];
+			}
+		}
+
 		for (int i0 = 0; i0 <= pvocFrameLen / 2; ++i0){
 			/*for (int i1 = 0; i1 < 2; ++i1) {*/
 			p_tmp = X_phase[i0] - lastPhase[i0];
@@ -245,8 +256,6 @@ void PhaseVocoder :: procFrame(const dtype * inBuf, const dtype shift) {
 			//}
 		}
 
-		
-
 		for (int i0 = 0; i0 <= pvocFrameLen / 2; ++i0) {
 			//for (int i1 = 0; i1 < 2; i1++) {
 			magn = synMagn[i0]; // get magnitude and true frequency from synthesis arrays						
@@ -260,6 +269,7 @@ void PhaseVocoder :: procFrame(const dtype * inBuf, const dtype shift) {
 							
 			sumPhase[i0] += p_tmp;		// accumulate delta phase to get bin phase
 			phase = sumPhase[i0];
+			//sumPhase[i0] = X_phase[i0]; /* DEBUG */
 
 			/* get real and imag part and re-interleave */
 			ftBuf2[2 * i0] = magn * cos(phase);
@@ -278,6 +288,8 @@ void PhaseVocoder :: procFrame(const dtype * inBuf, const dtype shift) {
 				warpCachePhase[(cidx0 % maxNDelayFrames) + i * maxNDelayFrames] = sumPhase[i];
 			}
 		} /* TODO: Finish and test it */
+
+		bPitchShift_prev = bPitchShift;
 
 	}
 	
@@ -305,7 +317,7 @@ void PhaseVocoder :: procFrame(const dtype * inBuf, const dtype shift) {
 		else {
 			if (bWarp_prev) {
 				 /* Recover from the last interval of time warping */ 
-				for (int i = 0; i < pvocFrameLen / 2; ++i) {
+				for (int i = 0; i <= pvocFrameLen / 2; ++i) {
 					lastPhase[i] = lastPhase_ntw[i];
 				}
 			}
@@ -429,6 +441,7 @@ void PhaseVocoder :: reset() {
 
 	for (int i0 = 0; i0 < pvocFrameLen; i0++) {
 		lastPhase[i0] = 0.0;
+		lastPhase_nps[i0] = 0.0;
 		lastPhase_ntw[i0] = 0.0;
 
 		sumPhase[i0] = 0.0;
@@ -445,6 +458,9 @@ void PhaseVocoder :: reset() {
 			warpCachePhase[i] = 0.0;
 		}
 	}
+
+	bPitchShift = false;
+	bPitchShift_prev = false;
 
 	bWarp = false;
 	bWarp_prev = false;	

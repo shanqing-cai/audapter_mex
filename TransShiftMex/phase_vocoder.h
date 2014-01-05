@@ -83,6 +83,7 @@ public: /* DEBUG */
 
 private: /* DEBUG */
 	dtype * lastPhase;
+	dtype * lastPhase_nps;	/* No pitch shifting version of lastPhase */
 	dtype * lastPhase_ntw;	/* No time warp version of lastPhase */
 	dtype * sumPhase;
 
@@ -104,8 +105,13 @@ private: /* DEBUG */
 	dtype * outFrameBuf;
 
 	/* Status variables */
+	bool bPitchShift_prev;
+	bool bPitchShift;
+
 	bool bWarp_prev;
 	bool bWarp;
+
+
 };
 
 /* Non-member utility functions */
