@@ -13,6 +13,8 @@
 
 class OST_TAB {
 private:
+	static const char commentChar = '#';
+
 	int stretchCnt;
 	int lastStatEnd;
 	double stretchSpanAccum;

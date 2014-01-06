@@ -13,6 +13,7 @@ pcf.cpp
 
 #include "mex.h"
 #include "pcf.h"
+#include "utils.h"
 
 using namespace std;
 
@@ -285,15 +286,31 @@ void PERT_CFG::addWarpCfg(int t_ostInitState, double t_tBegin, double t_rate1,
 
 
 /* Read from file */
-void PERT_CFG::readFromFile(const string pertCfgFN, const int bVerbose) {
-	FILE *fp;
-	int i0;
-	int lineWidth;
+void PERT_CFG::readFromFile(const string pertCfgFN, const int bVerbose) 
+	throw(pcfFileReadingError, pcfFileSyntaxError)
+{
 	int nTimeWarpAtoms = -1; /* SCai: currently a dummy variable. TODO: implement multiple time warping atoms */
-	char line[512];
-	double tmpx[16];
 	int t_ostInitState;
 	double t_tBegin, t_rate1, t_dur1, t_durHold, t_rate2;
+
+	list<string> lines_0 = readLinesFromFile(pertCfgFN);
+	if (lines_0.empty())
+		throw pcfFileReadingError();
+
+	/* Trim lines; remove empty lines; remove commented lines */
+	list<string> lines_1;
+	for (list<string>::const_iterator lit = lines_0.begin(); 
+		 lit != lines_0.end(); ++lit) {
+		string t_str = trimString(*lit);
+
+		if (t_str.size() == 0) /* Skip empty lines */
+			continue;
+
+		if ( (t_str.size() > 0) && (t_str[0] == commentChar) ) /* Skip commented lines */
+			continue;
+
+		lines_1.push_back(t_str);
+	}
 
 	// Free previously existing fields of ostTab
 	if (pitchShift) {
@@ -305,24 +322,13 @@ void PERT_CFG::readFromFile(const string pertCfgFN, const int bVerbose) {
 		intShift = NULL;
 	}
 
-	/*fp = fopen(pertCfgFN, "r");*/
-	if (fopen_s(&fp, pertCfgFN.c_str(), "r")) {
-		printf("ERROR: Unable to open ost file: %s\n", pertCfgFN.c_str());
-		return;
-	}
-
 	/* 1. Read the time warping section */
-	while (nTimeWarpAtoms == -1) {
-		lineWidth = readline(fp, line);
-		lineWidth = deblank(line);
+	list<string>::const_iterator lit = lines_1.begin();
+	vector<string> items = removeComments(splitStringToVector(*lit), commentChar);
 
-		if (lineWidth == 0) 
-			continue;
-		if (line[0] == '#') 
-			continue;
-
-		nTimeWarpAtoms = atoi(line);
-	}
+	if ( items.size() != 1 )
+		throw pcfFileSyntaxError(*lit);
+	nTimeWarpAtoms = atoi(items[0].c_str());
 
 	/* Clean up existing time-warp events */
 	warpCfg.clear();
@@ -331,34 +337,15 @@ void PERT_CFG::readFromFile(const string pertCfgFN, const int bVerbose) {
 	/*for (i0 = 0; i0 < nTimeWarpAtoms; i0 ++) {*/ /* TODO */
 	int nReadAtoms = 0;
 	while (nReadAtoms < nTimeWarpAtoms) {
-	/*for (i0 = 0; i0 < nTimeWarpAtoms; i0 ++) {*/
-		lineWidth = readline(fp, line);
-		lineWidth = deblank(line);
+		items = removeComments(splitStringToVector(*(++lit)), commentChar);
 
-		if (lineWidth == 0) 
-			continue;
-		if (line[0] == '#') 
-			continue;
+		if (items.size() == 5) {
+			t_tBegin = atof(items[0].c_str());
+			t_rate1 = atof(items[1].c_str());
+			t_dur1 = atof(items[2].c_str());
+			t_durHold = atof(items[3].c_str());
+			t_rate2 = atof(items[4].c_str());
 
-		/*sscanf(line, "%f, %f, %f, %f, %f", 
-			   &t_tBegin, &t_rate1, &t_dur1, &t_durHold, &t_rate2);*/
-
-		if (string_count_char(line, ',') == 4) {
-			sscanf_floatArray(line, tmpx, 5);
-
-			t_tBegin = tmpx[0];
-			t_rate1 = tmpx[1];
-			t_dur1 = tmpx[2];
-			t_durHold = tmpx[3];
-			t_rate2 = tmpx[4];
-
-			/* TODO: Implement multiple time warping events */
-			/*if (warpCfg)
-				delete warpCfg;*/
-			//warpCfg = new pvocWarpAtom(t_tBegin, t_rate1, t_dur1, t_durHold, t_rate2);
-			/*pvocWarpAtom t_warpCfg(t_tBegin, t_rate1, t_dur1, t_durHold, t_rate2);
-
-			warpCfg.push_back(t_warpCfg);*/
 			try {
 				addWarpCfg(t_tBegin, t_rate1, t_dur1, t_durHold, t_rate2);
 			}
@@ -367,24 +354,17 @@ void PERT_CFG::readFromFile(const string pertCfgFN, const int bVerbose) {
 				oss << "ERROR: Overlapping time intervals between time-warping events. " 
 					<< "Time-warp event #" << nReadAtoms + 1 << " cannot be loaded.";
 				
-				if (fp) fclose(fp);
 				mexErrMsgTxt(oss.str().c_str());
 			}
 		}
-		else {
-			sscanf_floatArray(line, tmpx, 6);
+		else if (items.size() == 6) {
+			t_ostInitState = static_cast<int>(atof(items[0].c_str()));
+			t_tBegin = atof(items[1].c_str());
+			t_rate1 = atof(items[2].c_str());
+			t_dur1 = atof(items[3].c_str());
+			t_durHold = atof(items[4].c_str());
+			t_rate2 = atof(items[5].c_str());
 
-			t_ostInitState = (int) tmpx[0];
-			t_tBegin = tmpx[1];
-			t_rate1 = tmpx[2];
-			t_dur1 = tmpx[3];
-			t_durHold = tmpx[4];
-			t_rate2 = tmpx[5];
-
-			/*warpCfg = new pvocWarpAtom(t_ostInitState, t_tBegin, t_rate1, t_dur1, t_durHold, t_rate2);*/
-			/*pvocWarpAtom t_warpCfg(t_ostInitState, t_tBegin, t_rate1, t_dur1, t_durHold, t_rate2);
-
-			warpCfg.push_back(t_warpCfg);*/
 			try {
 				addWarpCfg(t_ostInitState, t_tBegin, t_rate1, t_dur1, t_durHold, t_rate2);
 			}
@@ -393,31 +373,21 @@ void PERT_CFG::readFromFile(const string pertCfgFN, const int bVerbose) {
 				oss << "ERROR: Overlapping time intervals between time-warping events. " 
 					<< "Time-warp event #" << nReadAtoms + 1 << " cannot be loaded.";
 				
-				if (fp) fclose(fp);
 				mexErrMsgTxt(oss.str().c_str());
 			}
+		}
+		else {
+			throw pcfFileSyntaxError(*lit);
 		}
 		
 		nReadAtoms++;
 	}
 	
 	/* 2. Read the formant/pitch/intensity shift section */
-	n = -1;
-
-	while (n == -1) {
-		lineWidth = readline(fp, line);
-		lineWidth = deblank(line);
-
-		if (lineWidth == 0) 
-			continue;
-		if (line[0] == '#') 
-			continue;
-
-		n = atoi(line);
-		
-		if (bVerbose)
-			printf("pertCfg.n = %d\n", n);
-	}
+	items = removeComments(splitStringToVector(*(++lit)), commentChar);
+	if ( items.size() != 1 )
+		throw pcfFileSyntaxError(*lit);
+	n = atoi(items[0].c_str());
 
 	if ((pitchShift = (float *)calloc(n, sizeof(float))) == NULL) {
 		printf("ERROR: failed to allocate memor for pertCfg.pitchShift\n");
@@ -436,20 +406,18 @@ void PERT_CFG::readFromFile(const string pertCfgFN, const int bVerbose) {
 		return;
 	}
 
-	for (i0 = 0; i0 < n; i0++) {
-		lineWidth = readline(fp, line);
-		lineWidth = deblank(line);
+	for (int i0 = 0; i0 < n; i0++) {
+		items = removeComments(splitStringToVector(*(++lit)), commentChar);
+		if ( items.size() != 5 )
+			throw pcfFileSyntaxError(*lit);
 
-		if (lineWidth == 0) 
-			continue;
-		if (line[0] == '#') 
-			continue;
+		if ( atoi(items[0].c_str()) != i0 )
+			throw pcfFileSyntaxError(*lit);
 
-		sscanf_floatArray(line, tmpx, 5);
-		pitchShift[i0] = (float) tmpx[1];
-		intShift[i0] = (float) tmpx[2];
-		fmtPertAmp[i0] = (float) tmpx[3];
-		fmtPertPhi[i0] = (float) tmpx[4];
+		pitchShift[i0] = static_cast<float>(atof(items[1].c_str()));
+		intShift[i0] = static_cast<float>(atof(items[2].c_str()));
+		fmtPertAmp[i0] = static_cast<float>(atof(items[3].c_str()));
+		fmtPertPhi[i0] = static_cast<float>(atof(items[4].c_str()));
 		
 		if (bVerbose) {
 			printf("\tstat=%d: pitchShift = %f s.t.; intShift = %f dB;\n", 
@@ -459,7 +427,6 @@ void PERT_CFG::readFromFile(const string pertCfgFN, const int bVerbose) {
 		}
 	}
 
-	fclose(fp);
 }
 
 const bool PERT_CFG::procTimeWarp(const int stat, const int * statOnsetIndices, 

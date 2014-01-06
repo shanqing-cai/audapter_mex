@@ -75,3 +75,22 @@ std::vector<std::string> splitStringToVector(const std::string &s) {
 
   return tokens;
 }
+
+/* Remove comments:
+	Input arguments: 
+		items:	input items
+		cc:		comment character
+*/
+vector<string> removeComments(const vector<string> items, const char cc) {
+	vector<string> items_nc;
+
+	for(vector<string>::const_iterator it = items.cbegin(); 
+		it != items.cend(); ++it) {
+		if ( ((*it).size() > 0) && ((*it)[0] == cc) )
+			break;
+
+		items_nc.push_back(*it);
+	}
+
+	return items_nc;
+}

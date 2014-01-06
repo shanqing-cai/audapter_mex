@@ -42,9 +42,22 @@ public:
 
 class PERT_CFG { // Pitch and intensity perturbation configurtion
 private:
+	static const char commentChar = '#';
+
 	const bool checkWarpIntervalsOverlap(const pvocWarpAtom t_warpCfg);
 
 public:
+	/* Error classes */
+	class pcfFileReadingError {};
+	class pcfFileSyntaxError {
+	public:
+		std::string errLine;
+		
+		pcfFileSyntaxError(std::string t_line) : 
+			errLine(t_line) {};
+	};
+	
+	/* Parameters */
 	int n; // Number of stats
 	
 	float *pitchShift;	// Unit: st
@@ -66,7 +79,8 @@ public:
 	~PERT_CFG();
 
 	/* Read PERT_CFG from file */
-	void readFromFile(const std::string pertCfgFN, int bVerbose);
+	void readFromFile(const std::string pertCfgFN, int bVerbose)
+		throw(pcfFileReadingError, pcfFileSyntaxError);
 
 	/* Add a time-warping event configuration */
 	void addWarpCfg(double t_tBegin, double t_rate1, double t_dur1, double t_durHold, double t_rate2) 

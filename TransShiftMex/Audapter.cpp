@@ -54,7 +54,6 @@ Developed at:
 #include <algorithm>
 #include "mex.h"
 
-
 using namespace std;
 
 /* Right shift */
@@ -2714,8 +2713,9 @@ void Audapter::readOSTTab(int bVerbose) {
 	catch (OST_TAB::ostFileSyntaxError err) {
 		std::string errMsgTxt("Syntax error in ost file ");
 		errMsgTxt += ostFN;
-		errMsgTxt += " line: ";
+		errMsgTxt += " line: \"";
 		errMsgTxt += err.errLine;
+		errMsgTxt += "\"";
 		
 		mexErrMsgTxt(errMsgTxt.c_str());
 	}
@@ -2729,7 +2729,24 @@ void Audapter::readOSTTab(int bVerbose) {
 }
 
 void Audapter::readPertCfg(int bVerbose) {
-	pertCfg.readFromFile(string(pertCfgFN), bVerbose);
+	try {
+		pertCfg.readFromFile(string(pertCfgFN), bVerbose);
+	}
+	catch (PERT_CFG::pcfFileReadingError err) {
+		string errMsg("Error reading from pcf file: ");
+		errMsg += pertCfgFN;
+
+		mexErrMsgTxt(errMsg.c_str());
+	}
+	catch (PERT_CFG::pcfFileSyntaxError err) {
+		string errMsg("Erroneous syntax in pcf file (");
+		errMsg += pertCfgFN;
+		errMsg += ") line: \"";
+		errMsg += err.errLine;
+		errMsg += "\"";
+
+		mexErrMsgTxt(errMsg.c_str());
+	}
 
 	/* Re-initialize phase vocoder according to perturbation config */
 	bool bIsPitchShift = false;

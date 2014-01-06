@@ -109,7 +109,6 @@ void OST_TAB::readFromFile(const string ostFN, const int bVerbose)
 	if (ostLines_0.empty()) {
 		throw ostFileReadingError();
 	}
-		
 
 	/* Trim lines; remove empty lines; remove commented lines */
 	list<string> ostLines_1;
@@ -120,7 +119,7 @@ void OST_TAB::readFromFile(const string ostFN, const int bVerbose)
 		if (t_str.size() == 0) /* Skip empty lines */
 			continue;
 
-		if ( (t_str.size() > 0) && (t_str[0] == '#') ) /* Skip commented lines */
+		if ( (t_str.size() > 0) && (t_str[0] == commentChar) ) /* Skip commented lines */
 			continue;
 
 		ostLines_1.push_back(t_str);
@@ -172,7 +171,7 @@ void OST_TAB::readFromFile(const string ostFN, const int bVerbose)
 		printf("ostFN = %s\n", ostFN.c_str());
 
 	list<string>::const_iterator lit = ostLines_1.begin();
-	vector<string> items = splitStringToVector(*lit);
+	vector<string> items = removeComments(splitStringToVector(*lit), commentChar);
 	if ( (items.size() != 3) || 
 		 (items[0] != string("rmsSlopeWin")) || 
 		 (items[1] != string("=")) )
@@ -183,7 +182,7 @@ void OST_TAB::readFromFile(const string ostFN, const int bVerbose)
 	if (bVerbose)
 		printf("rmsSlopeWin = %f\n", rmsSlopeWin);
 
-	items = splitStringToVector(*(++lit));
+	items = removeComments(splitStringToVector(*(++lit)), commentChar);
 	if ( (items.size() != 3) || 
 		 (items[0] != string("n")) || 
 		 (items[1] != string("=")) )
@@ -212,7 +211,7 @@ void OST_TAB::readFromFile(const string ostFN, const int bVerbose)
 	}
 	
 	for (i0 = 0; i0 < n; i0++) {
-		items = splitStringToVector(*(++lit));
+		items = removeComments(splitStringToVector(*(++lit)), commentChar);
 		if ( (items.size() != 5) || 
 			 (items[4] != string("{}")) )
 			throw ostFileSyntaxError(*lit);
@@ -247,7 +246,7 @@ void OST_TAB::readFromFile(const string ostFN, const int bVerbose)
 	if (++lit == ostLines_1.end())
 		return;
 
-	items = splitStringToVector(*lit);
+	items = removeComments(splitStringToVector(*lit), commentChar);
 	if ( (items.size() != 3) || 
 		 (items[0] != string("n")) || 
 		 (items[1] != string("=")) )
@@ -274,7 +273,7 @@ void OST_TAB::readFromFile(const string ostFN, const int bVerbose)
 		}
 
 		for (i0 = 0; i0 < maxIOICfg.n; i0++) {
-			items = splitStringToVector(*(++lit));
+			items = removeComments(splitStringToVector(*(++lit)), commentChar);
 
 			if ( items.size() != 3 )
 				throw ostFileSyntaxError(*lit);
