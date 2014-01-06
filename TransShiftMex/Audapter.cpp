@@ -2991,9 +2991,24 @@ void Audapter::readOSTTab(int bVerbose) {
 	try {
 		ostTab.readFromFile(string(ostFN), bVerbose);
 	}
+	catch (OST_TAB::ostFileReadingError) {
+		std::string errMsgTxt("Fail to read from ost file: ");
+		errMsgTxt += string(ostFN);
+
+		mexErrMsgTxt(errMsgTxt.c_str());
+	}
+	catch (OST_TAB::ostFileSyntaxError err) {
+		std::string errMsgTxt("Syntax error in ost file ");
+		errMsgTxt += ostFN;
+		errMsgTxt += " line: ";
+		errMsgTxt += err.errLine;
+		
+		mexErrMsgTxt(errMsgTxt.c_str());
+	}
 	catch (OST_TAB::unrecognizedOSTModeError err) {
 		std::string errMsgTxt("Unrecognized OST heuristic mode: ");
 		errMsgTxt += err.modeStr;
+
 		mexErrMsgTxt(errMsgTxt.c_str());
 	}
 	this->rmsSlopeWin = ostTab.rmsSlopeWin;

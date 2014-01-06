@@ -42,12 +42,22 @@ private:
 
 public:
 	/* Error classes */
+	class ostFileReadingError {};
+
 	class unrecognizedOSTModeError {
 	public:
 		std::string modeStr;
 
 		unrecognizedOSTModeError(std::string t_modeStr) 
 			: modeStr(t_modeStr) {};
+	};
+
+	class ostFileSyntaxError {
+	public:
+		std::string errLine;
+		
+		ostFileSyntaxError(std::string t_line)
+			: errLine(t_line) {};
 	};
 
 	double rmsSlopeWin;
@@ -76,7 +86,9 @@ public:
 
 	/* Reading from a file */
 	void readFromFile(const std::string ostFN, const int bVerbose) 
-		throw(unrecognizedOSTModeError);
+		throw(ostFileReadingError, 
+			  unrecognizedOSTModeError, 
+			  ostFileSyntaxError);
 
 	/* Main function: online status tracking */
 	int osTrack(const int stat, const int data_counter, const int frame_counter, 

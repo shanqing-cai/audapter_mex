@@ -11,8 +11,75 @@
 #include <cstdlib>
 #include <cstdio>
 #include <string>
+#include <list>
+#include <vector>
+#include <fstream>
+#include <sstream>
+#include <iterator>
+#include <algorithm>
 
 using namespace std;
+
+/* Utility functions */
+/* Read lines from a file */
+list<string> readLinesFromFile(const string & ostFN) {
+	list<string> lines;
+
+	ifstream inFile(ostFN);
+
+	if (!inFile)
+		return lines;
+
+	while (inFile.good()) {
+		string t_str;
+
+		getline(inFile, t_str);
+		lines.push_back(t_str);
+	}
+
+	return lines;
+}
+
+/* Strip string: strip white space at the beginning and the end */
+string trimString(const string & str) {
+	string str_out;
+	size_t pos_0 = str.find_first_not_of(" \t");
+	size_t pos_1 = str.find_last_not_of(" \t");
+
+	if ( (pos_0 != string::npos) && (pos_1 >= pos_0) ) {
+		str_out = string(str, pos_0, pos_1 - pos_0 + 1);
+	}
+	
+	return str_out;
+}
+
+/* Split string at white spaces; save results in a list */
+list<string> splitStringToList(const string & str) {
+	list<string> strs_out; 
+
+	istringstream iss(str);
+
+	while (iss.good()) {
+		string t_str;
+		iss >> t_str;
+		strs_out.push_back(t_str);
+	}
+
+	return strs_out;
+}
+
+/* Split string by whitespace */
+std::vector<std::string> splitStringToVector(const std::string &s) {
+  std::vector<std::string> tokens;
+  std::istringstream iss(s);
+
+  std::copy(std::istream_iterator<std::string>(iss), 
+	    std::istream_iterator<std::string>(),
+	    std::back_inserter<std::vector <std::string> > (tokens));
+
+  return tokens;
+}
+
 
 /* Constructor */
 OST_TAB::OST_TAB() {
@@ -92,13 +159,43 @@ void OST_TAB::reset() {
 	stretchSpanAccum = 0.0;
 }
 
+
+
 void OST_TAB::readFromFile(const string ostFN, const int bVerbose) 
-	throw(unrecognizedOSTModeError) 
+	throw(ostFileReadingError, 
+	      unrecognizedOSTModeError, 
+		  ostFileSyntaxError) 
 {
-	FILE *fp;
-	int i0, t_n;
-	static int maxStatesPerLine = 4;
-	char c0[128], c1;
+	//FILE *fp;
+	int i0;
+	const int maxStatesPerLine = 4;
+
+	list<string> ostLines_0 = readLinesFromFile(ostFN);
+	if (ostLines_0.empty()) {
+		throw ostFileReadingError();
+	}
+		
+
+	/* Trim lines; remove empty lines; remove commented lines */
+	list<string> ostLines_1;
+	for (list<string>::const_iterator lit = ostLines_0.begin(); 
+		 lit != ostLines_0.end(); ++lit) {
+		string t_str = trimString(*lit);
+
+		if (t_str.size() == 0) /* Skip empty lines */
+			continue;
+
+		if ( (t_str.size() > 0) && (t_str[0] == '#') ) /* Skip commented lines */
+			continue;
+
+		ostLines_1.push_back(t_str);
+	}
+
+	/* Iterate through the lines */
+	/*for (list<string>::const_iterator lit = ostLines_1.begin(); 
+		 lit != ostLines_1.end(); ++lit) {
+		list<string> items = splitStringToList(*lit);
+	}*/
 
 	// Free previously existing fields of ostTab
 	if (stat0) {
@@ -139,24 +236,25 @@ void OST_TAB::readFromFile(const string ostFN, const int bVerbose)
 	if (bVerbose)
 		printf("ostFN = %s\n", ostFN.c_str());
 
-	/* fp = fopen(this->ostFN, "r"); */
-	if (fopen_s(&fp, ostFN.c_str(), "r")) {
-		printf("ERROR: Unable to open ost file: %s\n", ostFN.c_str());
-		return;
-	}
+	list<string>::const_iterator lit = ostLines_1.begin();
+	vector<string> items = splitStringToVector(*lit);
+	if ( (items.size() != 3) || 
+		 (items[0] != string("rmsSlopeWin")) || 
+		 (items[1] != string("=")) )
+		throw ostFileSyntaxError(*lit);
 
-	for (i0 = 0; i0 < 3; i0++)
-		/* fscanf(fp, "%s", c0); */
-		fscanf_s(fp, "%s", c0, sizeof(c0));
-	rmsSlopeWin = atof(c0);
-	
+	rmsSlopeWin = atof(items[2].c_str());
+
 	if (bVerbose)
 		printf("rmsSlopeWin = %f\n", rmsSlopeWin);
 
-	for (i0 = 0; i0 < 3; i0++)
-		/* fscanf(fp, "%s", c0); */
-		fscanf_s(fp, "%s", c0, sizeof(c0));
-	n = atoi(c0);
+	items = splitStringToVector(*(++lit));
+	if ( (items.size() != 3) || 
+		 (items[0] != string("n")) || 
+		 (items[1] != string("=")) )
+		throw ostFileSyntaxError(*lit);
+
+	n = atoi(items[2].c_str());
 
 	if (bVerbose)
 		printf("ostTab.n = %d\n", n);
@@ -177,44 +275,29 @@ void OST_TAB::readFromFile(const string ostFN, const int bVerbose)
 		printf("ERROR: failed to allocate memor for ostTab.prm2");
 		return;
 	}
-
+	
 	for (i0 = 0; i0 < n; i0++) {
-		/* fscanf(fp, "%s", c0); */
-		fscanf_s(fp, "%s", c0, sizeof(c0));
-		stat0[i0] = atoi(c0);
-		//printf("\tstat0[%d] = %d\n", i0, stat0[i0]);
+		items = splitStringToVector(*(++lit));
+		if ( (items.size() != 5) || 
+			 (items[4] != string("{}")) )
+			throw ostFileSyntaxError(*lit);
+		stat0[i0] = atoi(items[0].c_str());
 
-		/*fscanf(fp, "%s", c0);*/
-		fscanf_s(fp, "%s", c0, sizeof(c0));
-		mode[i0] = atoi(c0);
-		if ( (mode[i0] == 0) && strcmp(c0, "0") && strcmp(c0, "OST_END") ) {
+
+		mode[i0] = atoi(items[1].c_str());
+		if ( (mode[i0] == 0) && (items[1] != string("0")) && (items[1] != string("OST_END")) ) {
 			/* Test if the string is in the ostModeMap */
-			string modeStr(c0);
-
 			try {
-				mode[i0] = ostModeMap.at(modeStr); /* WARNING: Assume C++11 is available */
+				mode[i0] = ostModeMap.at(items[1]); /* WARNING: Assume C++11 is available */
 			}
 			catch (out_of_range) {
-				fclose(fp);
-				throw unrecognizedOSTModeError(modeStr);
+				//fclose(fp);
+				throw unrecognizedOSTModeError(items[1]);
 			}
 		}
-		//printf("\tmode[%d] = %d\n", i0, mode[i0]);
 
-		/*fscanf(fp, "%s", c0);*/
-		fscanf_s(fp, "%s", c0, sizeof(c0));
-		prm1[i0] = atof(c0);
-		//printf("\tprm1[%d] = %f\n", i0, prm1[i0]);
-
-		/* fscanf(fp, "%s", c0); */
-		fscanf_s(fp, "%s", c0, sizeof(c0));
-		prm2[i0] = atof(c0);
-		//printf("\tprm2[%d] = %f\n", i0, prm2[i0]);
-
-		c1 = '\0';
-		while (!(c1 == '\n' || c1 == '\r' || c1 == EOF)) {
-			c1 = fgetc(fp);
-		}
+		prm1[i0] = atof(items[2].c_str());
+		prm2[i0] = atof(items[3].c_str());
 	
 		if (bVerbose)
 			printf("\tSeg %d: stat0=%d; mode=%d; prm1=%f; prm2=%f\n", 
@@ -226,78 +309,50 @@ void OST_TAB::readFromFile(const string ostFN, const int bVerbose)
 		return;
 	}
 
-	if (c1 == EOF) {
-		fclose(fp);
+	if (++lit == ostLines_1.end())
 		return;
-	}
-			
-	while (c1 != EOF) {
-		c1 = fgetc(fp);
 
-		if (c1 == EOF) {
-			fclose(fp);
-			return;
-		}
-
-		if (c1 == 'n')
-			break;
-	}
+	items = splitStringToVector(*lit);
+	if ( (items.size() != 3) || 
+		 (items[0] != string("n")) || 
+		 (items[1] != string("=")) )
+		throw ostFileSyntaxError(*lit);
 
 	/* Process maxInterOnsetIntervalCfg (maxIOICfg)  */
-	for (i0 = 0; i0 < 2; i0++)
-		/* n = fscanf(fp, "%s", c0); */
-		t_n = fscanf_s(fp, "%s", c0, sizeof(c0));
+	maxIOICfg.n = atoi(items[2].c_str());
 
-	if (atoi(c0) > 0) {
-		maxIOICfg.n = atoi(c0);
+	if (maxIOICfg.n > 0) {
 		if (bVerbose)
 			printf("ostTab.maxIOICfg.n = %d\n", maxIOICfg.n);
 
 		if ((maxIOICfg.stat0 = (int *)calloc(maxIOICfg.n, sizeof(int))) == NULL) {
 			printf("ERROR: failed to allocate memor for ostTab.maxIOICfg.stat0");
-			fclose(fp);
 			return;
 		}
 		if ((maxIOICfg.maxInterval = (double *)calloc(maxIOICfg.n, sizeof(double))) == NULL) {
 			printf("ERROR: failed to allocate memor for ostTab.maxIOICfg.maxInterval");
-			fclose(fp);
 			return;
 		}
 		if ((maxIOICfg.stat1 = (int *)calloc(maxIOICfg.n, sizeof(int))) == NULL) {
 			printf("ERROR: failed to allocate memor for ostTab.maxIOICfg.stat1");
-			fclose(fp);
 			return;
 		}
 
 		for (i0 = 0; i0 < maxIOICfg.n; i0++) {
-			/* fscanf(fp, "%s", c0); */
-			fscanf_s(fp, "%s", c0, sizeof(c0));
-			maxIOICfg.stat0[i0] = atoi(c0);
+			items = splitStringToVector(*(++lit));
 
-			/* fscanf(fp, "%s", c0); */
-			fscanf_s(fp, "%s", c0, sizeof(c0));
-			maxIOICfg.maxInterval[i0] = atof(c0);
+			if ( items.size() != 3 )
+				throw ostFileSyntaxError(*lit);
 
-			/* fscanf(fp, "%s", c0); */
-			fscanf_s(fp, "%s", c0, sizeof(c0));
-			maxIOICfg.stat1[i0] = atoi(c0);
-
-			c1 = '\0';
-			while (!(c1 == '\n' || c1 == '\r' || c1 == EOF)) {
-				c1 = fgetc(fp);
-			}
+			maxIOICfg.stat0[i0] = atoi(items[0].c_str());
+			maxIOICfg.maxInterval[i0] = atof(items[1].c_str());
+			maxIOICfg.stat1[i0] = atoi(items[2].c_str());
 
 			if (bVerbose)
 				printf("maxIOICfg %d: stat0=%d; maxInterval=%d; stat1=%d\n", 
 					   i0, maxIOICfg.stat0[i0], maxIOICfg.maxInterval[i0], maxIOICfg.stat1[i0]);
 		}
 	}
-	else {
-		fclose(fp);
-		return;
-	}
-
-	fclose(fp);
 }
 
 int OST_TAB::osTrack(const int stat, const int data_counter, const int frame_counter, 
