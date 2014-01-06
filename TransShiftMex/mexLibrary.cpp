@@ -2,9 +2,10 @@
 #include "Audapter.h"
 #include <math.h>
 #include <stdio.h>
-#include <string.h>
+#include <string>
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include "audioIO.h"
 
 #include <windows.h>
@@ -89,8 +90,9 @@ void mexFunction( int nlhs, mxArray *plhs[],
 	char actionStr[512];
 	char tmpMsg[512];
 
-	mwSize inParNDims;
-	const mwSize *inParSize;
+	mwSize inParNDims, inSigNDims;
+	const mwSize *inParSize, *inSigSize;
+	int sigLen;
 	size_t nPars;
 	bool isActionString;
 
@@ -333,7 +335,24 @@ void mexFunction( int nlhs, mxArray *plhs[],
 		case 5:				//SC manually supply the buffer and run the process
 			frame_len = *((int *) audapter.getParam("framelen"));
 			t_downFact = *((int *) audapter.getParam("downfact"));
+
+			/* Check the size of the input signal */
+			inSigNDims = mxGetNumberOfDimensions(prhs[1]);
+			if ( inParNDims != 2 )
+				mexErrMsgTxt("Incorrect number of dimensions in input signal");
+
+			inSigSize = mxGetDimensions(prhs[1]);
+			sigLen = (inSigSize[0] > inSigSize[1]) ? inSigSize[0] : inSigSize[1];
+			if ( sigLen != frame_len * t_downFact) {
+				ostringstream oss;
+				oss << "Length of input signal (" << sigLen 
+					<< ") is different from the expected length (" 
+					<< (frame_len * t_downFact) << ")";
+				mexErrMsgTxt(oss.str().c_str());
+			}
+
 			data_ptr = (double*)mxGetPr(prhs[1]);	//SC pointer to buffer
+		
 			algoCallbackFuncMono((char *)data_ptr, frame_len * t_downFact, (void *)&audapter);
 			break;
 

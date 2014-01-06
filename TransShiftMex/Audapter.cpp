@@ -21,14 +21,18 @@ Also incorporated
 	3) Gain adaptation after shifting (optional)
 	4) RMS-based formant smoothing (to reduce the influence of subglottal 
 		coupling on formant estimates) (optional)
+	5) Online status tracking (OST) for focal perturbations on multisyllabic, 
+		connected speech
+	6) Perturbation configuration files (PCFs) for flexible, mixable 
+		configuration of perturbation
 
 Authors:
-2007 Marc Boucek, Satrajit Ghosh
-2008-2013 Shanqing Cai (shanqing.cai@gmail.com)
+	2007 Marc Boucek, Satrajit Ghosh
+	2008-2013 Shanqing Cai (shanqing.cai@gmail.com)
 
 Developed at:
-Speech Communication Group, RLE, MIT
-Speech Laboratory, Boston University
+	Speech Communication Group, RLE, MIT
+	Speech Laboratory, Boston University
 */
 
 //#include <string.h> 
@@ -347,7 +351,6 @@ Audapter :: Audapter()
 	p.fn2			= 1333; // A priori expectation of F2 (Hz)
 
 	p.nTracks			= 4;	// number of tracked formants 
-	p.trackFF			= 0.95;		 //Marked
 
 	// booleans						
 	p.bRecord			= 1;	// record signal, should almost always be set to 1. 
@@ -510,18 +513,9 @@ Audapter :: Audapter()
 	downSampFilter.setCoeff(nCoeffsSRFilt, t_srfilt_a, nCoeffsSRFilt, t_srfilt_b);
 	upSampFilter.setCoeff(nCoeffsSRFilt, t_srfilt_a, nCoeffsSRFilt, t_srfilt_b);
 
-	//SC-Mod(2008/05/15) FFT related	
-	gen_w_r2(fftc_ps, max_nFFT);
-
 	//SC(2009/02/06) RMS level clipping protection. 
 	p.bRMSClip = 1;
 	p.rmsClipThresh = 1.0;
-
-	// Pitch and frequency shifting-related
-	for (int i0 = 0; i0 < max_nFFT; i0++){
-		fftc_ps0[i0] = 0;
-		fftc_ps[i0] = 0;
-	}
 
 	// For wav file writing
 	sprintf_s(wavFileBase, "");
@@ -564,7 +558,7 @@ void Audapter::reset()
 		outFrameBuf[i0] = 0;
 
 		for (j0 = 0; j0 < maxNVoices; j0++)
-			outFrameBufPS[j0][i0] = 0;			//Marked
+			outFrameBufPS[j0][i0] = 0;
 	}
 	outFrameBuf_circPtr = 0;	//Marked
 
@@ -574,11 +568,12 @@ void Audapter::reset()
 	}
 
 	// Initialize internal input, output buffers  (at downsampled  rate !!!)
-	for(i0=0;i0<maxBufLen;i0++)
+	/*for(i0=0;i0<maxBufLen;i0++)*/
+	for(i0 = 0; i0 < maxFrameLen; i0++)
 	{
-		inBuf[i0] = 0;
-		outBuf[i0] = 0;
-		zeros[i0]  = 0;
+		inBuf[i0] = 0.0;
+		outBuf[i0] = 0.0;
+		zeros[i0]  = 0.0;
 	}
 
 //*****************************************************  FILTER STATES  *****************************************************
@@ -619,19 +614,6 @@ void Audapter::reset()
 	}
 
 	// Initialize variables used in the pitch shifting algorithm 
-	// SC(2012/03/05)
-	for (i0 = 0; i0 < nFFT; i0++){ //Marked
-		lastPhase[0][i0] = 0.0;
-		lastPhase[1][i0] = 0.0;
-
-		lastPhase_ntw[i0] = 0.0;
-		
-		/*outputAccum[i0] = 0;*/
-
-		for (j0 = 0; j0 < maxNVoices; j0++)
-			for (int i1 = 0; i1 < 2; i1++)
-				sumPhase[i1][j0][i0] = 0;
-	}
 
 	// initialize recording counters
 	frame_counter=0;
@@ -661,32 +643,11 @@ void Audapter::reset()
 	ma_rms_fb = 0;
 
 //*****************************************************  getWma    *****************************************************
-
-	// initialize weight matrix and moving sum
-	//for(j0=0;j0<maxNTracks;j0++) //Marked
-	//{
-	//	sumWeiPhi[j0]=0;
-	//	sumWeiBw[j0]=0;
-	//	for(i0=0;i0<maxPitchLen;i0++)
-	//	{
-	//		weiVec[i0]=0;
-	//		weiMatPhi[j0][i0]=0;
-	//		weiMatBw[j0][i0]=0;
-	//	}
-	//}
-	//sumWei=0; //Marked
-
 	//SC(2009/02/02)
 	bLastFrameAboveRMS=0;
 
 //*****************************************************  getAI    *****************************************************
 
-	// Initialize hanning window (for frequency / pitch shifting) SC(2012/03/05)
-	for(i0=0;i0<p.pvocFrameLen;i0++){
-		hwin2[i0] = 0.5*cos(dtype(2*M_PI*i0)/dtype(p.pvocFrameLen)); 
-		hwin2[i0] = 0.5 - hwin2[i0];
-		//hwin2[p.pvocFrameLen-i0-1] = hwin2[i0];
-	}
 
 //*****************************************************  hqr_Roots    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 	
@@ -695,13 +656,6 @@ void Audapter::reset()
 
 	//SC(2012/02/29) For data saving (Writing to disk)
 	dataFileCnt = 0;
-
-	//SC(2012/03/13) PVOC time warp
-	for (int i0 = 0; i0 < internalBufLen / 64; i0++){	//Marked
-		for (int i1 = 0; i0 < 1024 * 2; i0++){
-			pvocWarpCache[i0][i1] = 0;
-		}
-	}
 	
 	//SC(2012/10/19): OST online sentence tracking
 	stat = 0;
@@ -710,19 +664,6 @@ void Audapter::reset()
 	duringTimeWarp_prev = false;
 
 	phase0 = phase1 = 0.0;
-
-	/* Related to pitch shifting */ //Marked
-	for (int i0 = 0; i0 < max_nFFT * 2; i0++) //Marked
-		for (int i1 = 0; i1 < 2; i1++)
-			ftBuf2ps[i1][i0] = 0.0;
-
-	for (int j0 = 0; j0 < maxNVoices; j0++) { //Marked
-		for (int i0 = 0; i0 < max_nFFT; i0++) {
-			for (int i1 = 0; i1 < 2; i1++) {
-				sumPhase[i1][j0][i0] = 0.0;
-			}			
-		}
-	}
 
 	/* Feedback mode 4 */
 	rmsFF_fb_now = p.rmsFF_fb[0];
@@ -1130,15 +1071,7 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 			}
 		}
 		else if (ns == string("pvocframelen")) {
-			for(int i0=0;i0<p.pvocFrameLen;i0++){ //Marked
-				hwin2[i0] = 0.5*cos(dtype(2*M_PI*i0)/dtype(p.pvocFrameLen)); 
-				hwin2[i0] = 0.5 - hwin2[i0];
-				//hwin2[p.pvocFrameLen-i0-1] = hwin2[i0];
-			}
-			for (int i0 = 0; i0 < max_nFFT; i0++){ //Marked
-				fftc_ps0[i0] = 0;
-			}
-			gen_w_r2(fftc_ps0, p.pvocFrameLen); //Marked
+			
 		}
 		else if (ns == string("datapb")) {
 			pbCounter = 0;
@@ -1372,19 +1305,6 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 	int fi=0, si=0, i0=0, offs=0, quit_hqr=0, indx=0, nZC=0, nZCp=0;	
 	dtype rms_o, rms_p, rms_s, rms_fb, wei;
 	int optr[maxNVoices]; //SC(2012/02/28) DAF
-
-	// ====== Variables for frequency/pitch shifting (smbPitchShift) ======
-	// SC(2012/03/05)
-	dtype xFrameW[maxBufLen+maxNLPC]; //Marked
-	dtype X_magn[max_nFFT]; //Marked
-	dtype X_phase[max_nFFT]; //Marked
-	dtype anaMagn[2][max_nFFT], anaFreq[2][max_nFFT]; // (Normal | nps)	//Marked
-	dtype synMagn[2][max_nFFT], synFreq[2][max_nFFT]; // (Normal | nps)	//Marked
-
-	dtype p_tmp[2], magn[2], phase[2]; // (Normal | nps)	 // Marked
-	dtype expct, osamp, freqPerBin; //Marked
-	int qpd; //Marked
-	int index[2];	// (Normal | nps) //Marked
 	
 	char wavfn_in[256], wavfn_out[256];
 	// ====== ~Variables for frequency/pitch shifting (smbPitchShift) ======
@@ -1686,11 +1606,6 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 			}
 		}
 		else {			
-			/* Marked */
-			expct = 2.* M_PI * (double)p.pvocHop / (double)p.pvocFrameLen;
-			osamp = p.pvocFrameLen / p.pvocHop;
-			freqPerBin = p.sr / (double)p.pvocFrameLen;
-
 			if (outFrameBuf_circPtr - p.pvocFrameLen >= 0)
 				DSPF_dp_blk_move(&outFrameBuf[outFrameBuf_circPtr - p.pvocFrameLen], xBuf, p.pvocFrameLen);
 			else{ // Take care of wrapping-around
@@ -1699,54 +1614,14 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 								    &xBuf[0], 
 									p.pvocFrameLen - outFrameBuf_circPtr);
 			}
-			DSPF_dp_vecmul(xBuf, hwin2, xFrameW, p.pvocFrameLen);
-
-			for (i0 = 0; i0 < p.pvocFrameLen; i0++){
-				ftBuf1ps[i0 * 2] = xFrameW[i0];
-				ftBuf1ps[i0 * 2 + 1] = 0;
-
-				//ss_inBuf += ftBuf1ps[i0 * 2] * ftBuf1ps[i0 * 2]; // DEBUG: amp
-			}				
-			
-			// DEBUG: amp
-			for (i0 = 0; i0 < p.pvocFrameLen; i0++) {
-				ms_in += xFrameW[i0] * xFrameW[i0];
-			}
-			ms_in /= (dtype) p.pvocFrameLen;
-
-			DSPF_dp_cfftr2(p.pvocFrameLen, ftBuf1ps, fftc_ps0, 1);
-			bit_rev(ftBuf1ps, p.pvocFrameLen);
-
-			for (i0=0; i0 < p.pvocFrameLen; i0++){
-				X_magn[i0] = 2. * sqrt(ftBuf1ps[i0*2] * ftBuf1ps[i0*2] + ftBuf1ps[i0*2+1] * ftBuf1ps[i0*2+1]);
-				X_phase[i0] = atan2(ftBuf1ps[i0*2+1], ftBuf1ps[i0*2]);
-			}
-			/* ~Marked */
 
 			// --- Time warping preparation ---
 			dtype t0 = (dtype)(frame_counter - (p.nDelay - 1)) * p.frameLen / p.sr;
 			dtype t1;
-			dtype cidx1_d, cidx1_f;
-			// dtype cidx0_d, cidx0_f;
-			dtype dp;
-			int cidx0 = (frame_counter - (p.nDelay - 1)) / (p.pvocHop / p.frameLen);
-			int cidx1;
-				
-			for (i0 = 0; i0 < p.pvocFrameLen; i0++){
-				pvocWarpCache[cidx0 % (internalBufLen / 64)][i0] = X_magn[i0];
-				pvocWarpCache[cidx0 % (internalBufLen / 64)][i0 + p.pvocFrameLen] = X_phase[i0];
-			}
-
-			/*if (frame_counter - (p.nDelay - 1) == p.pvocFrameLen / p.frameLen){
-				for (i0 = 0; i0 <= p.pvocFrameLen / 2; i0++){
-					lastPhase[i0] = X_phase[i0];
-				}
-			}*/
 
 			// --- ~Time warping preparation ---
 			/* Time warping, overrides pitch shifting */
-			int ifb = 0;
-			
+			const int ifb = 0;
 			duringTimeWarp = pertCfg.procTimeWarp(stat, ostTab.statOnsetIndices, 
 												  p.nDelay, static_cast<double>(p.frameLen) / static_cast<double>(p.sr), 
 									    		  t0, t1);
@@ -1785,172 +1660,11 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 							 "TIME_WARP_WITH_FIXED_PITCH_SHIFT");
 			}
 
-			if (duringTimeWarp){
-				duringPitchShift = false;
-				p.pitchShiftRatio[0] = 1.0;
-
-				cidx1_d = t1 * (dtype)p.sr / (dtype)p.pvocHop;
-				cidx1 = (int)floor(cidx1_d);
-				cidx1_f = cidx1_d - (dtype)cidx1;
-					
-				/* For no-time-warp backup */
-
-				for (i0 = 0; i0 <= p.pvocFrameLen / 2; i0++) {
-					int k0 = cidx1 % (internalBufLen / 64);
-					int k1 = (cidx1 + 1) % (internalBufLen / 64);
-					magn[0] = pvocWarpCache[k0][i0] * (1 - cidx1_f) + pvocWarpCache[k1][i0] * cidx1_f;
-					/* No time warp */
-					/*magn = pvocWarpCache[cidx0 % (internalBufLen / 64)][i0];*/
-				
-					dp = pvocWarpCache[k1][i0 + p.pvocFrameLen] - pvocWarpCache[k0][i0 + p.pvocFrameLen];
-						
-					dp -= (dtype)i0 * expct;
-						
-					qpd = (int)(dp / M_PI);
-					if (qpd >= 0) qpd += qpd & 1;
-					else qpd -= qpd & 1;
-					dp -= M_PI * (dtype)qpd;
-
-					ftBuf2ps[0][2 * i0] = magn[0] * cos(lastPhase[0][i0]);
-					ftBuf2ps[0][2 * i0 + 1] = magn[0] * sin(lastPhase[0][i0]);
-
-					/* No time warp */
-					/*ftBuf2ps[2 * i0] = magn * cos(X_phase[i0]);
-					ftBuf2ps[2 * i0 + 1] = magn * sin(X_phase[i0]);*/
-					lastPhase[0][i0] += (dtype)i0 * expct + dp;
-
-					/* No time warp */
-					/*lastPhase[i0] = X_phase[i0];*/
-
-					/* No-time-warp backup */
-					lastPhase_ntw[i0] = X_phase[i0];
-					sumPhase[0][ifb][i0] = X_phase[i0];
-				}
-			}
-			else { /* Pitch shifting */
-				if (duringTimeWarp_prev && !duringTimeWarp) { /* Recover from time warping */ 
-					for (i0 = 0; i0 <= p.pvocFrameLen / 2; i0++) {
-						lastPhase[0][i0] = lastPhase_ntw[i0];
-					}
-				}
-
-				if (pertCfg.pitchShift && stat < pertCfg.n) { /* Marked */
-					p.pitchShiftRatio[ifb] = pow(2.0, pertCfg.pitchShift[stat] / 12.0);
-				}
-				/* else {
-					p.pitchShiftRatio[ifb] = 1.0;
-				} */
-				duringPitchShift = (pertCfg.pitchShift[stat] != 0.0); /* TODO: Fix it */
-					
-				/* Marked */
-				for (i0=0; i0 <= p.pvocFrameLen / 2; i0++){
-					for (int i1 = 0; i1 < 2; i1++) {
-						p_tmp[i1] = X_phase[i0] - lastPhase[i1][i0];
-
-						p_tmp[i1] -= (dtype)i0 * expct;
-
-						qpd = (int)(p_tmp[i1] / M_PI);
-
-						if (qpd >= 0) qpd += qpd&1;
-						else qpd -= qpd&1;
-						p_tmp[i1] -= M_PI * (dtype)qpd;
-
-						p_tmp[i1] = osamp * p_tmp[i1] / (2. * M_PI);
-						p_tmp[i1] = (dtype)i0 * freqPerBin + p_tmp[i1] * freqPerBin;
-
-						anaMagn[i1][i0] = X_magn[i0];
-						anaFreq[i1][i0] = p_tmp[i1];
-
-						//if (i1 == 0) { // DEBUG: amp
-						//	ss_anaMagn += anaMagn[i1][i0] * anaMagn[i1][i0];
-						//} 
-
-						lastPhase[i1][i0] = X_phase[i0];
-					}						
-				}
-				
-
-				/* SCai: Pitch shifting synthesis */
-				for (i0 = 0; i0 < p.pvocFrameLen; i0++){
-					for (int i1 = 0; i1 < 2; i1++) {
-						synMagn[i1][i0] = 0.0;
-						synFreq[i1][i0] = 0.0;
-					}
-				}
-				
-					
-				for (i0 = 0; i0 <= p.pvocFrameLen / 2; i0++){
-					for (int i1 = 0; i1 < 2; i1++) {
-						if (i1 == 0)
-							index[i1] = (int)(i0 / p.pitchShiftRatio[ifb]);
-						else
-							index[i1] = i0;
-							
-						if (index[i1] <= p.pvocFrameLen / 2) {
-							synMagn[i1][i0] += anaMagn[i1][index[i1]];								
-
-							if (i1 == 0)
-								synFreq[i1][i0] = anaFreq[i1][index[i1]] * p.pitchShiftRatio[ifb];
-							else
-								synFreq[i1][i0] = anaFreq[i1][index[i1]];
-						}
-					}
-	
-				}
-					
-				for (i0 = 0; i0 <= p.pvocFrameLen / 2; i0++) {
-					for (int i1 = 0; i1 < 2; i1++) {
-						magn[i1] = synMagn[i1][i0]; // get magnitude and true frequency from synthesis arrays						
-
-						p_tmp[i1] = synFreq[i1][i0];
-							
-						p_tmp[i1] -= (double)i0 * freqPerBin;	// subtract bin mid frequency		
-						p_tmp[i1] /= freqPerBin;	// get bin deviation from freq deviation
-						p_tmp[i1] = 2. * M_PI * p_tmp[i1] / osamp;	// take osamp into account
-						p_tmp[i1] += (double)i0 * expct;		// add the overlap phase advance back in
-							
-						sumPhase[i1][ifb][i0] += p_tmp[i1];		// accumulate delta phase to get bin phase
-						phase[i1] = sumPhase[i1][ifb][i0];
-
-						/* get real and imag part and re-interleave */
-						ftBuf2ps[i1][2 * i0] = magn[i1] * cos(phase[i1]);
-						ftBuf2ps[i1][2 * i0 + 1] = magn[i1] * sin(phase[i1]);			// What causes the sign reversal here?
-
-					}
-				}
-				/* ~Marked */
-			}
-
 			duringTimeWarp_prev = duringTimeWarp;
-
-			/* Marked */
-			for (i0 = p.pvocFrameLen + 1; i0 < p.pvocFrameLen * 2; i0++) {
-				for (int i1 = 0; i1 < 2; i1++) {
-					ftBuf2ps[i1][i0] = 0.;
-				}
-			}
-			
-			/* Inverse Fourier transform */				
-			for (int i1 = 0; i1 < 2; i1 ++ ) {
-				DSPF_dp_icfftr2(p.pvocFrameLen, ftBuf2ps[i1], fftc_ps0, 1);
-				bit_rev(ftBuf2ps[i1], p.pvocFrameLen);
-				for (i0 = 0; i0 < p.pvocFrameLen; i0++){
-					ftBuf2ps[i1][i0 * 2] /= p.pvocFrameLen;
-					ftBuf2ps[i1][i0 * 2 + 1] /= p.pvocFrameLen;
-
-					//if (i1 == 0){ // DEBUG
-					//	ss_outBuf += ftBuf2ps[i1][i0 * 2] * ftBuf2ps[i1][i0 * 2];
-					//}
-				}
-			}
-			/* ~Marked */
-
-			//if (p.pitchShiftRatio[ifb] != 1.0) { // DEBUG: amp
-			//	ss_outBuf += 0.0; // DEBUG: amp
-			//}
 
 			// --- Accumulate to buffer ---
 			for (i0 = 0; i0 < p.pvocFrameLen; i0++){					
+				/* Old: using native results */
 				/*outFrameBufPS[ifb][(outFrameBuf_circPtr + i0) % (internalBufLen)] = 
 					outFrameBufPS[ifb][(outFrameBuf_circPtr + i0) % (internalBufLen)] + 
 					2 * ftBuf2ps[0][2 * i0] * hwin2[i0] / (osamp / 2);*/
@@ -1965,7 +1679,7 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 			for (i0 = 0; i0 < p.pvocHop; i0++) {
 				outFrameBufPS[ifb][(outFrameBuf_circPtr + p.pvocFrameLen + i0) % (internalBufLen)] = 0.;
 			}
-				
+
 			// Back Zeroing
 			for (i0 = 1; i0 <= p.pvocHop; i0++){ // Ad hoc alert!
 				outFrameBufPS[ifb][(outFrameBuf_circPtr - p.delayFrames[ifb] * p.frameLen - i0) % (internalBufLen)] = 0.;						

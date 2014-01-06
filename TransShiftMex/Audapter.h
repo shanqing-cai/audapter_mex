@@ -234,10 +234,7 @@ private:
 	dtype zeros[maxFrameLen];						    // utility buffer for filtering
 
 	//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  VARIOUS EXTRACTED DATA  *****************************************************%%%%%%%%%%%	
-
-
-	// other buffers : process rate = downsampled rate * nWin		
-	dtype hwin2[maxBufLen];						// Hanning window for frequency/pitch shifting //Marked
+	// other buffers : process rate = downsampled rate * nWin
 
 	dtype amps[maxNPoles];						// radius of poles
 	dtype orgPhis[maxNPoles];						// angle of original poles
@@ -281,16 +278,6 @@ private:
 
 	// sample rate conversion filter 
 
-	//SC(2008/05/07)
-	dtype ftBuf1ps[max_nFFT * 2]; // For frequency/pitch shifting
-	dtype ftBuf2ps[2][max_nFFT * 2]; // For frequency/pitch shifting: (Normal / nps)	
-
-	//SC(2012/03/05): Pitch Shifting
-	dtype lastPhase[2][max_nFFT]; // (Normal | nps) //Marked
-	dtype lastPhase_ntw[max_nFFT]; // ntw: no time warping	
-	dtype sumPhase[2][maxNVoices][max_nFFT]; // (Normal | nps)	
-	/*dtype outputAccum[max_nFFT];*/
-
 	dtype phase0, phase1;
 
 	//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  DATA   RECORDING  *****************************************************%%%%%%%%%%%	
@@ -311,18 +298,11 @@ private:
 	dtype f2m;     // F2 (mel)
 	dtype f2mp;	// F2 (mel) of the foot of perpendicular to the fit polynomial.
 
-	//SC-Mod(2008/05/15) FFT related	
-	dtype fftc_ps0[max_nFFT * 2];
-	dtype fftc_ps[max_nFFT * 2];	//SC(2012/03/05) For frequency/pitch shifting
-
 	//SC(2009/02/02)
 	int bLastFrameAboveRMS;
 
 	//SC(2012/02/29) For data writing:
 	int dataFileCnt;
-
-	//SC(2012/03/13) For PVOC time warping
-	dtype pvocWarpCache[internalBufLen / 64][1024 * 2];
 
 	dtype rms_ratio;
 
@@ -358,8 +338,8 @@ private:
 		// thus the overall process latency (without souncard) is :Tproc=nDelay*frameLen/sr
 		int	   anaLen;					// size of lpc analysis (symmetric around window to be processed)
 
-		int	   pvocFrameLen;			// size of analysis window for pitch shifting (aim for power of 2)  //Marked
-		int	   pvocHop;					// step size of analysis window (must be multiples of frameLen) //Marked
+		int	   pvocFrameLen;			// size of analysis window for pitch shifting (aim for power of 2)
+		int	   pvocHop;					// step size of analysis window (must be multiples of frameLen)
 
 		int    avgLen;				// length of smoothing ( should be approx one pitch period, 
 		// can be greater /shorter if you want more / lesss moothing)
