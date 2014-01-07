@@ -74,12 +74,7 @@ inline bool isabove(const dtype &a, const dtype &b) {
 }
 
 /* Callback function declarations */
-int algoCallbackFunc(char *buffer, int buffer_size, void * data); // algorithm callback function: stereo: for online runs
-int algoCallbackFuncMono(char *buffer, int buffer_size, void * data); // algorithm callback function: mono: for offline simulations only
-int algoCallbackFuncSineGen(char *buffer, int buffer_size, void * data); //SC algorithm sine wave generator
-int algoCallbackFuncWavePB(char *buffer, int buffer_size, void * data); //SC algorithm sine wave generator
-
-int algoCallbackFuncToneSeq(char *buffer, int buffer_size, void * data); //SC(2009/12/01) algorithm tone sequence generation
+int audapterCallback(char *buffer, int buffer_size, void * data); // algorithm callback function: stereo: for online runs
 
 
 typedef struct tag_thrWriteWavStruct {
@@ -513,6 +508,15 @@ private:
 	void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars, bool bVerbose, int *length);
 
 public:
+	/* Action modes */
+	enum {
+		PROC_AUDIO_INPUT_OFFLINE, 
+		PROC_AUDIO_INPUT_ONLINE, 
+		GEN_SINE_WAVE, 
+		WAV_PLAYBACK, 
+		GEN_TONE_SEQ
+	} actionMode;
+
 	// Constructor initializes all variables
 	Audapter();
 

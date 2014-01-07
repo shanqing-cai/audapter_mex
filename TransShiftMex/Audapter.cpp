@@ -65,103 +65,23 @@ LONGLONG overhead;
 #endif
 
 // Non-class function that is called by the audioIO routines when data becomes available
-int algoCallbackFunc(char *buffer, int buffer_size, void * data)	//SC The input is 8-bit, so char type is proper for buffer.
+int audapterCallback(char *buffer, int buffer_size, void * data)	//SC The input is 8-bit, so char type is proper for buffer.
 {
 	Audapter *audapter = (Audapter*)data;	//SC copy data to audapter
 #ifdef TIME_IT
 	QueryPerformanceCounter(&time1);
 #endif
 
-	audapter->handleBuffer((dtype*)buffer, (dtype*)buffer, buffer_size, false);		//SC(12/19/2007)
-
-#ifdef TIME_IT
-	QueryPerformanceCounter(&time2);
-	TRACE("%.6f\n",double(time2.QuadPart - time1.QuadPart - overhead)/double(freq.QuadPart));
-#endif
-	return 0;
-}
-
-int algoCallbackFunc_zeroBuffer(char *buffer, int buffer_size, void * data)	//SC The input is 8-bit, so char type is proper for buffer.
-{
-	Audapter *audapter = (Audapter*)data;	//SC copy data to audapter
-#ifdef TIME_IT
-	QueryPerformanceCounter(&time1);
-#endif
-
-	/* audapter->handleBuffer((dtype*)buffer, (dtype*)buffer, buffer_size, false);		//SC(12/19/2007) */
-
-
-#ifdef TIME_IT
-	QueryPerformanceCounter(&time2);
-	TRACE("%.6f\n",double(time2.QuadPart - time1.QuadPart - overhead)/double(freq.QuadPart));
-#endif
-	return 0;
-}
-
-// Non-class function that is called by the audioIO routines when data becomes available
-int algoCallbackFuncMono(char *buffer, int buffer_size, void * data)	//SC The input is 8-bit, so char type is proper for buffer.
-{
-	Audapter *audapter = (Audapter*)data;	//SC copy data to audapter
-#ifdef TIME_IT
-	QueryPerformanceCounter(&time1);
-#endif
-
-	audapter->handleBuffer((dtype*)buffer, (dtype*)buffer, buffer_size, true);		//SC(12/19/2007)
-
-#ifdef TIME_IT
-	QueryPerformanceCounter(&time2);
-	TRACE("%.6f\n",double(time2.QuadPart - time1.QuadPart - overhead)/double(freq.QuadPart));
-#endif
-	return 0;
-}
-
-int algoCallbackFuncToneSeq(char *buffer, int buffer_size, void * data)	//SC Tone sequence generator
-{
-	Audapter *audapter = (Audapter*)data;	//SC copy data to audapter
-#ifdef TIME_IT
-	QueryPerformanceCounter(&time1);
-#endif
-	//TRACE("%d\n",buffer_size);
-	//DSPF_dp_blk_move((MY_TYPE*)buffer, (MY_TYPE*)buffer, buffer_size);
-
-	audapter->handleBufferToneSeq((dtype*)buffer, (dtype*)buffer, buffer_size);
-
-
-#ifdef TIME_IT
-	QueryPerformanceCounter(&time2);
-	TRACE("%.6f\n",double(time2.QuadPart - time1.QuadPart - overhead)/double(freq.QuadPart));
-#endif
-	return 0;
-}
-
-int algoCallbackFuncSineGen(char *buffer, int buffer_size, void * data)	//SC sine wave generator
-{
-	Audapter *audapter = (Audapter*)data;	//SC copy data to audapter
-#ifdef TIME_IT
-	QueryPerformanceCounter(&time1);
-#endif
-	//TRACE("%d\n",buffer_size);
-	//DSPF_dp_blk_move((MY_TYPE*)buffer, (MY_TYPE*)buffer, buffer_size);
-
-	audapter->handleBufferSineGen((dtype*)buffer, (dtype*)buffer, buffer_size);
-
-
-#ifdef TIME_IT
-	QueryPerformanceCounter(&time2);
-	TRACE("%.6f\n",double(time2.QuadPart - time1.QuadPart - overhead)/double(freq.QuadPart));
-#endif
-	return 0;
-}
-
-int algoCallbackFuncWavePB(char *buffer, int buffer_size, void * data)	//SC sine wave generator
-{
-	Audapter *audapter = (Audapter*)data;	//SC copy data to audapter
-#ifdef TIME_IT
-	QueryPerformanceCounter(&time1);
-#endif
-
-	audapter->handleBufferWavePB((dtype*)buffer, (dtype*)buffer, buffer_size);
-
+	if (audapter->actionMode == Audapter::PROC_AUDIO_INPUT_ONLINE)
+		audapter->handleBuffer((dtype *)buffer, (dtype *)buffer, buffer_size, false);
+	if (audapter->actionMode == Audapter::PROC_AUDIO_INPUT_OFFLINE)
+		audapter->handleBuffer((dtype *)buffer, (dtype *)buffer, buffer_size, true);
+	else if (audapter->actionMode == Audapter::GEN_SINE_WAVE)
+		audapter->handleBufferSineGen((dtype *)buffer, (dtype *)buffer, buffer_size);
+	else if (audapter->actionMode == Audapter::GEN_TONE_SEQ)
+		audapter->handleBufferToneSeq((dtype*)buffer, (dtype*)buffer, buffer_size);
+	else if (audapter->actionMode == Audapter::WAV_PLAYBACK)
+		audapter->handleBufferWavePB((dtype*)buffer, (dtype*)buffer, buffer_size);
 
 #ifdef TIME_IT
 	QueryPerformanceCounter(&time2);
@@ -196,8 +116,11 @@ Audapter :: Audapter()
 	  preEmpFilter(2), deEmpFilter(2), 
 	  shiftF1Filter(3), shiftF2Filter(3), 
 	  fmtTracker(0), pVoc(0)
-{//modifiable parameters ( most of them can be modified externally) 
-	/* Parameters configuration */
+{
+	/* Set default action mode */
+	actionMode = PROC_AUDIO_INPUT_OFFLINE;
+
+	/* Modifiable parameters */
 	/* Boolean parameters */
 	params.addParam("bshift",		"Formant perturbation switch", Parameter::TYPE_BOOL);
 	params.addParam("btrack",		"Formant tracking switch", Parameter::TYPE_BOOL);

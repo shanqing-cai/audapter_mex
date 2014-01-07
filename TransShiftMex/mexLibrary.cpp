@@ -1,17 +1,16 @@
-#include "mex.h"
-#include "Audapter.h"
 #include <math.h>
 #include <stdio.h>
 #include <string>
 #include <iostream>
 #include <fstream>
 #include <sstream>
+
+#include "mex.h"
+#include "Audapter.h"
 #include "audioIO.h"
 
 #include <windows.h>
 #pragma comment(lib, "Winmm.lib")
-
-//#include "procWarpAtom.h"
 
 using namespace std;
 
@@ -206,14 +205,16 @@ void mexFunction( int nlhs, mxArray *plhs[],
 			frame_len = *((int *) audapter.getParam("framelen"));
 			t_downFact = *((int *) audapter.getParam("downfact"));
 
-			audio_obj.setcallbackparams(frame_len * t_downFact, (void *)&algoCallbackFunc, (void *)&audapter);			
+			audapter.actionMode = Audapter::PROC_AUDIO_INPUT_OFFLINE;
+			audio_obj.setcallbackparams(frame_len * t_downFact, (void *)&audapterCallback, (void *)&audapter);			
 			break;
 
 		case 1:			//SC set audio device parameters and start the action
 			frame_len = *((int *) audapter.getParam("framelen"));
 			t_downFact = *((int *) audapter.getParam("downfact"));
 
-			audio_obj.setcallbackparams(frame_len * t_downFact, (void *)&algoCallbackFunc, (void *)&audapter);
+			audapter.actionMode = Audapter::PROC_AUDIO_INPUT_ONLINE;
+			audio_obj.setcallbackparams(frame_len * t_downFact, (void *)&audapterCallback, (void *)&audapter);
 			
 			devpar.fs = *((int *) audapter.getParam("srate")) * t_downFact;	//SC device sampling rate
 
@@ -353,7 +354,8 @@ void mexFunction( int nlhs, mxArray *plhs[],
 
 			data_ptr = (double*)mxGetPr(prhs[1]);	//SC pointer to buffer
 		
-			algoCallbackFuncMono((char *)data_ptr, frame_len * t_downFact, (void *)&audapter);
+			audapter.actionMode = Audapter::PROC_AUDIO_INPUT_OFFLINE;
+			audapterCallback((char *)data_ptr, frame_len * t_downFact, (void *)&audapter);
 			break;
 
 		case 6:				//SC manually reset audapter object
@@ -410,7 +412,8 @@ void mexFunction( int nlhs, mxArray *plhs[],
 			frame_len = *((int *) audapter.getParam("framelen"));
 			t_downFact = *((int *) audapter.getParam("downfact"));
 
-			audio_obj.setcallbackparams(frame_len * t_downFact, (void *)&algoCallbackFuncSineGen, (void *)&audapter);		
+			audapter.actionMode = Audapter::GEN_SINE_WAVE;
+			audio_obj.setcallbackparams(frame_len * t_downFact, (void *)&audapterCallback, (void *)&audapter);		
 
 			devpar.num = activeDeviceNum;
 			devpar.chans = 2;
@@ -435,7 +438,8 @@ void mexFunction( int nlhs, mxArray *plhs[],
 			frame_len = *((int *) audapter.getParam("framelen"));
 			t_downFact = *((int *) audapter.getParam("downfact"));
 
-			audio_obj.setcallbackparams(frame_len * t_downFact, (void *)&algoCallbackFuncWavePB, (void *)&audapter);
+			audapter.actionMode = Audapter::WAV_PLAYBACK;
+			audio_obj.setcallbackparams(frame_len * t_downFact, (void *)&audapterCallback, (void *)&audapter);
 					
 			devpar.fs = *((int *) audapter.getParam("srate")) * t_downFact;	//SC device sampling rate
 			devpar.num = activeDeviceNum;
@@ -459,7 +463,8 @@ void mexFunction( int nlhs, mxArray *plhs[],
 			frame_len = *((int *) audapter.getParam("framelen"));
 			t_downFact = *((int *) audapter.getParam("downfact"));
 
-			audio_obj.setcallbackparams(frame_len * t_downFact, (void *)&algoCallbackFuncToneSeq, (void *)&audapter);
+			audapter.actionMode = Audapter::GEN_TONE_SEQ;
+			audio_obj.setcallbackparams(frame_len * t_downFact, (void *)&audapterCallback, (void *)&audapter);
 				
 			devpar.fs = *((int *) audapter.getParam("srate")) * t_downFact;	//SC device sampling rate
 
