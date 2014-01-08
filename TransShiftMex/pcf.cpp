@@ -429,6 +429,18 @@ void PERT_CFG::readFromFile(const string pertCfgFN, const int bVerbose)
 
 }
 
+
+void PERT_CFG::nullify() {
+	n = 0;
+
+	if (pitchShift)	{ free(pitchShift);	pitchShift = NULL; }
+	if (intShift)	{ free(intShift);	intShift = NULL; }
+	if (fmtPertAmp)	{ free(fmtPertAmp);	fmtPertAmp = NULL; }
+	if (fmtPertPhi)	{ free(fmtPertPhi);	fmtPertPhi = NULL; }
+
+	warpCfg.clear();
+}
+
 const bool PERT_CFG::procTimeWarp(const int stat, const int * statOnsetIndices, 
 							      const int nDelay, const double frameDur, 
 								  double & t, double & wt) const {

@@ -49,7 +49,7 @@ void printHelp() {
 	mexPrintf("\t\t4 / getData:	Get data from the last run\n");
 	mexPrintf("\t\t5 / runFrame:	Supply a frame of data for offline processing\n");
 	mexPrintf("\t\t6 / reset:		Software state reset for new run\n");
-	mexPrintf("\t\t7 / outFrame:	Read outFrameBufPS\n");
+	// mexPrintf("\t\t7 / outFrame:	Read outFrameBufPS\n");
 	mexPrintf("\t\t8 / ost:		Read online sentence tracking (ost) configuration file\n");
 	mexPrintf("\t\t9 / pcf:		Read perturbation configuration (pcf) file\n");
 	mexPrintf("\t\t\n");
@@ -89,7 +89,7 @@ void mexFunction( int nlhs, mxArray *plhs[],
 	char actionStr[512];
 	char tmpMsg[512];
 
-	mwSize inParNDims, inSigNDims;
+	mwSize inParNDims, inSigNDims, inStrNDims;
 	const mwSize *inParSize, *inSigSize;
 	int sigLen;
 	size_t nPars;
@@ -362,15 +362,15 @@ void mexFunction( int nlhs, mxArray *plhs[],
 			audapter.reset();
 			break;
 
-		case 7:				// Read out the outFrameBufPS
-			t_downFact = *((int *) audapter.getParam("downfact"));
-			algobuf_ptr = audapter.getOutFrameBufPS();
-			plhs[0] = mxCreateDoubleMatrix(audapter.getMaxFrameLen() * t_downFact * audapter.getMaxDelayFrames(), 1, mxREAL);
-			signal_ptr = mxGetPr(plhs[0]);
-			for (int i = 0; i < (audapter.getMaxFrameLen() * t_downFact * audapter.getMaxDelayFrames()); i++) {
-				signal_ptr[i] = algobuf_ptr[i];
-			}
-			break;
+		//case 7:				// Read out the outFrameBufPS
+		//	t_downFact = *((int *) audapter.getParam("downfact"));
+		//	algobuf_ptr = audapter.getOutFrameBufPS();
+		//	plhs[0] = mxCreateDoubleMatrix(audapter.getMaxFrameLen() * t_downFact * audapter.getMaxDelayFrames(), 1, mxREAL);
+		//	signal_ptr = mxGetPr(plhs[0]);
+		//	for (int i = 0; i < (audapter.getMaxFrameLen() * t_downFact * audapter.getMaxDelayFrames()); i++) {
+		//		signal_ptr[i] = algobuf_ptr[i];
+		//	}
+		//	break;
 
 		case 8:				// Set OST file name and read the file (10/18/2012)			
 			if (nrhs == 2 || nrhs == 3) {
@@ -378,6 +378,10 @@ void mexFunction( int nlhs, mxArray *plhs[],
 					bVerbose = 1;
 				else
 					bVerbose = (int)(*(double *) mxGetPr(prhs[2]));
+
+				inStrNDims = mxGetNumberOfDimensions(prhs[1]);
+				if ( inParNDims != 2 )
+					mexErrMsgTxt("Incorrect number of dimensions in input file name");
 
 				strcpy_s(audapter.ostFN, sizeof(audapter.ostFN), mxArrayToString(prhs[1]));
 				if (bVerbose)
@@ -396,6 +400,10 @@ void mexFunction( int nlhs, mxArray *plhs[],
 					bVerbose = 1;
 				else
 					bVerbose = (int)(*(double *) mxGetPr(prhs[2]));
+
+				inStrNDims = mxGetNumberOfDimensions(prhs[1]);
+				if ( inParNDims != 2 )
+					mexErrMsgTxt("Incorrect number of dimensions in input file name");
 
 				strcpy_s(audapter.pertCfgFN, sizeof(audapter.pertCfgFN), mxArrayToString(prhs[1]));				
 				if (bVerbose)

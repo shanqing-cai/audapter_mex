@@ -92,9 +92,12 @@ public:
 			  unrecognizedOSTModeError, 
 			  ostFileSyntaxError);
 
+	/* Nullify */
+	void nullify();
+
 	/* Main function: online status tracking */
 	int osTrack(const int stat, const int data_counter, const int frame_counter, 
-		     	const double rms_o, const double rms_o_slp, const double rms_ratio, const double *rms_rec, 
+		     	const double rms_s, const double rms_o_slp, const double rms_ratio, const double *rms_rec, 
 				const double frameDur);
 
 	/* Reset status */

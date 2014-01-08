@@ -82,6 +82,9 @@ public:
 	void readFromFile(const std::string pertCfgFN, int bVerbose)
 		throw(pcfFileReadingError, pcfFileSyntaxError);
 
+	/* Nullify */
+	void nullify();
+
 	/* Add a time-warping event configuration */
 	void addWarpCfg(double t_tBegin, double t_rate1, double t_dur1, double t_durHold, double t_rate2) 
 		throw(overlappingWarpIntervalsError);

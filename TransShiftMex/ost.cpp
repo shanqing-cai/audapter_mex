@@ -289,8 +289,38 @@ void OST_TAB::readFromFile(const string ostFN, const int bVerbose)
 	}
 }
 
+void OST_TAB::nullify() {
+	n = 0;
+	if (mode)	{	free(mode);		mode = NULL;	}
+	if (stat0)	{	free(stat0);	stat0 = NULL;	}
+	if (prm1)	{	free(prm1);		prm1 = NULL;	}
+	if (prm2)	{	free(prm2);		prm2 = NULL;	}
+	if (prm3)	{	free(prm3);		prm3 = NULL;	}
+
+	if (statOnsetIndices) {	
+		free(statOnsetIndices);		
+		statOnsetIndices = NULL;	
+	}
+
+	maxIOICfg.n = 0;
+	if (maxIOICfg.stat0) {	
+		free(maxIOICfg.stat0);
+		maxIOICfg.stat0 = NULL;	
+	}
+	if (maxIOICfg.maxInterval) {	
+		free(maxIOICfg.maxInterval);		
+		maxIOICfg.maxInterval = NULL;	
+	}
+	if (maxIOICfg.stat1) {	
+		free(maxIOICfg.stat1);		
+		maxIOICfg.stat1 = NULL;	
+	}
+
+	stretchCnt = 0;
+}
+
 int OST_TAB::osTrack(const int stat, const int data_counter, const int frame_counter, 
-					 const double rms_o, const double rms_o_slp, const double rms_ratio, const double *rms_rec, 
+					 const double rms_s, const double rms_o_slp, const double rms_ratio, const double *rms_rec, 
 					 const double frameDur) {
 /* Input: stat: current status number */
 	int k, i, j;
@@ -331,7 +361,7 @@ int OST_TAB::osTrack(const int stat, const int data_counter, const int frame_cou
 		}
 		else if (t_mode == INTENSITY_RISE_HOLD) { // (+2) Crossing an rmsThresh (from below) and hold. prm1: rmsThresh; prm2: minHoldDur (s)			
 			if (stat == t_stat0) {
-				if (rms_o > prm1[k]) {
+				if (rms_s > prm1[k]) {
 					stat_out = stat + 1;
 					statOnsetIndices[stat_out] = frame_counter;
 					stretchCnt = 1;
@@ -340,7 +370,7 @@ int OST_TAB::osTrack(const int stat, const int data_counter, const int frame_cou
 			else {
 				minDurN = (int) floor(prm2[k] / frameDur + 0.5);
 
-				if (rms_o > prm1[k]) {
+				if (rms_s > prm1[k]) {
 					stretchCnt++;
 					if (stretchCnt > minDurN) {
 						stat_out = stat + 1;
@@ -356,7 +386,7 @@ int OST_TAB::osTrack(const int stat, const int data_counter, const int frame_cou
 		}
 		else if (t_mode == INTENSITY_RISE_HOLD_POS_SLOPE) { // (+2) Crossing an rmsThresh (from below) and hold, during positive RMS slopes. prm1: rmsThresh; prm2: minHoldDur (s)			
 			if (stat == t_stat0) {
-				if (rms_o > prm1[k] && 
+				if (rms_s > prm1[k] && 
 					rms_o_slp > 0) {
 					stat_out = stat + 1;
 					statOnsetIndices[stat_out] = frame_counter;
@@ -366,7 +396,7 @@ int OST_TAB::osTrack(const int stat, const int data_counter, const int frame_cou
 			else {
 				minDurN = (int) floor(prm2[k] / frameDur + 0.5);
 
-				if (rms_o > prm1[k] &&
+				if (rms_s > prm1[k] &&
 					rms_o_slp > 0) {
 					stretchCnt++;
 					if (stretchCnt > minDurN) {
