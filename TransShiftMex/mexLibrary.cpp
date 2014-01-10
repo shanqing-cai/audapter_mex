@@ -14,15 +14,17 @@
 
 using namespace std;
 
-#define N_ACTIONS 16
+#define N_ACTIONS 17
 char *actionNames[N_ACTIONS] = {"info", "start", "stop", "setParam", "getParam", 
 								"getData", "runFrame", "reset", "outFrame",
 								"ost", "pcf", "playTone", "playWave",
-								"playToneSeq", "writeToneSeq", "deviceName"};
+								"playToneSeq", "writeToneSeq", "getMaxPBLen", 
+								"deviceName"};
 int actionCode[N_ACTIONS] = {0, 1, 2, 3, 15,
 							 4, 5, 6, 7,
 							 8, 9, 11, 12, 
-							 13, 14, 100};
+							 13, 14, 51, 
+							 100};
 
 int getActionNum(int nActions, char **actionNames, int *actionCode, char *actionName) {
 	int act = -1;
@@ -58,6 +60,7 @@ void printHelp() {
 	mexPrintf("\t\t13 / playToneSeq:	Play pre-configured tone sequence\n");
 	mexPrintf("\t\t14 / writeToneSeq:	Write the waveform of the last tone sequence to wav file\n");	
 	mexPrintf("\t\t\n");
+	mexPrintf("\t\t51 / getMaxPBLen:	Get the wav playback length\n");	
 	mexPrintf("\t\t100 / deviceName:Set audio device name\n");
 	mexPrintf("\t\t\n");
 	mexPrintf("\n");
@@ -287,10 +290,10 @@ void mexFunction( int nlhs, mxArray *plhs[],
 			paramName = new char[inParSize[1] + 1];
 			mxGetString(prhs[1], paramName, inParSize[1] + 1);
 			
-			if (nlhs == 1) {
+			if (nlhs <= 1) {
 				audapter.queryParam(paramName, &(plhs[0]));
 			}
-			else if (nlhs > 1) {
+			else {
 				mexErrMsgTxt("Too many output arguments");
 			}
 
@@ -586,6 +589,14 @@ void mexFunction( int nlhs, mxArray *plhs[],
 				return;
 			}
 			audapter.writeSignalsToWavFile();
+			break;
+
+		case 51:	/* Get the waveform playback length */
+			plhs[0] = mxCreateDoubleMatrix(1, 1, mxREAL);
+			signal_ptr = mxGetPr(plhs[0]);
+
+			signal_ptr[0] = audapter.getMaxPBSize();
+
 			break;
 
 		case 100:

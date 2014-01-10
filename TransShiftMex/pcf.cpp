@@ -41,6 +41,9 @@ pvocWarpAtom::pvocWarpAtom(double t_tBegin, double t_rate1, double t_dur1, doubl
 	durHold = t_durHold;
 	rate2 = t_rate2;
 
+	if ( !(rate1 > 0.0 && rate1 < 1.0) || !(rate2 > 1.0) )
+		throw rateError();
+
 	ostInitState = 0;
 
 	dur2 = (1 - rate1) / (rate2 - 1) * dur1;
@@ -56,6 +59,9 @@ pvocWarpAtom::pvocWarpAtom(int t_ostInitState, double t_tBegin, double t_rate1, 
 	durHold = t_durHold;
 	rate2 = t_rate2;
 
+	if ( !(rate1 > 0.0 && rate1 < 1.0) || !(rate2 > 1.0) )
+		throw rateError();
+
 	ostInitState = t_ostInitState;
 
 	dur2 = (1 - rate1) / (rate2 - 1) * dur1;
@@ -66,7 +72,7 @@ pvocWarpAtom::pvocWarpAtom(int t_ostInitState, double t_tBegin, double t_rate1, 
 /* pvocWarpAtom: Test if the input time t is within the time-shift period: Variant 2: with initial state number */
 const bool pvocWarpAtom::procTimeWarp(const int stat, const int statOnsetIndex, 
 										  const int nDelay, const double frameDur, 
-										  double & t, double & wt) const {
+										  const double & t, double & wt) const {
 /* Input arguments: 
 		stat:			current OST status number
 		statOnsetIndex: frame index at which the current status is first entered
@@ -80,6 +86,7 @@ const bool pvocWarpAtom::procTimeWarp(const int stat, const int statOnsetIndex,
 		false otherwise
 */
 
+	double tt = t;
 	if ((ostInitState < 0) || (stat < ostInitState)) {
 		return false;
 	}
@@ -87,24 +94,23 @@ const bool pvocWarpAtom::procTimeWarp(const int stat, const int statOnsetIndex,
 		double t01;
 		bool duringTimeWarp;
 
-		t01 = t - static_cast<double>(statOnsetIndex) * frameDur;
-		//t01 = t - static_cast<double>(statOnsetIndex - (nDelay - 1)) * frameDur;
+		t01 = tt - static_cast<double>(statOnsetIndex) * frameDur;
+		//t01 = tt - static_cast<double>(statOnsetIndex - (nDelay - 1)) * frameDur;
 		duringTimeWarp = (t01 >= tBegin) && (t01 < tEnd);
 
 		if (duringTimeWarp)
-			t = t01;
-			//t = t;
+			tt = t01;			
 
 		/* Determine warped time */
-		if (t < tBegin + dur1){ /* Time dilation (deceleration) */
-			wt = (t - tBegin) * rate1 + tBegin;
+		if (tt < tBegin + dur1){ /* Time dilation (deceleration) */
+			wt = (tt - tBegin) * rate1 + tBegin;
 		}
-		else if (t < tBegin + dur1 + durHold){ /* Time shifting (no compression or dilation) */
-			wt = rate1 * dur1 - dur1 + t;
+		else if (tt < tBegin + dur1 + durHold){ /* Time shifting (no compression or dilation) */
+			wt = rate1 * dur1 - dur1 + tt;
 		}
-		else if (t < tBegin + dur1 + durHold + dur2){ /* Time compression (acceleration) at the end of the warp interval */			
+		else if (tt < tBegin + dur1 + durHold + dur2){ /* Time compression (acceleration) at the end of the warp interval */			
 			wt = tBegin + dur1 + durHold + dur2;
-			wt -= (tBegin + dur1 + durHold + dur2 - t) * rate2;
+			wt -= (tBegin + dur1 + durHold + dur2 - tt) * rate2;
 		}
 			
 		wt += static_cast<double>(statOnsetIndex) * frameDur;
@@ -259,13 +265,19 @@ const bool PERT_CFG::checkWarpIntervalsOverlap(const pvocWarpAtom t_warpCfg) {
 void PERT_CFG::addWarpCfg(double t_tBegin, double t_rate1, 
 						  double t_dur1, double t_durHold, double t_rate2)
 	throw(overlappingWarpIntervalsError) {
-	pvocWarpAtom t_warpCfg(t_tBegin, t_rate1, t_dur1, t_durHold, t_rate2);
 
-	/* Check to make sure that there is no overlapping time warp periods */
-	if ( !checkWarpIntervalsOverlap(t_warpCfg) )
-		warpCfg.push_back(t_warpCfg);
-	else
-		throw overlappingWarpIntervalsError();
+	try {
+		pvocWarpAtom t_warpCfg(t_tBegin, t_rate1, t_dur1, t_durHold, t_rate2);
+
+		/* Check to make sure that there is no overlapping time warp periods */
+		if ( !checkWarpIntervalsOverlap(t_warpCfg) )
+			warpCfg.push_back(t_warpCfg);
+		else
+			throw overlappingWarpIntervalsError();
+	}
+	catch (pvocWarpAtom::rateError) {
+		throw warpCfgInitError();
+	}
 
 }
 
@@ -274,13 +286,18 @@ void PERT_CFG::addWarpCfg(int t_ostInitState, double t_tBegin, double t_rate1,
 						  double t_dur1, double t_durHold, double t_rate2)
 	throw(overlappingWarpIntervalsError) {
 
-	pvocWarpAtom t_warpCfg(t_ostInitState, t_tBegin, t_rate1, t_dur1, t_durHold, t_rate2);
+	try {
+		pvocWarpAtom t_warpCfg(t_ostInitState, t_tBegin, t_rate1, t_dur1, t_durHold, t_rate2);
 
-	/* Check to make sure that there is no overlapping time warp periods */
-	if ( !checkWarpIntervalsOverlap(t_warpCfg) )
-		warpCfg.push_back(t_warpCfg);
-	else
-		throw overlappingWarpIntervalsError();
+		/* Check to make sure that there is no overlapping time warp periods */
+		if ( !checkWarpIntervalsOverlap(t_warpCfg) )
+			warpCfg.push_back(t_warpCfg);
+		else
+			throw overlappingWarpIntervalsError();
+	}
+	catch (pvocWarpAtom::rateError) {
+		throw warpCfgInitError();
+	}
 
 }
 
@@ -356,6 +373,13 @@ void PERT_CFG::readFromFile(const string pertCfgFN, const int bVerbose)
 				
 				mexErrMsgTxt(oss.str().c_str());
 			}
+			catch (warpCfgInitError) {
+				ostringstream oss;
+				oss << "ERROR: Failed to initialize time-warping event # " 
+					<< nReadAtoms + 1;
+
+				mexErrMsgTxt(oss.str().c_str());
+			}
 		}
 		else if (items.size() == 6) {
 			t_ostInitState = static_cast<int>(atof(items[0].c_str()));
@@ -373,6 +397,13 @@ void PERT_CFG::readFromFile(const string pertCfgFN, const int bVerbose)
 				oss << "ERROR: Overlapping time intervals between time-warping events. " 
 					<< "Time-warp event #" << nReadAtoms + 1 << " cannot be loaded.";
 				
+				mexErrMsgTxt(oss.str().c_str());
+			}
+			catch (warpCfgInitError) {
+				ostringstream oss;
+				oss << "ERROR: Failed to initialize time-warping event # " 
+					<< nReadAtoms + 1;
+
 				mexErrMsgTxt(oss.str().c_str());
 			}
 		}

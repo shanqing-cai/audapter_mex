@@ -584,4 +584,6 @@ public:
 	const int getMaxDataSize() const { return maxDataSize; };
 	const int getMaxFrameLen() const { return maxFrameLen; };
 	const int getMaxDelayFrames() const {return maxDelayFrames; };
+
+	const int getMaxPBSize() const { return maxPBSize; };
 };

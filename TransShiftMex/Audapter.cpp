@@ -157,8 +157,8 @@ Audapter :: Audapter()
 	params.addParam("stereomode",	"Two-channel mode", Parameter::TYPE_INT);
 
 	/* Integer array parameters */
-	//params.addParam("pvocampnormtrans", "Phase vocoder amplitude normalization transitional period length (frames)", Parameter::TYPE_INT_ARRAY);
-	//params.addParam("delayframes",	"DAF global delay (frames): maxNVoices-long array", Parameter::TYPE_INT_ARRAY); //TODO: Fix type
+	params.addParam("pvocampnormtrans", "Phase vocoder amplitude normalization transitional period length (frames)", Parameter::TYPE_INT_ARRAY);
+	params.addParam("delayframes",	"DAF global delay (frames): maxNVoices-long array", Parameter::TYPE_INT_ARRAY); //TODO: Fix type
 
 	/* Double parameters */
 	params.addParam("scale",		"Output scaling factor (gain)", Parameter::TYPE_DOUBLE);
@@ -173,12 +173,12 @@ Audapter :: Audapter()
 	params.addParam("wgamp",		"Waveform generator: sine-wave peak amplitude", Parameter::TYPE_DOUBLE);
 	params.addParam("wgtime",		"Waveform generator: sine-wave duration (s)", Parameter::TYPE_DOUBLE);
 
-	params.addParam("f2min",		"Formant perturbation field: minimum F2 (Hz)", Parameter::TYPE_DOUBLE);	//
-	params.addParam("f2max",		"Formant perturbation field: maximum F2 (Hz)", Parameter::TYPE_DOUBLE);	//
-	params.addParam("f1min",		"Formant perturbation field: minimum F1 (Hz)", Parameter::TYPE_DOUBLE);	//
-	params.addParam("f1max",		"Formant perturbation field: maximum F1 (Hz)", Parameter::TYPE_DOUBLE);	//
-	params.addParam("lbk",			"Formant perturbation field: Oblique lower border: Slope k", Parameter::TYPE_DOUBLE);	//
-	params.addParam("lbb",			"Formant perturbation field: Oblique lower border: Intercept b", Parameter::TYPE_DOUBLE);	//
+	params.addParam("f2min",		"Formant perturbation field: minimum F2 (Hz)", Parameter::TYPE_DOUBLE);
+	params.addParam("f2max",		"Formant perturbation field: maximum F2 (Hz)", Parameter::TYPE_DOUBLE);
+	params.addParam("f1min",		"Formant perturbation field: minimum F1 (Hz)", Parameter::TYPE_DOUBLE);
+	params.addParam("f1max",		"Formant perturbation field: maximum F1 (Hz)", Parameter::TYPE_DOUBLE);
+	params.addParam("lbk",			"Formant perturbation field: Oblique lower border: Slope k", Parameter::TYPE_DOUBLE);
+	params.addParam("lbb",			"Formant perturbation field: Oblique lower border: Intercept b", Parameter::TYPE_DOUBLE);
 
 	params.addParam("triallen",		"Trial length (s)", Parameter::TYPE_DOUBLE);	//
 	params.addParam("ramplen",		"Audio ramp length (s)", Parameter::TYPE_DOUBLE);	//
@@ -197,9 +197,9 @@ Audapter :: Audapter()
 	
 	/* Double array parameters */
 	params.addParam("datapb",		"Waveform for playback", Parameter::TYPE_DOUBLE_ARRAY);
-	params.addParam("pertf2",		"Formant perturbation field: F2 grid (Hz)", Parameter::TYPE_DOUBLE_ARRAY);	//
-	params.addParam("pertamp",		"Formant perturbation field: Perturbation vector amplitude", Parameter::TYPE_DOUBLE_ARRAY);	//
-	params.addParam("pertphi",		"Formant perturbation field: Perturbation vector angle", Parameter::TYPE_DOUBLE_ARRAY);	//
+	params.addParam("pertf2",		"Formant perturbation field: F2 grid (Hz)", Parameter::TYPE_DOUBLE_ARRAY);
+	params.addParam("pertamp",		"Formant perturbation field: Perturbation vector amplitude", Parameter::TYPE_DOUBLE_ARRAY);
+	params.addParam("pertphi",		"Formant perturbation field: Perturbation vector angle", Parameter::TYPE_DOUBLE_ARRAY);
 	params.addParam("gain",			"Global intensity gain", Parameter::TYPE_DOUBLE_ARRAY);	//
 
 	params.addParam("tsgtonedur",	"Tone sequence generator: tone durations (s)", Parameter::TYPE_DOUBLE_ARRAY);	//
@@ -786,7 +786,11 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 	}
 	else if (ns == string("datapb")) {
 		ptr = (void *)data_pb;
-		len = maxPBSize;
+		
+		if (nPars > maxPBSize)
+			mexErrMsgTxt("Input waveform is too long");
+
+		len = (nPars < maxPBSize) ? nPars : maxPBSize;
 	}
 	else if (ns == string("f2min")) {
 		ptr = (void *)&p.F2Min;
@@ -882,7 +886,7 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 		ptr = (void *)p.tsgToneDur;
 		len = maxNTones;
 	}
-	else if (ns == string("tsgntonefreq")) {
+	else if (ns == string("tsgtonefreq")) {
 		ptr = (void *)p.tsgToneFreq;
 		len = maxNTones;
 	}
@@ -1880,12 +1884,9 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 
 int Audapter::handleBufferSineGen(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_size)	// Sine wave (pure tone) generator
 {
-	int n;
-	double dt;
-
-	dt=0.00002083333333333333;//((double) p.sr)*((double) p.downFact);
-
-	for(n=0;n<frame_size;n++){
+	const dtype dt = 1.0 / p.sr / p.downFact;
+	
+	for(int n = 0; n < frame_size; ++n) {
 		// outFrame_ptr[n]=p.wgAmp*sin(2*M_PI*p.wgFreq*p.wgTime);
 		outFrame_ptr[n * 2] = outFrame_ptr[n * 2 + 1] = p.wgAmp*sin(2*M_PI*p.wgFreq*p.wgTime);
 		p.wgTime=p.wgTime+dt;

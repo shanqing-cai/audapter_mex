@@ -13,6 +13,9 @@
 
 class pvocWarpAtom {
 public:
+	/* Error classes */
+	class rateError {};
+
 	double tBegin;
 	double rate1;	// Should aways be in the interval of (0, 1)
 	double dur1;
@@ -36,8 +39,8 @@ public:
 
 	/* Test if the input time t is within the time-shift period and output the warped time (wt) */
 	const bool procTimeWarp(const int stat, const int statOnsetIndex, 
-								const int nDelay, const double frameDur, 
-								double & t, double & wt) const;
+							const int nDelay, const double frameDur, 
+							const double & t, double & wt) const;
 };
 
 class PERT_CFG { // Pitch and intensity perturbation configurtion
@@ -48,7 +51,8 @@ private:
 
 public:
 	/* Error classes */
-	class pcfFileReadingError {};
+	class warpCfgInitError {};
+	class pcfFileReadingError {};	
 	class pcfFileSyntaxError {
 	public:
 		std::string errLine;
