@@ -122,20 +122,20 @@ Audapter :: Audapter()
 
 	/* Modifiable parameters */
 	/* Boolean parameters */
-	params.addParam("bshift",		"Formant perturbation switch", Parameter::TYPE_BOOL); //
-	params.addParam("btrack",		"Formant tracking switch", Parameter::TYPE_BOOL); //
-	params.addParam("bdetect",		"Formant tracking period detection switch", Parameter::TYPE_BOOL);	//
-	params.addParam("bweight",		"Switch for intensity-weighted smoothing of formant frequencies", Parameter::TYPE_BOOL);	//
-	params.addParam("bcepslift",	"Switch for cepstral liftering for formant trackng", Parameter::TYPE_BOOL);	//
-	params.addParam("bratioshift",	"Switch for ratio-based formant shifting", Parameter::TYPE_BOOL); //
-	params.addParam("bmelshift",	"Switch for formant shifting based on the mel frequency scale", Parameter::TYPE_BOOL);	//
-	params.addParam("bgainadapt",	"Formant perturbation gain adaptation switch", Parameter::TYPE_BOOL);	//
+	params.addParam("bshift",		"Formant perturbation switch", Parameter::TYPE_BOOL);
+	params.addParam("btrack",		"Formant tracking switch", Parameter::TYPE_BOOL);
+	params.addParam("bdetect",		"Formant tracking period detection switch", Parameter::TYPE_BOOL);
+	params.addParam("bweight",		"Switch for intensity-weighted smoothing of formant frequencies", Parameter::TYPE_BOOL);
+	params.addParam("bcepslift",	"Switch for cepstral liftering for formant trackng", Parameter::TYPE_BOOL);
+	params.addParam("bratioshift",	"Switch for ratio-based formant shifting", Parameter::TYPE_BOOL);
+	params.addParam("bmelshift",	"Switch for formant shifting based on the mel frequency scale", Parameter::TYPE_BOOL);
+	params.addParam("bgainadapt",	"Formant perturbation gain adaptation switch", Parameter::TYPE_BOOL);
 	params.addParam("brmsclip",		"Switch for auto RMS intensity clipping (loudness protection)", Parameter::TYPE_BOOL);	//
-	params.addParam("bbypassfmt",	"Switch for bypassing formant tracking (for use in pitch shifting and time warping", Parameter::TYPE_BOOL);	//
-	params.addParam("bpitchshift",	"Pitch shifting switch", Parameter::TYPE_BOOL);	 //TODO: Fix //
-	params.addParam("bdownsampfilt", "Down-sampling filter switch", Parameter::TYPE_BOOL);	// TODO: Fix	//
-	params.addParam("mute",			"Global mute switch", Parameter::TYPE_BOOL_ARRAY);	// TODO: Fix	//
-	params.addParam("bpvocmpnorm",	"Phase vocoder amplitude normalization switch", Parameter::TYPE_BOOL); // TODO: Fix	//
+	params.addParam("bbypassfmt",	"Switch for bypassing formant tracking (for use in pitch shifting and time warping", Parameter::TYPE_BOOL);
+	params.addParam("bpitchshift",	"Pitch shifting switch", Parameter::TYPE_BOOL);
+	params.addParam("bdownsampfilt", "Down-sampling filter switch", Parameter::TYPE_BOOL);
+	params.addParam("mute",			"Global mute switch", Parameter::TYPE_BOOL_ARRAY);
+	params.addParam("bpvocmpnorm",	"Phase vocoder amplitude normalization switch", Parameter::TYPE_BOOL);
 
 	/* Integer parameters */
 	params.addParam("srate",		"Sampling rate (Hz), after downsampling", Parameter::TYPE_INT);
@@ -151,14 +151,14 @@ Audapter :: Audapter()
 	params.addParam("minvowellen",  "Minimum vowel length (frames)", Parameter::TYPE_INT);
 	params.addParam("pvocframelen", "Phase vocoder frame length (samples)", Parameter::TYPE_INT);	//
 	params.addParam("pvochop",		"Phase vocoder frame hop (samples)", Parameter::TYPE_INT);	//
-	params.addParam("nfb",			"Number of feedbac voices", Parameter::TYPE_INT);	//
-	params.addParam("tsgntones",	"Tone sequence generator: number of tones", Parameter::TYPE_INT);	//
+	params.addParam("nfb",			"Number of feedbac voices", Parameter::TYPE_INT);
+	params.addParam("tsgntones",	"Tone sequence generator: number of tones", Parameter::TYPE_INT);
 	params.addParam("downfact",		"Downsampling factor", Parameter::TYPE_INT);
 	params.addParam("stereomode",	"Two-channel mode", Parameter::TYPE_INT);
 
 	/* Integer array parameters */
 	params.addParam("pvocampnormtrans", "Phase vocoder amplitude normalization transitional period length (frames)", Parameter::TYPE_INT_ARRAY);
-	params.addParam("delayframes",	"DAF global delay (frames): maxNVoices-long array", Parameter::TYPE_INT_ARRAY); //TODO: Fix type
+	params.addParam("delayframes",	"DAF global delay (frames): maxNVoices-long array", Parameter::TYPE_INT_ARRAY);
 
 	/* Double parameters */
 	params.addParam("scale",		"Output scaling factor (gain)", Parameter::TYPE_DOUBLE);
@@ -183,13 +183,13 @@ Audapter :: Audapter()
 	params.addParam("triallen",		"Trial length (s)", Parameter::TYPE_DOUBLE);	//
 	params.addParam("ramplen",		"Audio ramp length (s)", Parameter::TYPE_DOUBLE);	//
 
-	params.addParam("afact",		"Formant-tracking algorithm: alpha", Parameter::TYPE_DOUBLE);	//
-	params.addParam("bfact",		"Formant-tracking algorithm: beta", Parameter::TYPE_DOUBLE);	//
-	params.addParam("gfact",		"Formant-tracking algorithm: gamma", Parameter::TYPE_DOUBLE);	//
-	params.addParam("fn1",			"Formant-tracking algorithm: F1 prior", Parameter::TYPE_DOUBLE);	//
-	params.addParam("fn2",			"Formant-tracking algorithm: F2 prior", Parameter::TYPE_DOUBLE);	//
+	params.addParam("afact",		"Formant-tracking algorithm: alpha", Parameter::TYPE_DOUBLE);
+	params.addParam("bfact",		"Formant-tracking algorithm: beta", Parameter::TYPE_DOUBLE);
+	params.addParam("gfact",		"Formant-tracking algorithm: gamma", Parameter::TYPE_DOUBLE);
+	params.addParam("fn1",			"Formant-tracking algorithm: F1 prior", Parameter::TYPE_DOUBLE);
+	params.addParam("fn2",			"Formant-tracking algorithm: F2 prior", Parameter::TYPE_DOUBLE);
 
-	params.addParam("pitchshiftratio", "Pitch-shifting: ratio (1.0 = no shift)", Parameter::TYPE_DOUBLE);	//
+	params.addParam("pitchshiftratio", "Pitch-shifting: ratio (1.0 = no shift)", Parameter::TYPE_DOUBLE);
 
 	params.addParam("rmsff_fb",		"Speech-modulated noise feedback: RMS forgetting factor", Parameter::TYPE_SMN_RMS_FF);	//
 	params.addParam("fb4gaindb",	"Speech-modulated noise feedback: intensity gain factor", Parameter::TYPE_DOUBLE);	//
@@ -200,13 +200,13 @@ Audapter :: Audapter()
 	params.addParam("pertf2",		"Formant perturbation field: F2 grid (Hz)", Parameter::TYPE_DOUBLE_ARRAY);
 	params.addParam("pertamp",		"Formant perturbation field: Perturbation vector amplitude", Parameter::TYPE_DOUBLE_ARRAY);
 	params.addParam("pertphi",		"Formant perturbation field: Perturbation vector angle", Parameter::TYPE_DOUBLE_ARRAY);
-	params.addParam("gain",			"Global intensity gain", Parameter::TYPE_DOUBLE_ARRAY);	//
+	params.addParam("gain",			"Global intensity gain", Parameter::TYPE_DOUBLE_ARRAY);
 
-	params.addParam("tsgtonedur",	"Tone sequence generator: tone durations (s)", Parameter::TYPE_DOUBLE_ARRAY);	//
-	params.addParam("tsgtonefreq",	"Tone sequence generator: tone frequencies (Hz)", Parameter::TYPE_DOUBLE_ARRAY);	//
-	params.addParam("tsgtoneamp",	"Tone sequence generator: tone peak amplitudes", Parameter::TYPE_DOUBLE_ARRAY);	//
-	params.addParam("tsgtoneramp",	"Tone sequence generator: tone ramp durations (s)", Parameter::TYPE_DOUBLE_ARRAY);	//
-	params.addParam("tsgint",		"Tone sequence generator: intervals between tone onsets (s)", Parameter::TYPE_DOUBLE_ARRAY);	//
+	params.addParam("tsgtonedur",	"Tone sequence generator: tone durations (s)", Parameter::TYPE_DOUBLE_ARRAY);
+	params.addParam("tsgtonefreq",	"Tone sequence generator: tone frequencies (Hz)", Parameter::TYPE_DOUBLE_ARRAY);
+	params.addParam("tsgtoneamp",	"Tone sequence generator: tone peak amplitudes", Parameter::TYPE_DOUBLE_ARRAY);
+	params.addParam("tsgtoneramp",	"Tone sequence generator: tone ramp durations (s)", Parameter::TYPE_DOUBLE_ARRAY);
+	params.addParam("tsgint",		"Tone sequence generator: intervals between tone onsets (s)", Parameter::TYPE_DOUBLE_ARRAY);
 
 	/* Other types of parameters */
 	params.addParam("pvocwarp",		"Phase vocoder time warping configuration", Parameter::TYPE_PVOC_WARP);	//
@@ -290,7 +290,7 @@ Audapter :: Audapter()
 	//SC(2012/03/05)
 	p.bPitchShift		= 0;
 	for (n = 0; n < maxNVoices; n++)
-		p.pitchShiftRatio[n]   = 1.;	// 1. = no shift.
+		p.pitchShiftRatio[n]   = 1.0;	// 1.0 = no shift.
 		
 	//SC Initialize the playback data and the counter
 	for(n=0;n<maxPBSize;n++){
@@ -391,14 +391,20 @@ Audapter :: Audapter()
 	}
 
 	/* Initialize phase vocoder */
-	try {
-		pVoc = new PhaseVocoder(PhaseVocoder::PITCH_SHIFT_ONLY, p.nDelay, 
-								static_cast<dtype>(p.sr), p.frameLen, 
-								p.pvocFrameLen, p.pvocHop);
+	pVoc = new PhaseVocoder[p.nFB];
+		
+	for (int i = 0; i < p.nFB; ++i) {
+		try {
+			pVoc[i].config(PhaseVocoder::operMode::PITCH_SHIFT_ONLY, p.nDelay, 
+						   static_cast<dtype>(p.sr), p.frameLen, 
+							   p.pvocFrameLen, p.pvocHop);
+		}
+		catch (PhaseVocoder::initializationError) {
+			mexErrMsgTxt("Failed to initialize phase vocoder");
+		}
+
 	}
-	catch (PhaseVocoder::initializationError) {
-		mexErrMsgTxt("Failed to initialize phase vocoder");
-	}
+
 //************************************** Initialize filter coefs **************************************	
 
 	// preemphasis filter
@@ -452,7 +458,7 @@ Audapter::~Audapter(){
 		delete fmtTracker;
 
 	if (pVoc)
-		delete pVoc;
+		delete [] pVoc;
 }
 
 
@@ -603,9 +609,8 @@ void Audapter::reset()
 
 	/* Reset phase vocoder */
 	if (pVoc)
-		pVoc->reset();
-
-
+		for (int i = 0; i < p.nFB; ++i)
+			pVoc[i].reset();
 }
 
 void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars, bool bVerbose, int *length) {
@@ -711,9 +716,11 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 	}
 	else if (ns == string("delayframes")) {
 		ptr = (void *)p.delayFrames;
-		len = maxNVoices;
-		if (len > p.nFB)
-			len = p.nFB;
+		
+		if ( bSet && (nPars != p.nFB) )
+			mexErrMsgTxt("Erroneous length of input delayFrames");
+
+		len = p.nFB;
 	}
 	else if (ns == string("bpitchshift")) {
 		ptr = (void *)&p.bPitchShift;
@@ -735,15 +742,29 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 	}
 	else if (ns == string("nfb")) {
 		ptr = (void *)&p.nFB;
+
+		if (bSet)
+			bRemakePVoc = (int)(*((dtype *)value)) != p.nFB;
 	}
 	else if (ns == string("mute")) {
-		ptr = (void *)p.mute;
-		len = maxNVoices;
-		if (len > p.nFB)
-			len = p.nFB;
+		ptr = (void *)p.mute;		
+
+		if ( bSet && (nPars != p.nFB) )
+			mexErrMsgTxt("Erroneous length of input delayFrames");
+		
 	}
 	else if (ns == string("tsgntones")) {
 		ptr = (void *)&p.tsgNTones;
+
+		if ( *((int *)ptr) < 0 )
+			mexErrMsgTxt("Negative value for tsgNTones");
+		if ( *((int *)ptr) > maxNTones ) {
+			ostringstream oss;
+			oss << "Number of tones in the tone sequence is too big (max allowed = " 
+				<< maxNTones << ")";
+			mexErrMsgTxt(oss.str().c_str());
+		}
+
 	}
 	else if (ns == string("downfact")) {
 		ptr = (void *)&p.downFact;
@@ -860,9 +881,10 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 	}
 	else if (ns == string("pitchshiftratio")) {
 		ptr = (void *)p.pitchShiftRatio;
-		len = maxNVoices;
-		if (len > p.nFB)
-			len = p.nFB;
+
+		if ( bSet && (nPars != p.nFB) )
+			mexErrMsgTxt("Erroneous length of input delayFrames");		
+		len = p.nFB;
 	}
 	else if (ns == string("pvocwarp")) {
 		/*ptr = (void *) pertCfg.warpCfg[0];
@@ -874,33 +896,69 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 		ptr = NULL; //TODO
 	}
 	else if (ns == string("gain")) {
-		ptr = (void *)p.gain;
-		len = maxNVoices;
-		if (len > p.nFB)
-			len = p.nFB;
+		ptr = (void *)p.gain;	
+
+		if ( bSet && (nPars != p.nFB) )
+			mexErrMsgTxt("Erroneous length of input delayFrames");		
+		len = p.nFB;
 	}
 	else if (ns == string("rmsclipthresh")) {
 		ptr = (void *)&p.rmsClipThresh;
 	}
 	else if (ns == string("tsgtonedur")) {
 		ptr = (void *)p.tsgToneDur;
-		len = maxNTones;
+		len = p.tsgNTones;
+
+		if ( bSet && (nPars != len) ) {
+			ostringstream oss;
+			oss << "Erroneous number of elements in input parameter value: ";
+			oss << nPars << " (expected: " << len << ")";			
+			mexErrMsgTxt(oss.str().c_str());
+		}
 	}
 	else if (ns == string("tsgtonefreq")) {
 		ptr = (void *)p.tsgToneFreq;
-		len = maxNTones;
+		len = p.tsgNTones;
+
+		if ( bSet && (nPars != len) ) {
+			ostringstream oss;
+			oss << "Erroneous number of elements in input parameter value: ";
+			oss << nPars << " (expected: " << len << ")";			
+			mexErrMsgTxt(oss.str().c_str());
+		}
 	}
 	else if (ns == string("tsgtoneamp")) {
 		ptr = (void *)p.tsgToneAmp;
-		len = maxNTones;		
+		len = p.tsgNTones;
+
+		if ( bSet && (nPars != len) ) {
+			ostringstream oss;
+			oss << "Erroneous number of elements in input parameter value: ";
+			oss << nPars << " (expected: " << len << ")";			
+			mexErrMsgTxt(oss.str().c_str());
+		}
 	}
 	else if (ns == string("tsgtoneramp")) {
 		ptr = (void *)p.tsgToneRamp;
-		len = maxNTones;
+		len = p.tsgNTones;
+
+		if ( bSet && (nPars != len) ) {
+			ostringstream oss;
+			oss << "Erroneous number of elements in input parameter value: ";
+			oss << nPars << " (expected: " << len << ")";
+			mexErrMsgTxt(oss.str().c_str());
+		}
 	}
 	else if (ns == string("tsgint")) {
 		ptr = (void *)p.tsgInt;
-		len = maxNTones;
+		len = p.tsgNTones;
+
+		if ( bSet && (nPars != len) ) {
+			ostringstream oss;
+			oss << "Erroneous number of elements in input parameter value: ";
+			oss << nPars << " (expected: " << len << ")";			
+			mexErrMsgTxt(oss.str().c_str());
+		}
 	}
 	else if (ns == string("rmsff_fb")) {
 		ptr = (void *)p.rmsFF_fb;
@@ -977,8 +1035,10 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 	
 		/* Additional internal parameter changes */
 		if (ns == string("nfb")) {
-			if (p.nFB > maxNVoices)
-				p.nFB = maxNVoices;
+			if ( bSet && ((p.nFB <= 0) || (p.nFB > maxNVoices)) ) {
+				mexErrMsgTxt("Invalid value of nFB. nFB set to 1.");
+				p.nFB = 1;
+			}
 		}
 		else if (ns == string("framelen") || ns == string("ndelay")) {
 			p.anaLen = p.frameShift + 2 * (p.nDelay - 1) * p.frameLen;
@@ -1093,20 +1153,27 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 		}
 
 		/* Re-initialize phase vocoder */
-		if (bRemakePVoc) {
-			PhaseVocoder::operMode t_operMode = pVoc->getMode();
-
-			if (pVoc)
-				delete pVoc;
-
-			try {
-				pVoc = new PhaseVocoder(t_operMode, p.nDelay, 
-										static_cast<dtype>(p.sr), p.frameLen, 
-										p.pvocFrameLen, p.pvocHop);
+		if ( bRemakePVoc ) {
+			PhaseVocoder::operMode t_operMode;
+			if ( pVoc ) {
+				t_operMode = pVoc[0].getMode();
+				delete [] pVoc;
 			}
-			catch (PhaseVocoder::initializationError) {
-				mexErrMsgTxt("Failed to initialize phase vocoder");
-			}	
+			else {
+				t_operMode = PhaseVocoder::operMode::PITCH_SHIFT_ONLY;
+			}
+
+			pVoc = new PhaseVocoder[p.nFB];
+			for (int i = 0; i < p.nFB; ++i) {
+				try {
+					pVoc[i].config(t_operMode, p.nDelay, 
+								   static_cast<dtype>(p.sr), p.frameLen, 
+						    	   p.pvocFrameLen, p.pvocHop);
+				}
+				catch (PhaseVocoder::initializationError) {
+					mexErrMsgTxt("Failed to initialize phase vocoder");
+				}
+			}
 		}
 
 		return NULL;
@@ -1145,13 +1212,13 @@ void Audapter::queryParam(const char *name, mxArray **output) {
 
 		for (int i = 0; i < length; i++) {
 			if (pType == Parameter::TYPE_BOOL || pType == Parameter::TYPE_BOOL_ARRAY) {
-				output_ptr[i] = (double)(*(int *) val);
+				output_ptr[i] = (double)(*((int *)val + i));
 			}
 			else if (pType == Parameter::TYPE_INT || pType == Parameter::TYPE_INT_ARRAY) {
-				output_ptr[i] = (double)(*(int *) val);
+				output_ptr[i] = (double)(*((int *)val + i));
 			}
 			else if (pType == Parameter::TYPE_DOUBLE || pType == Parameter::TYPE_DOUBLE_ARRAY) {
-				output_ptr[i] = (double)(*(double *) val);
+				output_ptr[i] = *((double *)val + i);
 			}
 		}
 	}
@@ -1509,11 +1576,13 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 
 	//SCai (10/19/2012): determine the amount of pitch and intensity shift based on the OST stat number
 	// Note: we will override p.pitchShiftRatio[0] if pertCfg.n > 0d
-	if (stat < pertCfg.n) {
-		p.pitchShiftRatio[0] = pow(2.0, pertCfg.pitchShift[stat] / 12.0);
-		intShiftRatio = pow(10, pertCfg.intShift[stat] / 20.0);
+	if (pertCfg.n > 0) {
+		if (stat < pertCfg.n) {
+			p.pitchShiftRatio[0] = pow(2.0, pertCfg.pitchShift[stat] / 12.0);
+			intShiftRatio = pow(10, pertCfg.intShift[stat] / 20.0);
+		}
 	}
-
+	
 	//Marked
 	dtype ms_in = 0.0; // DEBUG: amp
 	dtype ms_out = 0.0; // DEBUG: amp 
@@ -1533,7 +1602,9 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 
 			if (frame_counter_nowarp - (p.nDelay - 1) < p.pvocFrameLen / p.frameLen) {
 				duringPitchShift = false;
-				p.pitchShiftRatio[0] = 1.0;
+
+				if ( pertCfg.n > 0)
+					p.pitchShiftRatio[0] = 1.0;
 			}
 		}
 		else {			
@@ -1552,77 +1623,79 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 
 			// --- ~Time warping preparation ---
 			/* Time warping, overrides pitch shifting */
-			const int ifb = 0;
-			duringTimeWarp = pertCfg.procTimeWarp(stat, ostTab.statOnsetIndices, 
-												  p.nDelay, static_cast<double>(p.frameLen) / static_cast<double>(p.sr), 
-									    		  t0, t1);
+			int ifb_max;
+			if (pertCfg.n > 0) /* PCF overrides multivoice mode */
+				ifb_max = 0;
+			else
+				ifb_max = p.nFB - 1;
+
+			for (int ifb = 0; ifb <= ifb_max; ++ifb) {
+				duringTimeWarp = pertCfg.procTimeWarp(stat, ostTab.statOnsetIndices, 
+													  p.nDelay, static_cast<double>(p.frameLen) / static_cast<double>(p.sr), 
+									    			  t0, t1);
 			
-			/* Call phase vocoder */
-			try {
-				if (pVoc->getMode() == PhaseVocoder::TIME_WARP_ONLY) {
-					dtype warp_t;
-					if (duringTimeWarp) {
-						warp_t = t1 - t0; /* Expected to be negative */	
-					}
-					else {
-						warp_t = 0.0;
-					}
+				/* Call phase vocoder */
+				try {
+					if (pVoc[ifb].getMode() == PhaseVocoder::TIME_WARP_ONLY) {
+						dtype warp_t;
+						if (duringTimeWarp) {
+							warp_t = t1 - t0; /* Expected to be negative */	
+						}
+						else {
+							warp_t = 0.0;
+						}
 					
-					pVoc->procFrame(xBuf, warp_t);
-					/* DEBUG */
-					/*pVoc->procFrame(xBuf, 0.0);*/
-				}
-				else { /* TODO */
-					if (pertCfg.pitchShift && stat < pertCfg.n) {
-						pVoc->procFrame(xBuf, pertCfg.pitchShift[stat]);
+						pVoc[ifb].procFrame(xBuf, warp_t);
 					}
 					else {
-						pVoc->procFrame(xBuf, 0.0);
-					}					
+						if (pertCfg.pitchShift && stat < pertCfg.n) {						
+							pVoc[ifb].procFrame(xBuf, pertCfg.pitchShift[stat]);
+						}
+						else if ( (pertCfg.n == 0) && (p.pitchShiftRatio[ifb] != 1.0) ) {
+							pVoc[ifb].procFrame(xBuf, (log(p.pitchShiftRatio[ifb]) / log(2.0)) * 12.0);
+						}
+						else {
+							pVoc[ifb].procFrame(xBuf, 0.0);
+						}					
+					}
 				}
+				catch (PhaseVocoder::timeWarpFuturePredError) {
+					mexErrMsgTxt("Error occurred during phase-vocoder "
+								 "time warping: predicting the future is impossible");
+				}
+				catch (PhaseVocoder::fixedPitchShiftNotSpecifiedErr) {
+					mexErrMsgTxt("Phase vocoder error: "
+								 "Fixed pitch shift not specified under mode "
+								 "TIME_WARP_WITH_FIXED_PITCH_SHIFT");
+				}
+
+				duringTimeWarp_prev = duringTimeWarp;
+
+				// --- Accumulate to buffer ---
+				for (i0 = 0; i0 < p.pvocFrameLen; i0++){
+					/* Using pVoc results */
+					outFrameBufPS[ifb][(outFrameBuf_circPtr + i0) % (internalBufLen)] = 
+						outFrameBufPS[ifb][(outFrameBuf_circPtr + i0) % (internalBufLen)] + 
+						pVoc[ifb].ftBuf2[2 * i0];
+				}			
+
+				// Front zeroing
+				for (i0 = 0; i0 < p.pvocHop; i0++) {
+					outFrameBufPS[ifb][(outFrameBuf_circPtr + p.pvocFrameLen + i0) % (internalBufLen)] = 0.;
+				}
+
+				// Back Zeroing
+				for (i0 = 1; i0 <= p.pvocHop; i0++){ // Ad hoc alert!
+					outFrameBufPS[ifb][(outFrameBuf_circPtr - p.delayFrames[ifb] * p.frameLen - i0) % (internalBufLen)] = 0.;						
+				}			
 			}
-			catch (PhaseVocoder::timeWarpFuturePredError) {
-				mexErrMsgTxt("Error occurred during phase-vocoder "
-					         "time warping: predicting the future is impossible");
-			}
-			catch (PhaseVocoder::fixedPitchShiftNotSpecifiedErr) {
-				mexErrMsgTxt("Phase vocoder error: "
-					         "Fixed pitch shift not specified under mode "
-							 "TIME_WARP_WITH_FIXED_PITCH_SHIFT");
-			}
-
-			duringTimeWarp_prev = duringTimeWarp;
-
-			// --- Accumulate to buffer ---
-			for (i0 = 0; i0 < p.pvocFrameLen; i0++){					
-				/* Old: using native results */
-				/*outFrameBufPS[ifb][(outFrameBuf_circPtr + i0) % (internalBufLen)] = 
-					outFrameBufPS[ifb][(outFrameBuf_circPtr + i0) % (internalBufLen)] + 
-					2 * ftBuf2ps[0][2 * i0] * hwin2[i0] / (osamp / 2);*/
-
-				/* Using pVoc results */
-				outFrameBufPS[ifb][(outFrameBuf_circPtr + i0) % (internalBufLen)] = 
-					outFrameBufPS[ifb][(outFrameBuf_circPtr + i0) % (internalBufLen)] + 
-					pVoc->ftBuf2[2 * i0];
-			}			
-
-			// Front zeroing
-			for (i0 = 0; i0 < p.pvocHop; i0++) {
-				outFrameBufPS[ifb][(outFrameBuf_circPtr + p.pvocFrameLen + i0) % (internalBufLen)] = 0.;
-			}
-
-			// Back Zeroing
-			for (i0 = 1; i0 <= p.pvocHop; i0++){ // Ad hoc alert!
-				outFrameBufPS[ifb][(outFrameBuf_circPtr - p.delayFrames[ifb] * p.frameLen - i0) % (internalBufLen)] = 0.;						
-			}			
-
 		}
 
 		duringPitchShift_prev = duringPitchShift;
 	}
 	else{
 		duringPitchShift = false;
-		p.pitchShiftRatio[0] = 1.0;
+		//p.pitchShiftRatio[0] = 1.0;
 		for (i0 = 0; i0 < p.nFB; i0++)
 			DSPF_dp_blk_move(&outFrameBuf[outFrameBuf_circPtr], &outFrameBufPS[i0][outFrameBuf_circPtr], p.frameLen);
 	}
@@ -1839,23 +1912,7 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 	frame_counter_nowarp++;
 
 	if (((frame_counter)*p.frameLen>=maxRecSize) || ((data_counter+p.nWin)>=maxDataSize)) //avoid segmentation violation
-	{
-		//SC(2012/02/29) Save signal to file
-		/* char dataFileName[200];
-		sprintf(dataFileName, "data%.3d.bin", dataFileCnt);
-		printf("Writing data to file %s: size = %d (%d bytes)\n", dataFileName, maxRecSize, maxRecSize * (sizeof dtype));
-
-		ofstream dataFileCl(dataFileName);
-		dataFileCl.close();
-
-		fstream dataFile(dataFileName, ios::binary | ios::out);
-		if (!dataFile){
-			printf("WARNING: Cannot open file %s\n", dataFileName);
-		}
-
-		dataFile.write((char *) signal_recorder, maxRecSize * (sizeof dtype));
-		dataFile.close(); */
-		
+	{	
 		//mexPrintf("data_counter = %d; frame_counter == %d --> 0.\n", data_counter, frame_counter);
 		frame_counter=0;
 		data_counter=0;
@@ -2701,7 +2758,7 @@ void Audapter::readPertCfg(int bVerbose) {
 
 	/* If no pitch shift or time warp is involved,
 	   an arbitrary default mode will be used */
-	PhaseVocoder::operMode pVocMode = PhaseVocoder::PITCH_SHIFT_ONLY;
+	PhaseVocoder::operMode pVocMode = PhaseVocoder::operMode::PITCH_SHIFT_ONLY;
 	if (pertCfg.warpCfg.size() > 0 && !bIsPitchShift) {
 		pVocMode = PhaseVocoder::TIME_WARP_ONLY;
 	}
@@ -2713,15 +2770,19 @@ void Audapter::readPertCfg(int bVerbose) {
 	}
 
 	if (pVoc)
-		delete pVoc;
+		delete [] pVoc;
 
-	try {
-		pVoc = new PhaseVocoder(pVocMode, p.nDelay, 
-								static_cast<dtype>(p.sr), p.frameLen, 
-								p.pvocFrameLen, p.pvocHop);
-	}
-	catch (PhaseVocoder::initializationError) {
-		mexErrMsgTxt("Failed to initialize phase vocoder");
+	pVoc = new PhaseVocoder[p.nFB];
+
+	for (int i = 0; i < p.nFB; ++i) {
+		try {
+			pVoc[i].config(pVocMode, p.nDelay, 
+				    	   static_cast<dtype>(p.sr), p.frameLen, 
+						   p.pvocFrameLen, p.pvocHop);
+		}
+		catch (PhaseVocoder::initializationError) {
+			mexErrMsgTxt("Failed to initialize phase vocoder");
+		}
 	}
 }
 

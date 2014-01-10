@@ -22,16 +22,30 @@ public:
 	class timeWarpFuturePredError {};
 	class fixedPitchShiftNotSpecifiedErr {};
 
+	/* Default constructor */
+	PhaseVocoder();
+
 	/* Constructor */
 	PhaseVocoder(operMode t_operMode, 
 				 const int t_nDelay, 
 				 const dtype t_sr, 
 				 const int t_frameLen, 
 				 const int t_pvocFrameLen, 
-				 const int t_pvocHop);
+				 const int t_pvocHop);	
 
 	/* Destructor */
 	~PhaseVocoder();
+
+	/* Memory clean up */
+	void cleanup();
+
+	/* Configure parameters */
+	void config(operMode t_operMode, 
+				const int t_nDelay, 
+				const dtype t_sr, 
+				const int t_frameLen, 
+				const int t_pvocFrameLen, 
+				const int t_pvocHop);
 
 	/* Main interface function: process a frame */
 	void procFrame(const dtype * inBuf, const dtype shift);

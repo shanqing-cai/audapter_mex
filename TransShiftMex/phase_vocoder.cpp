@@ -3,6 +3,73 @@
 #include "phase_vocoder.h"
 #include "DSPF.h"
 
+/* Default constructor */
+PhaseVocoder :: PhaseVocoder() :
+	mode(operMode::PITCH_SHIFT_ONLY), nDelay(0), 
+	sr(16000), frameLen(32), 
+	pvocFrameLen(1024), pvocHop(256)
+{
+	internalBufLen = pvocFrameLen * 2;
+
+	/* Windowing function */
+	hWin = new dtype[pvocFrameLen];
+	for(int i = 0; i < pvocFrameLen; ++i){
+		hWin[i] = 0.5 * cos((2 * M_PI * static_cast<dtype>(i)) / static_cast<dtype>(pvocFrameLen)); 
+		hWin[i] = 0.5 - hWin[i];
+	}
+
+	xFrameW = new dtype[pvocFrameLen];
+
+	/* FFT coefficients */
+	fftc = new dtype[pvocFrameLen * 2];
+	gen_w_r2(fftc, pvocFrameLen);
+
+	/* FFT intermediate data fields */
+	ftBuf1 = new dtype[pvocFrameLen * 2];
+	ftBuf2 = new dtype[pvocFrameLen * 2];
+
+	lastPhase = new dtype[pvocFrameLen]; /* TODO: Check size bound is tight */
+	lastPhase_nps = new dtype[pvocFrameLen];
+	lastPhase_ntw = new dtype[pvocFrameLen];
+	sumPhase = new dtype[pvocFrameLen];
+
+	outFrameBufPV = new dtype[internalBufLen];
+
+	X_magn = new dtype[pvocFrameLen];
+	X_phase = new dtype[pvocFrameLen];
+	anaMagn = new dtype[pvocFrameLen];
+	anaFreq = new dtype[pvocFrameLen];
+	synMagn = new dtype[pvocFrameLen];
+	synFreq = new dtype[pvocFrameLen];
+
+	outFrameBuf = new dtype[internalBufLen];
+
+	/* Internal variables */
+	expct = 2.* M_PI * pvocHop / pvocFrameLen; /* Expected phase change */
+	osamp = pvocFrameLen / pvocHop; /* Oversampling factor */
+	freqPerBin = sr / pvocFrameLen; /* Frequency per bin */
+
+	if (mode == TIME_WARP_ONLY || 
+		mode == TIME_WARP_WITH_FIXED_PITCH_SHIFT) {
+		maxNDelayFrames = pvocFrameLen * 8;	/* TODO: Check that the delay doesn't exceed this limit */
+
+		warpCacheMagn = new dtype[maxNDelayFrames * pvocFrameLen];
+		warpCachePhase = new dtype[maxNDelayFrames * pvocFrameLen];
+	}
+	else {
+		maxNDelayFrames = 0;
+
+		warpCacheMagn = 0;
+		warpCachePhase = 0;
+	}
+
+	if (mode == TIME_WARP_WITH_FIXED_PITCH_SHIFT) {
+		fixedPitchShiftST = static_cast<dtype>(0xffffffff); /* NAN */
+	}
+
+	reset();
+}
+
 /* Constructor 
 	Input argument:
 		t_operMode:		operation mode of the phase vocoder
@@ -99,32 +166,130 @@ PhaseVocoder :: PhaseVocoder(const operMode t_operMode,
 	reset();
 }
 
+/* Configure parameters */
+void PhaseVocoder :: config(operMode t_operMode, 
+							const int t_nDelay, 
+							const dtype t_sr, 
+							const int t_frameLen, 
+							const int t_pvocFrameLen, 
+							const int t_pvocHop) 
+{
+	/* Clean up */
+	cleanup();
+
+	mode = t_operMode;
+	nDelay = t_nDelay; 
+	sr = t_sr;
+	frameLen = t_frameLen;
+	pvocFrameLen = t_pvocFrameLen;
+	pvocHop = t_pvocHop;
+
+	/* Input sanity checks */
+	if ( sr <= 0 )
+		throw initializationError();
+
+	if ( (t_pvocFrameLen <= 0) || (t_frameLen <= 0) || (t_pvocHop <= 0) )
+		throw initializationError();
+
+	/* Make sure that pvocFrameLen is power of 2 */
+	if ( !check_power2(t_pvocFrameLen) )
+		throw initializationError();
+
+	/* Make sure that pvocFrameLen is a multiple of pvocHop */
+	if ( t_pvocFrameLen & t_pvocHop != 0 )
+		throw initializationError();
+	
+	internalBufLen = pvocFrameLen * 2;
+
+	/* Windowing function */
+	hWin = new dtype[pvocFrameLen];
+	for(int i = 0; i < pvocFrameLen; ++i){
+		hWin[i] = 0.5 * cos((2 * M_PI * static_cast<dtype>(i)) / static_cast<dtype>(pvocFrameLen)); 
+		hWin[i] = 0.5 - hWin[i];
+	}
+
+	xFrameW = new dtype[pvocFrameLen];
+
+	/* FFT coefficients */
+	fftc = new dtype[pvocFrameLen * 2];
+	gen_w_r2(fftc, pvocFrameLen);
+
+	/* FFT intermediate data fields */
+	ftBuf1 = new dtype[pvocFrameLen * 2];
+	ftBuf2 = new dtype[pvocFrameLen * 2];
+
+	lastPhase = new dtype[pvocFrameLen]; /* TODO: Check size bound is tight */
+	lastPhase_nps = new dtype[pvocFrameLen];
+	lastPhase_ntw = new dtype[pvocFrameLen];
+	sumPhase = new dtype[pvocFrameLen];
+
+	outFrameBufPV = new dtype[internalBufLen];
+
+	X_magn = new dtype[pvocFrameLen];
+	X_phase = new dtype[pvocFrameLen];
+	anaMagn = new dtype[pvocFrameLen];
+	anaFreq = new dtype[pvocFrameLen];
+	synMagn = new dtype[pvocFrameLen];
+	synFreq = new dtype[pvocFrameLen];
+
+	outFrameBuf = new dtype[internalBufLen];
+
+	/* Internal variables */
+	expct = 2.* M_PI * pvocHop / pvocFrameLen; /* Expected phase change */
+	osamp = pvocFrameLen / pvocHop; /* Oversampling factor */
+	freqPerBin = sr / pvocFrameLen; /* Frequency per bin */
+
+	if (mode == TIME_WARP_ONLY || 
+		mode == TIME_WARP_WITH_FIXED_PITCH_SHIFT) {
+		maxNDelayFrames = pvocFrameLen * 8;	/* TODO: Check that the delay doesn't exceed this limit */
+
+		warpCacheMagn = new dtype[maxNDelayFrames * pvocFrameLen];
+		warpCachePhase = new dtype[maxNDelayFrames * pvocFrameLen];
+	}
+	else {
+		maxNDelayFrames = 0;
+
+		warpCacheMagn = 0;
+		warpCachePhase = 0;
+	}
+
+	if (mode == TIME_WARP_WITH_FIXED_PITCH_SHIFT) {
+		fixedPitchShiftST = static_cast<dtype>(0xffffffff); /* NAN */
+	}
+
+	reset();
+}
+
+void PhaseVocoder :: cleanup() {
+	if (hWin)	{ delete [] hWin; hWin = 0; };
+	if (xFrameW){ delete [] xFrameW; xFrameW = 0; };
+
+	if (fftc)	{ delete [] fftc; fftc = 0; }
+	if (ftBuf1)	{ delete [] ftBuf1; ftBuf1 = 0; }
+	if (ftBuf2)	{ delete [] ftBuf2; ftBuf2 = 0; }
+
+	if (lastPhase)		{ delete [] lastPhase; lastPhase = 0; }
+	if (lastPhase_nps)	{ delete [] lastPhase_nps; lastPhase_nps = 0; }
+	if (lastPhase_ntw)	{ delete [] lastPhase_ntw; lastPhase_ntw = 0; }
+	if (sumPhase)		{ delete [] sumPhase; sumPhase = 0; }
+	if (outFrameBufPV)	{ delete [] outFrameBufPV; outFrameBufPV = 0; }
+
+	if (X_magn)			{ delete [] X_magn; X_magn = 0; }
+	if (X_phase)		{ delete [] X_phase; X_phase = 0; }
+	if (anaMagn)		{ delete [] anaMagn; anaMagn = 0; }
+	if (anaFreq)		{ delete [] anaFreq; anaFreq = 0; }
+	if (synMagn)		{ delete [] synMagn; synMagn = 0; }
+	if (synFreq)		{ delete [] synFreq; synFreq = 0; }
+
+	if (warpCacheMagn)	{ delete [] warpCacheMagn; warpCacheMagn = 0; }
+	if (warpCachePhase)	{ delete [] warpCachePhase; warpCachePhase = 0; }
+
+	if (outFrameBuf)	{ delete [] outFrameBuf; outFrameBuf = 0; }
+}
+
 /* Destructor */
 PhaseVocoder :: ~PhaseVocoder() {
-	if (hWin)	delete [] hWin;
-	if (xFrameW)	delete [] xFrameW;
-
-	if (fftc)	delete [] fftc;
-	if (ftBuf1)	delete [] ftBuf1;
-	if (ftBuf2)	delete [] ftBuf2;
-
-	if (lastPhase)		delete [] lastPhase;
-	if (lastPhase_nps)	delete [] lastPhase_nps;
-	if (lastPhase_ntw)	delete [] lastPhase_ntw;
-	if (sumPhase)		delete [] sumPhase;
-	if (outFrameBufPV)	delete [] outFrameBufPV;
-
-	if (X_magn)			delete [] X_magn;
-	if (X_phase)		delete [] X_phase;
-	if (anaMagn)		delete [] anaMagn;
-	if (anaFreq)		delete [] anaFreq;
-	if (synMagn)		delete [] synMagn;
-	if (synFreq)		delete [] synFreq;
-
-	if (warpCacheMagn)	delete [] warpCacheMagn;
-	if (warpCachePhase)	delete [] warpCachePhase;
-
-	if (outFrameBuf)	delete [] outFrameBuf;
+	cleanup();
 }
 
 /* Main interface function: process a frame 
