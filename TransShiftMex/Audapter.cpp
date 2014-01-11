@@ -189,7 +189,7 @@ Audapter :: Audapter()
 	params.addParam("fn1",			"Formant-tracking algorithm: F1 prior", Parameter::TYPE_DOUBLE);
 	params.addParam("fn2",			"Formant-tracking algorithm: F2 prior", Parameter::TYPE_DOUBLE);
 
-	params.addParam("pitchshiftratio", "Pitch-shifting: ratio (1.0 = no shift)", Parameter::TYPE_DOUBLE);
+	params.addParam("pitchshiftratio", "Pitch-shifting: ratio (1.0 = no shift)", Parameter::TYPE_DOUBLE_ARRAY);
 
 	params.addParam("rmsff_fb",		"Speech-modulated noise feedback: RMS forgetting factor", Parameter::TYPE_SMN_RMS_FF);	//
 	params.addParam("fb4gaindb",	"Speech-modulated noise feedback: intensity gain factor", Parameter::TYPE_DOUBLE);	//
@@ -277,7 +277,7 @@ Audapter :: Audapter()
 	// booleans						
 	p.bRecord			= 1;	// record signal, should almost always be set to 1. 
 	p.bTrack			= 1;	// use formant tracking algorithm
-	p.bShift			= 1;	// do shifting	//SC-Mod(09/23/2007): changed from 0 to 1
+	p.bShift			= 0;	// do formant shifting	//SC-Mod(09/23/2007): changed from 0 to 1
 	p.bGainAdapt		= 1;	// use gain adaption
 	p.bDetect			= 0;	// detect transition
 	p.bRelative			= 1;	// shift relative to actual formant point, (otherwise absolute coordinate)			

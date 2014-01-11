@@ -6,9 +6,9 @@
 typedef double dtype;
 
 class PhaseVocoder {
-	/* TODOs: */
+public:	
+	dtype * ftBuf2;
 
-public:
 	typedef enum {
 		PITCH_SHIFT_ONLY,
 		TIME_WARP_ONLY, 
@@ -35,9 +35,6 @@ public:
 
 	/* Destructor */
 	~PhaseVocoder();
-
-	/* Memory clean up */
-	void cleanup();
 
 	/* Configure parameters */
 	void config(operMode t_operMode, 
@@ -92,10 +89,13 @@ private:
 	/* Fourier transform buffers */
 	dtype * ftBuf1;			/* Length = pvocFrameLen * 2 */
 
-public: /* DEBUG */
-	dtype * ftBuf2;
+	/* Memory initialization */
+	void initialize();
 
-private: /* DEBUG */
+	/* Memory clean up */
+	void cleanup();
+	
+
 	dtype * lastPhase;
 	dtype * lastPhase_nps;	/* No pitch shifting version of lastPhase */
 	dtype * lastPhase_ntw;	/* No time warp version of lastPhase */

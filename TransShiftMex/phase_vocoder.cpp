@@ -3,12 +3,7 @@
 #include "phase_vocoder.h"
 #include "DSPF.h"
 
-/* Default constructor */
-PhaseVocoder :: PhaseVocoder() :
-	mode(operMode::PITCH_SHIFT_ONLY), nDelay(0), 
-	sr(16000), frameLen(32), 
-	pvocFrameLen(1024), pvocHop(256)
-{
+void PhaseVocoder :: initialize() {
 	internalBufLen = pvocFrameLen * 2;
 
 	/* Windowing function */
@@ -66,6 +61,15 @@ PhaseVocoder :: PhaseVocoder() :
 	if (mode == TIME_WARP_WITH_FIXED_PITCH_SHIFT) {
 		fixedPitchShiftST = static_cast<dtype>(0xffffffff); /* NAN */
 	}
+}
+
+/* Default constructor */
+PhaseVocoder :: PhaseVocoder() :
+	mode(operMode::PITCH_SHIFT_ONLY), nDelay(0), 
+	sr(16000), frameLen(32), 
+	pvocFrameLen(1024), pvocHop(256)
+{
+	initialize();
 
 	reset();
 }
@@ -105,63 +109,7 @@ PhaseVocoder :: PhaseVocoder(const operMode t_operMode,
 	if ( t_pvocFrameLen & t_pvocHop != 0 )
 		throw initializationError();
 	
-	internalBufLen = pvocFrameLen * 2;
-
-	/* Windowing function */
-	hWin = new dtype[pvocFrameLen];
-	for(int i = 0; i < pvocFrameLen; ++i){
-		hWin[i] = 0.5 * cos((2 * M_PI * static_cast<dtype>(i)) / static_cast<dtype>(pvocFrameLen)); 
-		hWin[i] = 0.5 - hWin[i];
-	}
-
-	xFrameW = new dtype[pvocFrameLen];
-
-	/* FFT coefficients */
-	fftc = new dtype[pvocFrameLen * 2];
-	gen_w_r2(fftc, pvocFrameLen);
-
-	/* FFT intermediate data fields */
-	ftBuf1 = new dtype[pvocFrameLen * 2];
-	ftBuf2 = new dtype[pvocFrameLen * 2];
-
-	lastPhase = new dtype[pvocFrameLen]; /* TODO: Check size bound is tight */
-	lastPhase_nps = new dtype[pvocFrameLen];
-	lastPhase_ntw = new dtype[pvocFrameLen];
-	sumPhase = new dtype[pvocFrameLen];
-
-	outFrameBufPV = new dtype[internalBufLen];
-
-	X_magn = new dtype[pvocFrameLen];
-	X_phase = new dtype[pvocFrameLen];
-	anaMagn = new dtype[pvocFrameLen];
-	anaFreq = new dtype[pvocFrameLen];
-	synMagn = new dtype[pvocFrameLen];
-	synFreq = new dtype[pvocFrameLen];
-
-	outFrameBuf = new dtype[internalBufLen];
-
-	/* Internal variables */
-	expct = 2.* M_PI * pvocHop / pvocFrameLen; /* Expected phase change */
-	osamp = pvocFrameLen / pvocHop; /* Oversampling factor */
-	freqPerBin = sr / pvocFrameLen; /* Frequency per bin */
-
-	if (mode == TIME_WARP_ONLY || 
-		mode == TIME_WARP_WITH_FIXED_PITCH_SHIFT) {
-		maxNDelayFrames = pvocFrameLen * 8;	/* TODO: Check that the delay doesn't exceed this limit */
-
-		warpCacheMagn = new dtype[maxNDelayFrames * pvocFrameLen];
-		warpCachePhase = new dtype[maxNDelayFrames * pvocFrameLen];
-	}
-	else {
-		maxNDelayFrames = 0;
-
-		warpCacheMagn = 0;
-		warpCachePhase = 0;
-	}
-
-	if (mode == TIME_WARP_WITH_FIXED_PITCH_SHIFT) {
-		fixedPitchShiftST = static_cast<dtype>(0xffffffff); /* NAN */
-	}
+	initialize();
 
 	reset();
 }
@@ -199,63 +147,7 @@ void PhaseVocoder :: config(operMode t_operMode,
 	if ( t_pvocFrameLen & t_pvocHop != 0 )
 		throw initializationError();
 	
-	internalBufLen = pvocFrameLen * 2;
-
-	/* Windowing function */
-	hWin = new dtype[pvocFrameLen];
-	for(int i = 0; i < pvocFrameLen; ++i){
-		hWin[i] = 0.5 * cos((2 * M_PI * static_cast<dtype>(i)) / static_cast<dtype>(pvocFrameLen)); 
-		hWin[i] = 0.5 - hWin[i];
-	}
-
-	xFrameW = new dtype[pvocFrameLen];
-
-	/* FFT coefficients */
-	fftc = new dtype[pvocFrameLen * 2];
-	gen_w_r2(fftc, pvocFrameLen);
-
-	/* FFT intermediate data fields */
-	ftBuf1 = new dtype[pvocFrameLen * 2];
-	ftBuf2 = new dtype[pvocFrameLen * 2];
-
-	lastPhase = new dtype[pvocFrameLen]; /* TODO: Check size bound is tight */
-	lastPhase_nps = new dtype[pvocFrameLen];
-	lastPhase_ntw = new dtype[pvocFrameLen];
-	sumPhase = new dtype[pvocFrameLen];
-
-	outFrameBufPV = new dtype[internalBufLen];
-
-	X_magn = new dtype[pvocFrameLen];
-	X_phase = new dtype[pvocFrameLen];
-	anaMagn = new dtype[pvocFrameLen];
-	anaFreq = new dtype[pvocFrameLen];
-	synMagn = new dtype[pvocFrameLen];
-	synFreq = new dtype[pvocFrameLen];
-
-	outFrameBuf = new dtype[internalBufLen];
-
-	/* Internal variables */
-	expct = 2.* M_PI * pvocHop / pvocFrameLen; /* Expected phase change */
-	osamp = pvocFrameLen / pvocHop; /* Oversampling factor */
-	freqPerBin = sr / pvocFrameLen; /* Frequency per bin */
-
-	if (mode == TIME_WARP_ONLY || 
-		mode == TIME_WARP_WITH_FIXED_PITCH_SHIFT) {
-		maxNDelayFrames = pvocFrameLen * 8;	/* TODO: Check that the delay doesn't exceed this limit */
-
-		warpCacheMagn = new dtype[maxNDelayFrames * pvocFrameLen];
-		warpCachePhase = new dtype[maxNDelayFrames * pvocFrameLen];
-	}
-	else {
-		maxNDelayFrames = 0;
-
-		warpCacheMagn = 0;
-		warpCachePhase = 0;
-	}
-
-	if (mode == TIME_WARP_WITH_FIXED_PITCH_SHIFT) {
-		fixedPitchShiftST = static_cast<dtype>(0xffffffff); /* NAN */
-	}
+	initialize();
 
 	reset();
 }
