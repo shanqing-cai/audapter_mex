@@ -180,8 +180,8 @@ Audapter :: Audapter()
 	params.addParam("lbk",			"Formant perturbation field: Oblique lower border: Slope k", Parameter::TYPE_DOUBLE);
 	params.addParam("lbb",			"Formant perturbation field: Oblique lower border: Intercept b", Parameter::TYPE_DOUBLE);
 
-	params.addParam("triallen",		"Trial length (s)", Parameter::TYPE_DOUBLE);	//
-	params.addParam("ramplen",		"Audio ramp length (s)", Parameter::TYPE_DOUBLE);	//
+	params.addParam("triallen",		"Trial length (s)", Parameter::TYPE_DOUBLE);
+	params.addParam("ramplen",		"Audio ramp length (s)", Parameter::TYPE_DOUBLE);
 
 	params.addParam("afact",		"Formant-tracking algorithm: alpha", Parameter::TYPE_DOUBLE);
 	params.addParam("bfact",		"Formant-tracking algorithm: beta", Parameter::TYPE_DOUBLE);
@@ -191,9 +191,9 @@ Audapter :: Audapter()
 
 	params.addParam("pitchshiftratio", "Pitch-shifting: ratio (1.0 = no shift)", Parameter::TYPE_DOUBLE_ARRAY);
 
-	params.addParam("rmsff_fb",		"Speech-modulated noise feedback: RMS forgetting factor", Parameter::TYPE_SMN_RMS_FF);	//
-	params.addParam("fb4gaindb",	"Speech-modulated noise feedback: intensity gain factor", Parameter::TYPE_DOUBLE);	//
-	params.addParam("fb3gain",		"Noise gain factor for speech+noise feedback mode", Parameter::TYPE_DOUBLE);	//
+	params.addParam("rmsff_fb",		"Speech-modulated noise feedback: RMS forgetting factor", Parameter::TYPE_SMN_RMS_FF);
+	params.addParam("fb4gaindb",	"Speech-modulated noise feedback: intensity gain factor", Parameter::TYPE_DOUBLE);
+	params.addParam("fb3gain",		"Noise gain factor for speech+noise feedback mode", Parameter::TYPE_DOUBLE);
 	
 	/* Double array parameters */
 	params.addParam("datapb",		"Waveform for playback", Parameter::TYPE_DOUBLE_ARRAY);
@@ -243,7 +243,7 @@ Audapter :: Audapter()
 	p.rmsFF_fb[0]		= 0.85; // rms forgetting factor for feedback
 	p.rmsFF_fb[1]		= 0.85;	
 	p.rmsFF_fb[2]		= 0.0;	// Unit: s: 0.0 means no transition: use only rmsFF_fb[0]
-	p.rmsFF_fb[2]		= 0.0;
+	p.rmsFF_fb[3]		= 0.0;
 
 	rmsFF_fb_now = p.rmsFF_fb[0];
 
@@ -331,8 +331,10 @@ Audapter :: Audapter()
 	p.fb=1;		
 
 	//SC(2008/06/22)
-	p.trialLen = 9;	//sec
-	p.rampLen=0.05;	//sec
+	//p.trialLen = 9;	//sec
+	//p.rampLen=0.05;	//sec
+	p.trialLen = 0.0;	//sec // Zero corresponds to no trial length limit. Data will be stored circularly. 
+	p.rampLen = 0.0;	//sec // Zero corresponds to no ramp (sudden onset and offset)
 
 	//SC(2012/02/28) DAF
 	for (n = 0; n < maxNVoices; n++) {
@@ -792,6 +794,12 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 	}
 	else if (ns == string("rmsff")) {
 		ptr = (void *)&p.rmsFF;
+
+		if (bSet) {
+			dtype new_val = *((dtype *)value);
+			if ( (new_val < 0.0) || (new_val > 1.0) ) 
+				mexErrMsgTxt("Invalid input value of rmsFF");
+		}
 	}
 	else if (ns == string("dfmtsff")) {
 		ptr = (void *)&p.dFmtsFF;
@@ -808,7 +816,7 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 	else if (ns == string("datapb")) {
 		ptr = (void *)data_pb;
 		
-		if (nPars > maxPBSize)
+		if ( bSet && (nPars > maxPBSize) )
 			mexErrMsgTxt("Input waveform is too long");
 
 		len = (nPars < maxPBSize) ? nPars : maxPBSize;
@@ -845,9 +853,21 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 	}
 	else if (ns == string("triallen")) {
 		ptr = (void *)&p.trialLen;
+
+		if (bSet) {
+			dtype new_val = *((dtype *)value);
+			if ( new_val < 0.0 ) 
+				mexErrMsgTxt("Invalid input: negative trial length");
+		}
 	}
 	else if (ns == string("ramplen")) {
 		ptr = (void *)&p.rampLen;
+
+		if (bSet) {
+			dtype new_val = *((dtype *)value);
+			if ( new_val < 0.0 ) 
+				mexErrMsgTxt("Invalid input: negative ramp length");
+		}
 	}
 	else if (ns == string("afact")) {
 		ptr = (void *)&p.aFact;
@@ -967,7 +987,7 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 		ptr = (void *)&p.fb4GainDB;
 	}
 	else if (ns == string("fb3gain")) {
-		ptr = (void *)&p.fb4Gain;
+		ptr = (void *)&p.fb3Gain;
 	}
 	else {		
 		string errStr("Unknown parameter name: ");
@@ -1029,6 +1049,10 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 			else {
 				mexErrMsgTxt("ERROR: unexpected number of inputs for p.rmsFF_fb");
 			}
+
+			if ( (p.rmsFF_fb[0] < 0.0) || (p.rmsFF_fb[0] > 1.0) ||
+				 (p.rmsFF_fb[1] < 0.0) || (p.rmsFF_fb[1] > 1.0) )
+				 mexErrMsgTxt("Invalid values in rmsFF_fb[0] and/or rmsFF_fb[1]");
 
 			rmsFF_fb_now = p.rmsFF_fb[0];
 		}
@@ -1107,8 +1131,10 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 					}
 
 					if (len > 1) {
-						if (i < len - 1)	oss << ", ";
-						else				oss << "]";
+						if (i < len - 1)	
+							oss << ", ";
+						else				
+							oss << "]";
 					}
 				}
 			}
@@ -1123,8 +1149,12 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 						oss << *((dtype *)ptr + i);
 					}
 
-					if (i < len - 1)	oss << ", ";
-					else				oss << "]";
+					if (len > 1) {
+						if (i < len - 1)	
+							oss << ", ";
+						else				
+							oss << "]";
+					}
 				}
 			}
 			oss << endl;
@@ -1895,18 +1925,25 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 	}
 
 	//SC(2008/06/22) Impose the onset and offset ramps, mainly to avoid the unpleasant "clicks" at the beginning and end
-	/* if ((dtype)frame_counter*(dtype)p.frameLen/(dtype)p.sr>p.trialLen){
-		for (n=0;n<frame_size;n++)
-			outFrame_ptr[n]=0;
+	int nMult = bSingleOutputBuffer ? 1 : 2;
+	if ( (p.trialLen > 0.0) && 
+		 (static_cast<dtype>(frame_counter) * static_cast<dtype>(p.frameLen) / static_cast<dtype>(p.sr) > p.trialLen) ) {		
+		for (n = 0; n < frame_size * nMult; ++n) {
+			outFrame_ptr[n] = 0.0;
+		}
+
 	}
-	if ((dtype)frame_counter*(dtype)p.frameLen/(dtype)p.sr<=p.rampLen){
-		for (n=0;n<frame_size;n++)
-			outFrame_ptr[n]=outFrame_ptr[n]/p.rampLen*((dtype)((frame_counter-1)*frame_size+n)/(dtype)p.sr/DOWNSAMP_FACT);
+	if ( (p.trialLen > 0.0) && (p.rampLen > 0.0) && 
+		 (static_cast<dtype>(frame_counter) * static_cast<dtype>(p.frameLen) / static_cast<dtype>(p.sr) <= p.rampLen) ) {
+		for (n = 0; n < frame_size * nMult; ++n)
+			outFrame_ptr[n] *= static_cast<dtype>((frame_counter - 1) * frame_size + n) / static_cast<dtype>(p.sr) / static_cast<dtype>(p.downFact) / p.rampLen;
 	}
-	if ((dtype)frame_counter*(dtype)p.frameLen/(dtype)p.sr>=p.trialLen-p.rampLen){
-		for (n=0;n<frame_size;n++)
-	 		outFrame_ptr[n]=outFrame_ptr[n]/p.rampLen*(p.trialLen-(dtype)((frame_counter-1)*frame_size+n)/(dtype)p.sr/DOWNSAMP_FACT);
-	} */
+	if ( (p.trialLen > 0.0) && (p.rampLen > 0.0) && 
+		 (static_cast<dtype>(frame_counter) * static_cast<dtype>(p.frameLen) / static_cast<dtype>(p.sr) >= p.trialLen - p.rampLen) ) {
+		for (n = 0; n < frame_size * nMult; ++n)
+	 		outFrame_ptr[n] *= (p.trialLen - static_cast<dtype>((frame_counter - 1) * frame_size + n) / static_cast<dtype>(p.sr) / static_cast<dtype>(p.downFact)) / p.rampLen;
+	}
+	
 
 	frame_counter++;
 	frame_counter_nowarp++;
