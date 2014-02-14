@@ -904,7 +904,7 @@
     <ClCompile>
       <AdditionalIncludeDirectories>$(SolutionDir)\audioIO;$(SolutionDir)\SibShift;C:\Program Files\MATLAB\R2011a\extern\include;C:\Program Files\MATLAB\R2011a\extern\include\win32;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;_USRDLL;MEXLIBRARY_EXPORTS;MATLAB_MEX_FILE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <PrecompiledHeader>
       </PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
