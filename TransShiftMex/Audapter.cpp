@@ -1027,6 +1027,11 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 			for (int i = 0; i < len; i++) {
 				*((dtype *)ptr + i) = (dtype)(*((dtype *)value + i));
 			}
+
+			if ( ns == string("datapb") ) { /* Zero out the remaining part */
+				for (int i = len; i < maxPBSize; i++)
+					*((dtype *)ptr + i) = 0.0;
+			}
 		}
 		else if (pType == Parameter::TYPE_PVOC_WARP) {
 			pertCfg.addWarpCfg(*((double *)value), *((double *)value + 1), 
