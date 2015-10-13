@@ -10,6 +10,6 @@ The following individuals participated in the writing of Audapter (in alphabetic
 * Kevin Reilly
 * Virgilio Villacorta
   
-The current maintainer of this project is
+The current maintainer of this project is:
 * Shanqing Cai
     
