@@ -314,7 +314,6 @@ void PhaseVocoder :: procFrame(const dtype * inBuf, const dtype shift) {
 		}
 
 		for (int i0 = 0; i0 <= pvocFrameLen / 2; ++i0) {
-			//for (int i1 = 0; i1 < 2; i1++) {
 			magn = synMagn[i0]; // get magnitude and true frequency from synthesis arrays						
 
 			p_tmp = synFreq[i0];
@@ -326,19 +325,16 @@ void PhaseVocoder :: procFrame(const dtype * inBuf, const dtype shift) {
 							
 			sumPhase[i0] += p_tmp;		// accumulate delta phase to get bin phase
 			phase = sumPhase[i0];
-			//sumPhase[i0] = X_phase[i0]; /* DEBUG */
 
 			/* get real and imag part and re-interleave */
 			ftBuf2[2 * i0] = magn * cos(phase);
 			ftBuf2[2 * i0 + 1] = magn * sin(phase);			// What causes the sign reversal here?
-			//}
 		}
 
 		/* Time warping on top of a fixed pitch shift 
 		      (specified in fixedPitchShiftST) */
 		if (mode == TIME_WARP_WITH_FIXED_PITCH_SHIFT) {
 			cidx0 = pvCtr;
-			//cidx0 = pvCtr / (pvocHop / frameLen);
 
 			for (int i = 0; i < pvocFrameLen; ++i){
 				warpCacheMagn[(cidx0 % maxNDelayFrames) + i * maxNDelayFrames] = synMagn[i];

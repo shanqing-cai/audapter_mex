@@ -35,7 +35,6 @@ Developed at:
 	Speech Laboratory, Boston University
 */
 
-//#include <string.h> 
 #include <stdio.h>
 #include <stdlib.h>
 #include <windows.h>
@@ -127,6 +126,7 @@ Audapter :: Audapter()
 	params.addParam("bdetect",		"Formant tracking period detection switch", Parameter::TYPE_BOOL);
 	params.addParam("bweight",		"Switch for intensity-weighted smoothing of formant frequencies", Parameter::TYPE_BOOL);
 	params.addParam("bcepslift",	"Switch for cepstral liftering for formant trackng", Parameter::TYPE_BOOL);
+	params.addParam("btrackpitch",  "Track pitch in real-time, using cepstral method", Parameter::TYPE_BOOL);
 	params.addParam("bratioshift",	"Switch for ratio-based formant shifting", Parameter::TYPE_BOOL);
 	params.addParam("bmelshift",	"Switch for formant shifting based on the mel frequency scale", Parameter::TYPE_BOOL);
 	params.addParam("bgainadapt",	"Formant perturbation gain adaptation switch", Parameter::TYPE_BOOL);
@@ -188,6 +188,9 @@ Audapter :: Audapter()
 	params.addParam("gfact",		"Formant-tracking algorithm: gamma", Parameter::TYPE_DOUBLE);
 	params.addParam("fn1",			"Formant-tracking algorithm: F1 prior", Parameter::TYPE_DOUBLE);
 	params.addParam("fn2",			"Formant-tracking algorithm: F2 prior", Parameter::TYPE_DOUBLE);
+
+	params.addParam("pitchlowerboundhz", "Lower bound for pitch, in Hz. Used by pitch tracker.", Parameter::TYPE_DOUBLE);
+	params.addParam("pitchupperboundhz", "Upper bound for pitch, in Hz. Used by pitch tracker.", Parameter::TYPE_DOUBLE);
 
 	params.addParam("pitchshiftratio", "Pitch-shifting: ratio (1.0 = no shift)", Parameter::TYPE_DOUBLE_ARRAY);
 
@@ -252,7 +255,7 @@ Audapter :: Audapter()
 
 	p.fb3Gain			= 0.0;
 
-	p.dPreemp			= .98;	// preemphasis factor
+	p.dPreemp			= 0.98;	// preemphasis factor
 	p.dScale			= 1.0;	// scaling the output (when upsampling) (does not affect internal signal
 
 	// for transition detection
@@ -283,14 +286,20 @@ Audapter :: Audapter()
 	p.bRelative			= 1;	// shift relative to actual formant point, (otherwise absolute coordinate)			
 	p.bWeight			= 1;	// do weighted moving average formant smoothing (over avglen) , otherwise not weigthed (= simple moving average)				
 	p.bCepsLift			= 0;	//SC-Mod(2008/05/15) Do cepstral lifting by default
-		
+
+	// Parameters related to the real-time pitch tracker.
+	p.bTrackPitch       = 0;		
+	p.pitchLowerBoundHz = 0.0;
+	p.pitchUpperBoundHz = 0.0;
+
 	p.bRatioShift		= 0;	//SC(2009/01/20)
 	p.bMelShift			= 1;	//SC(2009/01/20)
 
 	//SC(2012/03/05)
 	p.bPitchShift		= 0;
-	for (n = 0; n < maxNVoices; n++)
-		p.pitchShiftRatio[n]   = 1.0;	// 1.0 = no shift.
+	for (n = 0; n < maxNVoices; n++) {
+		p.pitchShiftRatio[n] = 1.0;	// 1.0 = no shift.
+	}
 		
 	//SC Initialize the playback data and the counter
 	for(n=0;n<maxPBSize;n++){
@@ -324,10 +333,8 @@ Audapter :: Audapter()
 	p.transDone=false;
 	p.transCounter=0;
 
-	//SC(2008/05/15)
 	p.cepsWinWidth=30;
 
-	//SC(2008/06/20)
 	p.fb=1;		
 
 	//SC(2008/06/22)
@@ -381,9 +388,12 @@ Audapter :: Audapter()
 
 	/* Initialize formant tracker */
 	try {
+		const CepstralPitchTrackerConfig pitchTrackerConfig(true, 120.0, 300.0);
+		// TODO(cais): Do not hard-code.
+		// TODO(cais): Deduplicate.
 		fmtTracker = new LPFormantTracker(p.nLPC, p.sr, p.anaLen, nFFT, p.cepsWinWidth * p.bCepsLift, 
 										  p.nTracks, p.aFact, p.bFact, p.gFact, p.fn1, p.fn2, 
-										  static_cast<bool>(p.bWeight), p.avgLen);
+										  static_cast<bool>(p.bWeight), p.avgLen, pitchTrackerConfig);
 	}
 	catch (LPFormantTracker::initializationError) {
 		mexErrMsgTxt("Failed to initialize formant tracker");
@@ -409,15 +419,7 @@ Audapter :: Audapter()
 
 //************************************** Initialize filter coefs **************************************	
 
-	// preemphasis filter
-	const dtype t_preemp_a[2] = {1.0, 0.0};
-	const dtype t_preemp_b[2] = {1, -p.dPreemp};
-	preEmpFilter.setCoeff(2, t_preemp_a, 2, t_preemp_b);
-
-	// deemphasis filter
-	const dtype t_deemp_a[2] = {1, -p.dPreemp};
-	const dtype t_deemp_b[2] = {1.0, 0.0};
-	deEmpFilter.setCoeff(2, t_deemp_a, 2, t_deemp_b);
+	initializePreEmpFilter();
 
     // Formant-shifting filters
 	a_filt1[0] = 1;
@@ -476,7 +478,6 @@ void Audapter::reset()
 	for(i0 = 0; i0 < maxFrameLen * downSampFact_default; i0++)
 	{
 		inFrameBuf[i0] = 0.0;
-
 		downSampBuffer[i0] = 0.0;
 		upSampBuffer[i0] = 0.0;
 	}
@@ -530,11 +531,11 @@ void Audapter::reset()
 
 
 	// Initialize data recorder
-	for(i0=0;i0<maxDataVec;i0++)
+	for(i0 = 0; i0 < maxDataVec; i0++)
 	{
-		for(j0=0;j0<maxDataSize;j0++)
+		for(j0 = 0; j0<maxDataSize; j0++)
 		{
-			data_recorder[i0][j0]=0;
+			data_recorder[i0][j0] = 0;
 		}
 	}
 
@@ -650,9 +651,15 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 	}
 	else if (ns == string("bcepslift")) {
 		ptr = (void *)&p.bCepsLift;
-
-		if (bSet)
+		if (bSet) {
 			bRemakeFmtTracker = (int)(*((dtype *)value)) != p.bCepsLift;
+		}
+	}
+	else if (ns == string("btrackpitch")) {
+		ptr = (void *)&p.bTrackPitch;
+		if (bSet) {
+			bRemakeFmtTracker = (int)(*((dtype *)value)) != p.bTrackPitch;
+		}
 	}
 	else if (ns == string("bratioshift")) {
 		ptr = (void *)&p.bRatioShift;
@@ -738,6 +745,18 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 
 		if (bSet)
 			bRemakePVoc = (int)(*((dtype *)value)) != p.pvocHop;
+	}
+	else if (ns == string("pitchlowerboundhz")) {
+		ptr = (void *)&p.pitchLowerBoundHz;
+		if (bSet) {
+			bRemakeFmtTracker = *((dtype *)value) != p.pitchLowerBoundHz;
+		}
+	}
+	else if (ns == string("pitchupperboundhz")) {
+		ptr = (void *)&p.pitchUpperBoundHz;
+		if (bSet) {
+			bRemakeFmtTracker = *((dtype *)value) != p.pitchUpperBoundHz;
+		}
 	}
 	else if (ns == string("bdownsampfilt")) {
 		ptr = (void *)&p.bDownSampFilt;
@@ -1068,11 +1087,9 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 				mexErrMsgTxt("Invalid value of nFB. nFB set to 1.");
 				p.nFB = 1;
 			}
-		}
-		else if (ns == string("framelen") || ns == string("ndelay")) {
+		} else if (ns == string("framelen") || ns == string("ndelay")) {
 			p.anaLen = p.frameShift + 2 * (p.nDelay - 1) * p.frameLen;
-		}
-		else if (ns == string("delayframes")) {
+		} else if (ns == string("delayframes")) {
 			for (int n = 0; n < maxNVoices && n < p.nFB; n++) {
 				p.delayFrames[n]		= (int)(*((dtype *)value + n));
 				if (p.delayFrames[n] < 0){
@@ -1084,21 +1101,19 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 					p.delayFrames[n] = maxDelayFrames;
 				}
 			}
-		}
-		else if (ns == string("pvocframelen")) {
+		} else if (ns == string("pvocframelen")) {
 			
-		}
-		else if (ns == string("datapb")) {
+		} else if (ns == string("datapb")) {
 			pbCounter = 0;
-		}
-		else if (ns == string("tsgint")) {
+		} else if (ns == string("tsgint")) {
 			tsgToneOnsets[0]=0;
 			for (int n = 1; n < maxNTones; n++){
 				tsgToneOnsets[n] = tsgToneOnsets[n - 1] + p.tsgInt[n-1];	//sec
 			}
-		}
-		else if (ns == string("fb4gaindb")) {
+		} else if (ns == string("fb4gaindb")) {
 			p.fb4Gain		= pow(10.0, p.fb4GainDB / 20);
+		} else if (ns == string("preemp")) {
+			initializePreEmpFilter();
 		}
 
 		p.frameShift	= p.frameLen / p.nWin;
@@ -1171,13 +1186,19 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 
 		/* Re-generate the formant tracker, if necessary */
 		if (bRemakeFmtTracker) {
-			if (fmtTracker)
+			if (fmtTracker) {
 				delete fmtTracker;
-
+			}
 			try {
+				const CepstralPitchTrackerConfig pitchTrackerConfig(
+					p.bTrackPitch,
+					p.pitchLowerBoundHz,
+					p.pitchUpperBoundHz);
+				// TODO(cais): Do not hard-code.
+				// TODO(cais): Deduplicate.
 				fmtTracker = new LPFormantTracker(p.nLPC, p.sr, p.anaLen, nFFT, p.cepsWinWidth * p.bCepsLift, 
 											      p.nTracks, p.aFact, p.bFact, p.gFact, p.fn1, p.fn2, 
-												  static_cast<bool>(p.bWeight), p.avgLen);
+												  static_cast<bool>(p.bWeight), p.avgLen, pitchTrackerConfig);
 			}
 			catch (LPFormantTracker::initializationError) {
 				mexErrMsgTxt("Failed to initialize formant tracker");
@@ -1215,6 +1236,18 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 	}
 
 	
+}
+
+void Audapter::initializePreEmpFilter() {
+	// pre-emphasis filter
+	const dtype t_preemp_a[2] = { 1.0, 0.0 };
+	const dtype t_preemp_b[2] = { 1, -p.dPreemp };
+	preEmpFilter.setCoeff(2, t_preemp_a, 2, t_preemp_b);
+
+	// deemphasis filter
+	const dtype t_deemp_a[2] = { 1, -p.dPreemp };
+	const dtype t_deemp_b[2] = { 1.0, 0.0 };
+	deEmpFilter.setCoeff(2, t_deemp_a, 2, t_deemp_b);
 }
 
 void Audapter::setParam(const char *name, void * value, int nPars, bool bVerbose) {
@@ -1355,29 +1388,28 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 
 	if (p.bRecord)		//SC Record the downsampled original signal
 	{// recording signal in (downsampled)
-		DSPF_dp_blk_move(&inFrameBuf[0], &signal_recorder[0][frame_counter * p.frameLen], p.frameLen);	//SC Copying
+		DSPF_dp_blk_move(inFrameBuf, &signal_recorder[0][frame_counter * p.frameLen], p.frameLen);	//SC Copying
 	}
 
 	// push samples in oBuf and pBuf
 	//SC audapter.oBuf: (downsampled) input, audapter.pBuf: preemphasized (downsampled) input
-	DSPF_dp_blk_move(&oBuf[p.frameLen], &oBuf[0], 2 * (p.nDelay - 1) * p.frameLen);	
-	DSPF_dp_blk_move(&pBuf[p.frameLen], &pBuf[0], 2 * (p.nDelay - 1) * p.frameLen);	//SC Pre-emphasized buffer shift to left
+	DSPF_dp_blk_move(oBuf + p.frameLen, oBuf, 2 * (p.nDelay - 1) * p.frameLen);	
+	DSPF_dp_blk_move(pBuf + p.frameLen, pBuf, 2 * (p.nDelay - 1) * p.frameLen);	//SC Pre-emphasized buffer shift to left
 
 	// move inFrame into oBuf
-	DSPF_dp_blk_move(&inFrameBuf[0], &oBuf[2 * (p.nDelay - 1) * p.frameLen], p.frameLen);
+	DSPF_dp_blk_move(inFrameBuf, oBuf + 2 * (p.nDelay - 1) * p.frameLen, p.frameLen);
 
 	// preemphasize inFrame and move to pBuf
-	//SC Preemphasis amounts to an high-pass iir filtering, the output is pBuf
-	//SC(2008/05/07)	
-	preEmpFilter.filter(inFrameBuf, &pBuf[2 * (p.nDelay - 1) * p.frameLen], p.frameLen, 1.0);
+	// Preemphasis amounts to an high-pass iir filtering, the output is pBuf
+	preEmpFilter.filter(inFrameBuf, pBuf + 2 * (p.nDelay - 1) * p.frameLen, p.frameLen, 1.0);
 
 	// load inBuf with p.frameLen samples of pBuf
 	//SC Copy pBuf to inBuf. pBuf is the signal based on which LPC and other
 	// analysis will be done. inBuf is the signal that will be shifted (if in shifting mode).
-	DSPF_dp_blk_move(&pBuf[(p.nDelay - 1) * p.frameLen], &inBuf[0], p.frameLen);
+	DSPF_dp_blk_move(pBuf + (p.nDelay - 1) * p.frameLen, inBuf, p.frameLen);
 
 	// move inBuf to outBuf  (will be overwritten when filtering)
-	DSPF_dp_blk_move(&inBuf[0], &outBuf[0], p.frameLen);
+	DSPF_dp_blk_move(inBuf, outBuf, p.frameLen);
 
 	for(fi = 0; fi < p.nWin; fi++)// each incoming frame is divided in nwin windows
 	{
@@ -1418,7 +1450,7 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 			else
 				wei=1; // simple moving average
 
-			fmtTracker->procFrame(&pBuf[si], rms_o, amps, wmaPhis, bw, fmts);
+			fmtTracker->procFrame(pBuf + si, rms_o, amps, wmaPhis, bw, fmts);
 
 			//SC Convert to mel. The perturbation field variables (F2Min, F2Max, pertF2, etc.) are all in mel. 			
 			if (p.bMelShift){
@@ -1457,8 +1489,9 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 			}
 
 			/* Reset roots in formant tracker */
-			if (fmtTracker)
+			if (fmtTracker) {
 				fmtTracker->postSupraThreshReset();
+			}
 
 			bLastFrameAboveRMS=0;
 		}
@@ -1579,7 +1612,6 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 
 		offs += 1;
 		data_recorder[offs][data_counter] = stat;
-
 	}
 	
 	// gain adaption: optional
@@ -1740,15 +1772,10 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 	data_recorder[offs][data_counter] = p.pitchShiftRatio[0];
 
 	offs++;
-	if (isPvocFrame) {
-		data_recorder[offs][data_counter] = ms_in;
+	if (p.bTrackPitch) {
+	    data_recorder[offs][data_counter] = fmtTracker->getLatestPitchHz();
 	}
-	else {
-		if (data_counter > 0) {
-			data_recorder[offs][data_counter] = data_recorder[offs][data_counter - 1];
-		}
-	}
-
+	 
 	// === ~Frequency/pitch shifting code ===
 
 	for (int h0 = 0; h0 < p.nFB; h0++) {
@@ -1790,9 +1817,6 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 		}
 		ms_out /= (dtype) nzCnt;
 
-		offs++;
-		data_recorder[offs][data_counter] = ms_out;
-
 		if (isPvocFrame == 1
 			//&& (frame_counter_nowarp - (p.nDelay - 1) > p.pvocFrameLen / p.frameLen)
 			&& (nzCnt == p.pvocFrameLen)) {
@@ -1823,9 +1847,6 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 
 		amp_ratio_prev = amp_ratio;
 	}
-
-	offs++;
-	data_recorder[offs][data_counter] = ms_out;
 
 	data_counter++;
 	circ_counter= data_counter % maxPitchLen;
@@ -1869,7 +1890,6 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 
 	outFrameBuf_circPtr += p.frameLen;
 	if (outFrameBuf_circPtr >= internalBufLen){
-		//mexPrintf("outFrameBuf_circPtr = %d --> 0\n", outFrameBuf_circPtr);
 		outFrameBuf_circPtr = 0;
 	}
 	
@@ -1955,7 +1975,6 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 
 	if (((frame_counter)*p.frameLen>=maxRecSize) || ((data_counter+p.nWin)>=maxDataSize)) //avoid segmentation violation
 	{	
-		//mexPrintf("data_counter = %d; frame_counter == %d --> 0.\n", data_counter, frame_counter);
 		frame_counter=0;
 		data_counter=0;
 		
@@ -2155,7 +2174,7 @@ void Audapter::formantShiftFilter(dtype *xin_ptr, dtype* xout_ptr,
 	// coefficients for the second filter (f2 shift) NOTE: b_filt2[0]=1 (see initilization)
 	b_filt2[1]=-2*r_ptr[1]*cos(oldPhi_ptr[1]);
 	b_filt2[2]= r_ptr[1]*r_ptr[1];
-	a_filt2[1]=-2*r_ptr[1]*cos(newPhi_ptr[1]);  
+	a_filt2[1]=-2*r_ptr[1]*cos(newPhi_ptr[1]);
 	a_filt2[2]= r_ptr[1]*r_ptr[1];
 
 	shiftF2Filter.setCoeff(3, a_filt2, 3, b_filt2);

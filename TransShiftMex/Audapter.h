@@ -36,6 +36,7 @@ Speech Laboratory, Boston University
 #include <windows.h>
 #include <process.h>
 #include <math.h>
+#include <memory>
 #include <vector>
 
 #include "mex.h"
@@ -133,7 +134,7 @@ private:
 	static const int maxNPoles = maxNLPC / 2 + 2;
 	static const int maxNTracks = 5;
 	static const int maxPitchLen = 100;
-	static const int nFFT = 1024;
+	static const int nFFT = 1024;  // TODO(cais): Make into adjustable parameter. Original: 1024.
 	static const int max_nFFT = 4096;
 
 	/* Data recorder */
@@ -192,6 +193,7 @@ private:
 
 	/* LP formant tracker object */
 	LPFormantTracker * fmtTracker;
+	// TODO(cais): Use std::unique_ptr<LPFormantTracker> fmtTracker;
 
 	/* Phase vocoder object */
 	PhaseVocoder *pVoc;
@@ -395,6 +397,11 @@ private:
 		int    bWeight;					// do weighted moving average formant smoothing (over pitchlen) , otherwise not weigthed (= simple moving average)				
 		int	   bCepsLift;				//SC-Mod(2008/05/15) Whether the cepstral lifting is done before the autocorrelation
 
+		// Parameters related to the pitch tracker.
+		int    bTrackPitch;
+		dtype  pitchLowerBoundHz;
+		dtype  pitchUpperBoundHz;
+
 		int	   bRatioShift;				//SC(2009/01/20). 
 		int	   bMelShift;				//SC(2009/01/20). 
 
@@ -506,6 +513,8 @@ private:
 	void	Audapter::osTrack();
 
 	void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars, bool bVerbose, int *length);
+
+	void initializePreEmpFilter();
 
 public:
 	/* Action modes */

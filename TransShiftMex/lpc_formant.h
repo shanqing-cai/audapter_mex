@@ -18,6 +18,20 @@ typedef double dtype;
 /* Right shift */
 #define RSL(INTEGER,SHIFT) (int)( ( (unsigned)INTEGER ) >> SHIFT )
 
+struct CepstralPitchTrackerConfig {
+	bool activated;
+	dtype pitchLowerBoundHz;
+	dtype pitchUpperBoundHz;
+
+	CepstralPitchTrackerConfig(const bool activated,
+		                       const dtype pitchLowerBoundHz,
+		                       const dtype pitchUpperBoundHz) {
+		this->activated = activated;
+		this->pitchLowerBoundHz = pitchLowerBoundHz;
+		this->pitchUpperBoundHz = pitchUpperBoundHz;
+	}
+};
+
 class LPFormantTracker {
 	//TODO:
 	//		resetting properly
@@ -51,6 +65,11 @@ private:
 	int nCands;
 	dtype aFact, bFact, gFact;
 	dtype fn1, fn2;
+
+	/* Pitch tracking */
+	int bTrackPitch;
+	dtype pitchLowerBoundHz;
+	dtype pitchUpperBoundHz;
 
 	/* Moving weighted average (MWA) parameters */
 	bool bMWA;
@@ -93,6 +112,8 @@ private:
 	dtype * bandwidth_us;	/* Unsmoothed pole bandwidths */
 	//dtype * phi_s;			/* Smoothed pole angles */
 
+	dtype latestPitchHz;  /* Latest-tracked pitch value, in Hz. */
+
 	int mwaCtr;		/* Moving average counter */
 	int mwaCircCtr; /* Moving average circular counter */
 	
@@ -127,7 +148,8 @@ public:
 					 const int t_nTracks, 
 					 const dtype t_aFact, const dtype t_bFact, const dtype t_gFact, 
 					 const dtype t_fn1, const dtype t_fn2, 
-					 const bool t_bMWA, const int t_avgLen);
+					 const bool t_bMWA, const int t_avgLen,
+		             const CepstralPitchTrackerConfig& pitchTrackerConfig);
 
 	/* Destructor */
 	~LPFormantTracker();
@@ -160,6 +182,7 @@ public:
 
 	const int getNLPC() const;
 	
+	const dtype getLatestPitchHz() const; 
 };
 
 #endif

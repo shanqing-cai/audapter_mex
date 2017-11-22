@@ -38,19 +38,22 @@ inline int imax(const int &k, const int &j) {
 		If cepsWinWidth is <= 0, cepstral liftering will be disabled.
 */
 LPFormantTracker::LPFormantTracker(const int t_nLPC, const int t_sr, const int t_bufferSize, 					 
-								   const int t_nFFT, const int t_cepsWinWidth, 
-								   const int t_nTracks, 
-								   const dtype t_aFact, const dtype t_bFact, const dtype t_gFact, 
-			   					   const dtype t_fn1, const dtype t_fn2, 
-								   const bool t_bMWA, const int t_avgLen) :
+                                   const int t_nFFT, const int t_cepsWinWidth,
+                                   const int t_nTracks,
+	                               const dtype t_aFact, const dtype t_bFact, const dtype t_gFact,
+                                   const dtype t_fn1, const dtype t_fn2,
+                                   const bool t_bMWA, const int t_avgLen,
+                                   const CepstralPitchTrackerConfig& pitchTrackerConfig) :
 	nLPC(t_nLPC), sr(t_sr), 
 	bufferSize(t_bufferSize), 
 	nFFT(t_nFFT), cepsWinWidth(t_cepsWinWidth), 
 	nTracks(t_nTracks), 
 	aFact(t_aFact), bFact(t_bFact), gFact(t_gFact), 
 	fn1(t_fn1), fn2(t_fn2), 
-	bMWA(t_bMWA), avgLen(t_avgLen)	
-{
+	bMWA(t_bMWA), avgLen(t_avgLen),
+	bTrackPitch(pitchTrackerConfig.activated),
+	pitchLowerBoundHz(pitchTrackerConfig.pitchLowerBoundHz),
+	pitchUpperBoundHz(pitchTrackerConfig.pitchUpperBoundHz) {
 	/* Input sanity checks */
 	if ( (nLPC <= 0) || (bufferSize <= 0) || (nFFT <= 0) ||
 	     (nTracks <= 0) )
@@ -192,6 +195,8 @@ void LPFormantTracker::postSupraThreshReset() {
 
 	mwaCtr = 0;
 	mwaCircCtr = 0;
+
+	latestPitchHz = 0.0;
 }
 
 /* Resetting */
@@ -535,42 +540,60 @@ void LPFormantTracker::getAi(dtype* xx, dtype* aa) {
 	////////////////////////////////////////////////////
 	//SC(2008/05/07) ----- Cepstral lifting -----
 	if (bCepsLift){
-		for (i0=0;i0<nFFT;i0++){
+		for (i0 = 0; i0 < nFFT; i0++){
 			if (i0 < bufferSize){
 				ftBuf1[i0 * 2] = temp_frame[nlpcplus1 + i0];
-				ftBuf1[i0 * 2 + 1]=0;
-			}
-			else{
+				ftBuf1[i0 * 2 + 1] = 0;
+			} else {
 				ftBuf1[i0 * 2] = 0;
 				ftBuf1[i0 * 2 + 1] = 0;
 			}
 		}
 		DSPF_dp_cfftr2(nFFT, ftBuf1, fftc, 1);	
 		bit_rev(ftBuf1, nFFT);
+
 		// Now ftBuf1 is X
 		for (i0 = 0; i0 < nFFT; i0++){
 			if (i0 <= nFFT / 2){
-				ftBuf2[i0 * 2] = log(sqrt(ftBuf1[i0*2]*ftBuf1[i0*2]+ftBuf1[i0*2+1]*ftBuf1[i0*2+1]));	// Optimize
-				ftBuf2[i0 * 2 + 1]=0;
+				ftBuf2[i0 * 2] = log(sqrt(ftBuf1[i0 * 2] * ftBuf1[i0 * 2] +
+					                      ftBuf1[i0 * 2 + 1] * ftBuf1[i0 * 2 + 1]));	// Optimize
+				ftBuf2[i0 * 2 + 1] = 0;
 			}
 			else{
 				ftBuf2[i0 * 2] = ftBuf2[(nFFT - i0) * 2];
-				ftBuf2[i0 * 2 + 1]=0;
+				ftBuf2[i0 * 2 + 1] = 0;
 			}
 		}
+
 		DSPF_dp_icfftr2(nFFT, ftBuf2, fftc, 1);
 		bit_rev(ftBuf2, nFFT);
 
 		// Now ftBuf2 is Xceps: the cepstrum
+		const int minCepstralIndex = bTrackPitch ? (int)(sr / pitchUpperBoundHz) : -1;
+		const int maxCepstralIndex = bTrackPitch ? (int)(sr / pitchLowerBoundHz) : -1;
+		int cepstralIndex = -1;
+		dtype maxCepstralMag = -10e20;
+
 		for (i0 = 0; i0 < nFFT; i0++){
+			if (bTrackPitch && i0 >= minCepstralIndex && i0 < maxCepstralIndex) {
+				const dtype cepstralMag = sqrt(ftBuf2[i0 * 2] * ftBuf2[i0 * 2] + ftBuf2[i0 * 2 + 1] * ftBuf2[i0 * 2 + 1]);
+				if (cepstralMag > maxCepstralMag) {
+					maxCepstralMag = cepstralMag;
+					cepstralIndex = i0;
+				}
+			}
+
 			if (i0 < cepsWinWidth || i0 > nFFT - cepsWinWidth){			// Adjust! 
 				ftBuf1[i0 * 2] = ftBuf2[i0 * 2] / nFFT;		// Normlize the result of the previous IFFT
+
 				ftBuf1[i0 * 2 + 1] = 0;
-			}
-			else{
+			} else {
 				ftBuf1[i0 * 2] = 0;
 				ftBuf1[i0 * 2 + 1] = 0;
 			}
+		}
+		if (bTrackPitch) {
+			latestPitchHz = static_cast<dtype>(sr / cepstralIndex);
 		}
 		// Now ftBuf1 is Xcepw: the windowed cepstrum
 		DSPF_dp_cfftr2(nFFT,ftBuf1,fftc,1);
@@ -851,24 +874,9 @@ void LPFormantTracker::procFrame(dtype * xx, dtype st_rms,
 		}
 	}
 
-	for (int i = 0; i < nTracks; ++i) //Marked
-		fmts[i] = phi[i] * sr /(2 * M_PI);
-	
-	/* DEBUG */
-	//dtype * n_radius = new dtype[maxNPoles];
-	//dtype * n_phi = new dtype[maxNPoles];
-
-	//for (int i = 0; i < maxNPoles; ++i) {
-	//	n_radius[i] = radius[i];
-	//	n_phi[i] = phi[i];
-	//}
-	//
-	//trackPhi(n_radius, n_phi); /* DEBUG */
-	//
-	///* DEBUG */
-	//delete [] n_radius;
-	//delete [] n_phi;
-	
+	for (int i = 0; i < nTracks; ++i) {  //Marked
+		fmts[i] = phi[i] * sr / (2 * M_PI);
+	}
 }
 
 
@@ -907,4 +915,8 @@ void LPFormantTracker::genHanningWindow() {
 
 const int LPFormantTracker::getNLPC() const {
 	return nLPC;
+}
+
+const dtype LPFormantTracker::getLatestPitchHz() const {
+	return latestPitchHz;
 }
