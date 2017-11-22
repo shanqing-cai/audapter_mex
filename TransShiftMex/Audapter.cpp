@@ -110,11 +110,10 @@ Parameter::paramType Parameter::checkParam(const char *name) {
 }
 
 /* Constructor of Audapter */
-Audapter :: Audapter()
-	: downSampFilter(nCoeffsSRFilt), upSampFilter(nCoeffsSRFilt), 
-	  preEmpFilter(2), deEmpFilter(2), 
-	  shiftF1Filter(3), shiftF2Filter(3), 
-	  fmtTracker(0), pVoc(0)
+Audapter::Audapter() :
+    downSampFilter(nCoeffsSRFilt), upSampFilter(nCoeffsSRFilt), 
+    preEmpFilter(2), deEmpFilter(2), shiftF1Filter(3), shiftF2Filter(3),
+    pVocs()
 {
 	/* Set default action mode */
 	actionMode = PROC_AUDIO_INPUT_OFFLINE;
@@ -388,12 +387,11 @@ Audapter :: Audapter()
 
 	/* Initialize formant tracker */
 	try {
-		const CepstralPitchTrackerConfig pitchTrackerConfig(true, 120.0, 300.0);
-		// TODO(cais): Do not hard-code.
 		// TODO(cais): Deduplicate.
-		fmtTracker = new LPFormantTracker(p.nLPC, p.sr, p.anaLen, nFFT, p.cepsWinWidth * p.bCepsLift, 
-										  p.nTracks, p.aFact, p.bFact, p.gFact, p.fn1, p.fn2, 
-										  static_cast<bool>(p.bWeight), p.avgLen, pitchTrackerConfig);
+		fmtTracker.reset(new LPFormantTracker(
+			p.nLPC, p.sr, p.anaLen, nFFT, p.cepsWinWidth * p.bCepsLift,
+			p.nTracks, p.aFact, p.bFact, p.gFact, p.fn1, p.fn2,
+			static_cast<bool>(p.bWeight), p.avgLen, CepstralPitchTrackerConfig()));
 	}
 	catch (LPFormantTracker::initializationError) {
 		mexErrMsgTxt("Failed to initialize formant tracker");
@@ -403,19 +401,19 @@ Audapter :: Audapter()
 	}
 
 	/* Initialize phase vocoder */
-	pVoc = new PhaseVocoder[p.nFB];
-		
-	for (int i = 0; i < p.nFB; ++i) {
-		try {
-			pVoc[i].config(PhaseVocoder::operMode::PITCH_SHIFT_ONLY, p.nDelay, 
-						   static_cast<dtype>(p.sr), p.frameLen, 
-							   p.pvocFrameLen, p.pvocHop);
-		}
-		catch (PhaseVocoder::initializationError) {
-			mexErrMsgTxt("Failed to initialize phase vocoder");
-		}
-
-	}
+    pVocs.clear();
+    for (size_t i = 0; i < p.nFB; ++i) {
+        std::unique_ptr<PhaseVocoder> pVoc(new PhaseVocoder());
+        try {
+            pVoc->config(PhaseVocoder::operMode::PITCH_SHIFT_ONLY, p.nDelay,
+                        static_cast<dtype>(p.sr), p.frameLen, p.pvocFrameLen,
+                        p.pvocHop);
+        }
+        catch (PhaseVocoder::initializationError) {
+            mexErrMsgTxt("Failed to initialize phase vocoder");
+        }
+        pVocs.push_back(std::move(pVoc));
+    }
 
 //************************************** Initialize filter coefs **************************************	
 
@@ -457,14 +455,7 @@ Audapter :: Audapter()
 	reset();
 }
 
-Audapter::~Audapter(){
-	if (fmtTracker) 
-		delete fmtTracker;
-
-	if (pVoc)
-		delete [] pVoc;
-}
-
+Audapter::~Audapter() {}
 
 void Audapter::reset()
 {// resets all 
@@ -607,13 +598,14 @@ void Audapter::reset()
 	amp_ratio = 1.0;
 
 	/* Reset formant tracker */
-	if (fmtTracker)
+	if (fmtTracker) {
 		fmtTracker->reset();
+	}
 
 	/* Reset phase vocoder */
-	if (pVoc)
-		for (int i = 0; i < p.nFB; ++i)
-			pVoc[i].reset();
+    for (size_t i = 0; i < pVocs.size(); ++i) {
+        pVocs[i]->reset();
+    }
 }
 
 void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars, bool bVerbose, int *length) {
@@ -1186,19 +1178,14 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 
 		/* Re-generate the formant tracker, if necessary */
 		if (bRemakeFmtTracker) {
-			if (fmtTracker) {
-				delete fmtTracker;
-			}
 			try {
 				const CepstralPitchTrackerConfig pitchTrackerConfig(
-					p.bTrackPitch,
-					p.pitchLowerBoundHz,
-					p.pitchUpperBoundHz);
-				// TODO(cais): Do not hard-code.
+                    p.bTrackPitch, p.pitchLowerBoundHz, p.pitchUpperBoundHz);
 				// TODO(cais): Deduplicate.
-				fmtTracker = new LPFormantTracker(p.nLPC, p.sr, p.anaLen, nFFT, p.cepsWinWidth * p.bCepsLift, 
-											      p.nTracks, p.aFact, p.bFact, p.gFact, p.fn1, p.fn2, 
-												  static_cast<bool>(p.bWeight), p.avgLen, pitchTrackerConfig);
+				fmtTracker.reset(new LPFormantTracker(
+					p.nLPC, p.sr, p.anaLen, nFFT, p.cepsWinWidth * p.bCepsLift,
+					p.nTracks, p.aFact, p.bFact, p.gFact, p.fn1, p.fn2,
+					static_cast<bool>(p.bWeight), p.avgLen, pitchTrackerConfig));
 			}
 			catch (LPFormantTracker::initializationError) {
 				mexErrMsgTxt("Failed to initialize formant tracker");
@@ -1211,25 +1198,25 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 		/* Re-initialize phase vocoder */
 		if ( bRemakePVoc ) {
 			PhaseVocoder::operMode t_operMode;
-			if ( pVoc ) {
-				t_operMode = pVoc[0].getMode();
-				delete [] pVoc;
+			if ( !pVocs.empty() ) {
+				t_operMode = pVocs[0]->getMode();
+                pVocs.clear();
 			}
 			else {
 				t_operMode = PhaseVocoder::operMode::PITCH_SHIFT_ONLY;
 			}
 
-			pVoc = new PhaseVocoder[p.nFB];
-			for (int i = 0; i < p.nFB; ++i) {
-				try {
-					pVoc[i].config(t_operMode, p.nDelay, 
-								   static_cast<dtype>(p.sr), p.frameLen, 
-						    	   p.pvocFrameLen, p.pvocHop);
-				}
-				catch (PhaseVocoder::initializationError) {
-					mexErrMsgTxt("Failed to initialize phase vocoder");
-				}
-			}
+            for (size_t i = 0; i < p.nFB; ++i) {
+                std::unique_ptr<PhaseVocoder> pVoc(new PhaseVocoder());
+                try {
+                    pVoc->config(t_operMode, p.nDelay, static_cast<dtype>(p.sr),
+                                 p.frameLen, p.pvocFrameLen, p.pvocHop);
+                }
+                catch (PhaseVocoder::initializationError) {
+                    mexErrMsgTxt("Failed to initialize phase vocoder");
+                }
+                pVocs.push_back(std::move(pVoc));
+            }
 		}
 
 		return NULL;
@@ -1703,7 +1690,7 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 			
 				/* Call phase vocoder */
 				try {
-					if (pVoc[ifb].getMode() == PhaseVocoder::TIME_WARP_ONLY) {
+					if (pVocs[ifb]->getMode() == PhaseVocoder::TIME_WARP_ONLY) {
 						dtype warp_t;
 						if (duringTimeWarp) {
 							warp_t = t1 - t0; /* Expected to be negative */	
@@ -1711,18 +1698,18 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 						else {
 							warp_t = 0.0;
 						}
-					
-						pVoc[ifb].procFrame(xBuf, warp_t);
+
+						pVocs[ifb]->procFrame(xBuf, warp_t);
 					}
 					else {
 						if (pertCfg.pitchShift && stat < pertCfg.n) {						
-							pVoc[ifb].procFrame(xBuf, pertCfg.pitchShift[stat]);
+							pVocs[ifb]->procFrame(xBuf, pertCfg.pitchShift[stat]);
 						}
 						else if ( (pertCfg.n == 0) && (p.pitchShiftRatio[ifb] != 1.0) ) {
-							pVoc[ifb].procFrame(xBuf, (log(p.pitchShiftRatio[ifb]) / log(2.0)) * 12.0);
+							pVocs[ifb]->procFrame(xBuf, (log(p.pitchShiftRatio[ifb]) / log(2.0)) * 12.0);
 						}
 						else {
-							pVoc[ifb].procFrame(xBuf, 0.0);
+							pVocs[ifb]->procFrame(xBuf, 0.0);
 						}					
 					}
 				}
@@ -1743,7 +1730,7 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 					/* Using pVoc results */
 					outFrameBufPS[ifb][(outFrameBuf_circPtr + i0) % (internalBufLen)] = 
 						outFrameBufPS[ifb][(outFrameBuf_circPtr + i0) % (internalBufLen)] + 
-						pVoc[ifb].ftBuf2[2 * i0];
+						pVocs[ifb]->ftBuf2[2 * i0];
 				}			
 
 				// Front zeroing
@@ -2830,20 +2817,18 @@ void Audapter::readPertCfg(int bVerbose) {
 		pVocMode = PhaseVocoder::TIME_WARP_WITH_FIXED_PITCH_SHIFT;
 	}
 
-	if (pVoc)
-		delete [] pVoc;
-
-	pVoc = new PhaseVocoder[p.nFB];
-
-	for (int i = 0; i < p.nFB; ++i) {
+    pVocs.clear();
+	for (size_t i = 0; i < p.nFB; ++i) {
+        std::unique_ptr<PhaseVocoder> pVoc(new PhaseVocoder());
 		try {
-			pVoc[i].config(pVocMode, p.nDelay, 
-				    	   static_cast<dtype>(p.sr), p.frameLen, 
-						   p.pvocFrameLen, p.pvocHop);
+			pVoc->config(pVocMode, p.nDelay, 
+                         static_cast<dtype>(p.sr), p.frameLen, 
+                         p.pvocFrameLen, p.pvocHop);
 		}
 		catch (PhaseVocoder::initializationError) {
 			mexErrMsgTxt("Failed to initialize phase vocoder");
 		}
+        pVocs.push_back(std::move(pVoc));
 	}
 }
 

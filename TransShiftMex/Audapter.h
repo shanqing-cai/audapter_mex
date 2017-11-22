@@ -192,11 +192,10 @@ private:
 	long int frame_counter_nowarp;
 
 	/* LP formant tracker object */
-	LPFormantTracker * fmtTracker;
-	// TODO(cais): Use std::unique_ptr<LPFormantTracker> fmtTracker;
+	std::unique_ptr<LPFormantTracker> fmtTracker;
 
 	/* Phase vocoder object */
-	PhaseVocoder *pVoc;
+    std::vector<std::unique_ptr<PhaseVocoder>> pVocs;
 
 	// 
 	dtype time_step;       // process time unit 
@@ -319,8 +318,6 @@ private:
 
 	dtype amp_ratio;
 	dtype amp_ratio_prev;
-
-	//pvocWarpAtom warpCfg;
 
 	//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  PARAMETERS  *****************************************************%%%%%%%%%%%
 

@@ -23,13 +23,15 @@ struct CepstralPitchTrackerConfig {
 	dtype pitchLowerBoundHz;
 	dtype pitchUpperBoundHz;
 
-	CepstralPitchTrackerConfig(const bool activated,
-		                       const dtype pitchLowerBoundHz,
-		                       const dtype pitchUpperBoundHz) {
-		this->activated = activated;
-		this->pitchLowerBoundHz = pitchLowerBoundHz;
-		this->pitchUpperBoundHz = pitchUpperBoundHz;
-	}
+	CepstralPitchTrackerConfig() :
+		activated(false), pitchLowerBoundHz(0.0), pitchUpperBoundHz(0.0) {}
+
+	CepstralPitchTrackerConfig(
+		const bool activated,
+		const dtype pitchLowerBoundHz,
+		const dtype pitchUpperBoundHz) :
+		activated(activated), pitchLowerBoundHz(pitchLowerBoundHz),
+		pitchUpperBoundHz(pitchUpperBoundHz) {}
 };
 
 class LPFormantTracker {
