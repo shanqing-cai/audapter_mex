@@ -55,12 +55,13 @@ LPFormantTracker::LPFormantTracker(const int t_nLPC, const int t_sr, const int t
 	pitchLowerBoundHz(pitchTrackerConfig.pitchLowerBoundHz),
 	pitchUpperBoundHz(pitchTrackerConfig.pitchUpperBoundHz) {
 	/* Input sanity checks */
-	if ( (nLPC <= 0) || (bufferSize <= 0) || (nFFT <= 0) ||
-	     (nTracks <= 0) )
-		 throw initializationError();
+    if ((nLPC <= 0) || (bufferSize <= 0) || (nFFT <= 0) || (nTracks <= 0)) {
+        throw initializationError();
+    }
 
-	if (nLPC > maxNLPC)
-		throw nLPCTooLargeError();
+    if (nLPC > maxNLPC) {
+        throw nLPCTooLargeError();
+    }
 
 	bCepsLift = (cepsWinWidth > 0);
 	
@@ -117,57 +118,76 @@ LPFormantTracker::LPFormantTracker(const int t_nLPC, const int t_sr, const int t
 /* Destructor */
 LPFormantTracker::~LPFormantTracker() 
 {
-	if (winFunc)
-		delete [] winFunc;
+    if (winFunc) {
+        delete[] winFunc;
+    }
 
-	if (Acompanion)
-		delete [] Acompanion;
-	if (AHess)
-		delete [] AHess;
+    if (Acompanion) {
+        delete[] Acompanion;
+    }
+    if (AHess) {
+        delete[] AHess;
+    }
 
-	if (temp_frame)
-		delete [] temp_frame;
-	if (R)
-		delete [] R;
+    if (temp_frame) {
+        delete[] temp_frame;
+    }
+    if (R) {
+        delete[] R;
+    }
 
-	if (ftBuf1)
-		delete [] ftBuf1;
-	if (ftBuf2)
-		delete [] ftBuf2;
-	if (fftc)
-		delete [] fftc;
+    if (ftBuf1) {
+        delete[] ftBuf1;
+    }
+    if (ftBuf2) {
+        delete[] ftBuf2;
+    }
+    if (fftc) {
+        delete[] fftc;
+    }
 
-	if (lpcAi)
-		delete [] lpcAi;
-	if (realRoots)
-		delete [] realRoots;
-	if (imagRoots)
-		delete [] imagRoots;
+    if (lpcAi) {
+        delete[] lpcAi;
+    }
+    if (realRoots) {
+        delete[] realRoots;
+    }
+    if (imagRoots) {
+        delete[] imagRoots;
+    }
 
-	if (cumMat)
-		delete [] cumMat;
-	if (costMat)
-		delete [] costMat;
+    if (cumMat) {
+        delete[] cumMat;
+    }
+    if (costMat) {
+        delete[] costMat;
+    }
 
-	if (weiMatPhi)
-		delete [] weiMatPhi;
-	if (weiMatBw)
-		delete [] weiMatBw;
-	if (weiVec)
-		delete [] weiVec;
-	if (sumWeiPhi)
-		delete [] sumWeiPhi;
-	if (sumWeiBw)
-		delete [] sumWeiBw;
+    if (weiMatPhi) {
+        delete[] weiMatPhi;
+    }
+    if (weiMatBw) {
+        delete[] weiMatBw;
+    }
+    if (weiVec) {
+        delete[] weiVec;
+    }
+    if (sumWeiPhi) {
+        delete[] sumWeiPhi;
+    }
+    if (sumWeiBw) {
+        delete[] sumWeiBw;
+    }
 
-	if (radius_us)
-		delete [] radius_us;
-	if (phi_us)
-		delete [] phi_us;
-	if (bandwidth_us)
-		delete [] bandwidth_us;
-	/*if (phi_s)
-		delete [] phi_s;*/
+    if (radius_us) {
+        delete[] radius_us;
+    }
+    if (phi_us) {
+        delete[] phi_us;
+    }
+    if (bandwidth_us) {
+        delete[] bandwidth_us;
+    }
 }
 
 /* Reset after a supra-threshold interval */
@@ -329,11 +349,13 @@ int LPFormantTracker::hqr_roots(dtype * c, dtype * wr, dtype * wi) {
                s = fabs(aMat(l - 1, l - 1)) + fabs(aMat(l, l));
 			   /*s = fabs(AHess[(l - 2) * nLPC + l - 2]) + fabs(AHess[(l - 1) * nLPC + l - 1]);*/
 
-               if (s == 0.0) s = anorm;
-
-               if ((dtype) (fabs(aMat(l, l - 1)) + s) == s) 
-			   /*if ((dtype) (fabs(AHess[(l - 2) * nLPC + l - 1]) + s) == s)*/
-				   break;
+               if (s == 0.0) {
+                   s = anorm;
+               }
+               if (static_cast<dtype>(fabs(aMat(l, l - 1)) + s) == s) {
+                   /*if ((dtype) (fabs(AHess[(l - 2) * nLPC + l - 1]) + s) == s)*/
+                   break;
+               }
            }
 
          x=aMat(nn, nn);
@@ -411,7 +433,9 @@ int LPFormantTracker::hqr_roots(dtype * c, dtype * wr, dtype * wi) {
 					v = fabs(p) * (fabs(aMat(m - 1, m - 1)) + fabs(z) + fabs(aMat(m + 1, m + 1)));
 					/*v = fabs(p) * (fabs(AHess[(m - 2) * nLPC + m - 2]) + fabs(z) + fabs(AHess[m * nLPC + m]));*/
 
-					if ((dtype) (u+v) == v) break;
+                    if (static_cast<dtype>(u + v) == v) {
+                        break;
+                    }
                 }
                 
 				for (i = m + 2; i <= nn; i++) {
@@ -569,8 +593,8 @@ void LPFormantTracker::getAi(dtype* xx, dtype* aa) {
 		bit_rev(ftBuf2, nFFT);
 
 		// Now ftBuf2 is Xceps: the cepstrum
-		const int minCepstralIndex = bTrackPitch ? (int)(sr / pitchUpperBoundHz) : -1;
-		const int maxCepstralIndex = bTrackPitch ? (int)(sr / pitchLowerBoundHz) : -1;
+		const int minCepstralIndex = bTrackPitch ? static_cast<int>(sr / pitchUpperBoundHz) : -1;
+		const int maxCepstralIndex = bTrackPitch ? static_cast<int>(sr / pitchLowerBoundHz) : -1;
 		int cepstralIndex = -1;
 		dtype maxCepstralMag = -10e20;
 

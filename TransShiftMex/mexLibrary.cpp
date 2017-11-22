@@ -138,11 +138,8 @@ void mexFunction( int nlhs, mxArray *plhs[],
 		}
 	}
 	else {
-		action = (int) floor(*(double*) mxGetPr(prhs[0]));	//SC Figure out the input argument
+		action = static_cast<int>(floor(*(double*) mxGetPr(prhs[0])));	//SC Figure out the input argument
 	}
-		/* if (~mxGetString(prhs[0], actionStr, )) {
-			action = (int)floor(*(double*)mxGetPr(prhs[0]));	//SC Figure out the input argument
-		} */
 
 		//LPCWSTR in_wav_fn = L"E:\\speechres\\blueshift\\mcode\\test1.wav";
 
@@ -228,25 +225,25 @@ void mexFunction( int nlhs, mxArray *plhs[],
 			devpar.chans = 2;
 			audio_obj.setdevparams(&devpar, 2);
 
-			if (!started)
-			{
-				printf("Action Start:  %d\n", action);
+			if (!started) {
+				mexPrintf("Action Start:  %d\n", action);
 				audapter.reset();			//SC Reset audio device params
 				audio_obj.startdev();	//SC Start audio device. Callback function will be automatically called
 			}
-			else
-				printf("Already started\n");
+            else {
+                mexPrintf("Already started\n");
+            }
 			started = 1;
 			break;
 
 		case 2:			//SC Stop the audio device
-			if (started){
-				printf("Action End:  %d\n", action);
+			if (started) {
+				mexPrintf("Action End:  %d\n", action);
 				if (audio_obj.started)
 					audio_obj.stopdev();
 			}
 			else {
-				printf("Not started\n");
+				mexPrintf("Not started\n");
 			}
 			started = 0;
 			break;
@@ -269,11 +266,12 @@ void mexFunction( int nlhs, mxArray *plhs[],
 					mexErrMsgTxt("ERROR: Input parameter is not a scalar or a row or column vector");
 			}
 
-			if (nrhs >=4)
-				bVerb = ((int) floor(*(double*) mxGetPr(prhs[3])) == 1);
-
-			if (nrhs >= 3)
-				audapter.setParam(mxArrayToString(prhs[1]), (void *)mxGetPr(prhs[2]), nPars, bVerb);
+            if (nrhs >= 4) {
+                bVerb = static_cast<int>(floor(*(double*)mxGetPr(prhs[3])) == 1);
+            }
+            if (nrhs >= 3) {
+                audapter.setParam(mxArrayToString(prhs[1]), (void *)mxGetPr(prhs[2]), nPars, bVerb);
+            }
 
 			break;
 
@@ -377,44 +375,51 @@ void mexFunction( int nlhs, mxArray *plhs[],
 
 		case 8:				// Set OST file name and read the file (10/18/2012)			
 			if (nrhs == 2 || nrhs == 3) {
-				if (nrhs == 2)
-					bVerbose = 1;
-				else
-					bVerbose = (int)(*(double *) mxGetPr(prhs[2]));
+                if (nrhs == 2) {
+                    bVerbose = 1;
+                }
+                else {
+                    bVerbose = static_cast<int>(*(double *)mxGetPr(prhs[2]));
+                }
 
 				inStrNDims = mxGetNumberOfDimensions(prhs[1]);
 				if ( inParNDims != 2 )
 					mexErrMsgTxt("Incorrect number of dimensions in input file name");
 
 				strcpy_s(audapter.ostFN, sizeof(audapter.ostFN), mxArrayToString(prhs[1]));
-				if (bVerbose)
-					printf("ostFN = %s\n", audapter.ostFN);
+                if (bVerbose) {
+                    mexPrintf("ostFN = %s\n", audapter.ostFN);
+                }
 				audapter.readOSTTab(bVerbose);
 			}
 			else {
-				printf("Syntax error.\n");
+				mexPrintf("Syntax error.\n");
 			}
 
 			break;
 				
 		case 9:				// Set PIP cfg file name and read the file (10/19/2012)
 			if (nrhs == 2 || nrhs == 3) {
-				if (nrhs == 2)
-					bVerbose = 1;
-				else
-					bVerbose = (int)(*(double *) mxGetPr(prhs[2]));
+                if (nrhs == 2) {
+                    bVerbose = 1;
+                }
+                else {
+                    bVerbose = static_cast<int>(*(double *)mxGetPr(prhs[2]));
+                }
 
 				inStrNDims = mxGetNumberOfDimensions(prhs[1]);
-				if ( inParNDims != 2 )
-					mexErrMsgTxt("Incorrect number of dimensions in input file name");
+                if (inParNDims != 2) {
+                    mexErrMsgTxt("Incorrect number of dimensions in input file name");
+                }
 
 				strcpy_s(audapter.pertCfgFN, sizeof(audapter.pertCfgFN), mxArrayToString(prhs[1]));				
-				if (bVerbose)
-					printf("pertCfgFN = %s\n", audapter.pertCfgFN);
+                if (bVerbose) {
+                    mexPrintf("pertCfgFN = %s\n", audapter.pertCfgFN);
+                }
 				audapter.readPertCfg(bVerbose);
 			}
 			else {
-				printf("Syntax error.\n");
+				mexPrintf("Syntax error.\n");
 			}
 
 			break;
@@ -434,14 +439,14 @@ void mexFunction( int nlhs, mxArray *plhs[],
 			audio_obj.setdevparams(&devpar, 2);
 
 
-			if (!started)
-			{
-				printf("Action Start:  %d\n", action);
+			if (!started) {
+				mexPrintf("Action Start:  %d\n", action);
 				audapter.reset();			//SC Reset audio device params
 				audio_obj.startdev();	//SC Start audio device. Callback function will be automatically called
 			}
-			else
-				printf("Already started\n");
+            else {
+                mexPrintf("Already started\n");
+            }
 			started = 1;
 			break;
 
@@ -459,14 +464,14 @@ void mexFunction( int nlhs, mxArray *plhs[],
 			devpar.num = activeDeviceNum;
 			audio_obj.setdevparams(&devpar,2);
 
-			if (!started)
-			{
-				printf("Action Start:  %d\n", action);
+			if (!started) {
+				mexPrintf("Action Start:  %d\n", action);
 				audapter.reset();			//SC Reset audio device params
 				audio_obj.startdev();	//SC Start audio device. Callback function will be automatically called
 			}
-			else
-				printf("Already started\n");
+            else {
+                mexPrintf("Already started\n");
+            }
 			started = 1;
 			break;
 
@@ -487,14 +492,14 @@ void mexFunction( int nlhs, mxArray *plhs[],
 			devpar.num = activeDeviceNum;
 			audio_obj.setdevparams(&devpar, 2);
 
-			if (!started)
-			{
-				printf("Action Start:  %d\n", action);
+			if (!started) {
+                mexPrintf("Action Start:  %d\n", action);
 				audapter.reset();			//SC Reset audio device params
 				audio_obj.startdev();	//SC Start audio device. Callback function will be automatically called
 			}
-			else
-				printf("Already started\n");
+            else {
+                mexPrintf("Already started\n");
+            }
 			started = 1;
 			break;
 
@@ -539,7 +544,7 @@ void mexFunction( int nlhs, mxArray *plhs[],
 
 				fstream dataFile("data0.bin", ios::binary | ios::out);
 				if (!dataFile){
-					printf("WARNING: Cannot open file data0.bin\n");
+					mexPrintf("WARNING: Cannot open file data0.bin\n");
 				}
 
 				dataFile.write((char *) algosignal_ptr, audapter.getMaxRecSize() * (sizeof dtype));
@@ -574,18 +579,18 @@ void mexFunction( int nlhs, mxArray *plhs[],
 
 		case 30: // Set the output base;
 			if (nrhs != 2) {
-				printf("Usage: TransShiftMex(30, wavOutBase);\n");
+                mexPrintf("Usage: TransShiftMex(30, wavOutBase);\n");
 				return;
 			}			
 
 			sprintf_s(audapter.wavFileBase, "%s", mxArrayToString(prhs[1]));
-			printf("audapter.wavFileBase = %s\n", audapter.wavFileBase);
+            mexPrintf("audapter.wavFileBase = %s\n", audapter.wavFileBase);
 
 			break;
 
 		case 31:
 			if (nrhs != 1) {
-				printf("Usage: TransShiftMex(31);\n");
+                mexPrintf("Usage: TransShiftMex(31);\n");
 				return;
 			}
 			audapter.writeSignalsToWavFile();
@@ -627,8 +632,7 @@ void mexFunction( int nlhs, mxArray *plhs[],
 			break;
 
 		default:
-			printf("Action unknown:  %d\n", action);
-				
+            mexPrintf("Action unknown:  %d\n", action);
 	}
 
 

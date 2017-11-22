@@ -379,7 +379,7 @@ Audapter::Audapter() :
 	p.pvocAmpNormTrans = 16;
 
 	rmsSlopeWin = 0.03; // Unit: s
-	rmsSlopeN = (int)(rmsSlopeWin / ((dtype)p.frameLen / (dtype)p.sr));
+	rmsSlopeN = static_cast<int>(rmsSlopeWin / (static_cast<dtype>(p.frameLen) / static_cast<dtype>(p.sr)));
 
 	intShiftRatio = 1.0;
 	amp_ratio = 1.0;
@@ -643,14 +643,14 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 	}
 	else if (ns == string("bcepslift")) {
 		ptr = (void *)&p.bCepsLift;
-		if (bSet) {
-			bRemakeFmtTracker = (int)(*((dtype *)value)) != p.bCepsLift;
+		if (bSet && static_cast<int>(*((dtype *)value)) != p.bCepsLift) {
+            bRemakeFmtTracker = true;
 		}
 	}
 	else if (ns == string("btrackpitch")) {
 		ptr = (void *)&p.bTrackPitch;
-		if (bSet) {
-			bRemakeFmtTracker = (int)(*((dtype *)value)) != p.bTrackPitch;
+		if (bSet && static_cast<int>(*((dtype *)value)) != p.bTrackPitch) {
+			bRemakeFmtTracker = true;
 		}
 	}
 	else if (ns == string("bratioshift")) {
@@ -668,16 +668,16 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 	else if (ns == string("srate")) {
 		ptr = (void *)&p.sr;
 
-		if (bSet) {
-			bRemakeFmtTracker = (int)(*((dtype *)value)) != p.sr;
-			bRemakePVoc = (int)(*((dtype *)value)) != p.sr;
+		if (bSet && static_cast<int>(*((dtype *)value)) != p.sr) {
+			bRemakeFmtTracker = true;
+			bRemakePVoc = true;
 		}
 	}
-	else if (ns == string("framelen")) {
-		ptr = (void *)&p.frameLen;
-
-		if (bSet)
-			bRemakePVoc = (int)(*((dtype *)value)) != p.frameLen;
+    else if (ns == string("framelen")) {
+        ptr = (void *)&p.frameLen;
+        if (bSet && static_cast<int>(*((dtype *)value)) != p.frameLen) {
+            bRemakePVoc = true;
+        }
 	}
 	else if (ns == string("ndelay")) {
 		ptr = (void *)&p.nDelay;
@@ -687,9 +687,9 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 	}
 	else if (ns == string("nlpc")) {
 		ptr = (void *)&p.nLPC;
-
-		if (bSet)
-			bRemakeFmtTracker = (int)(*((dtype *)value)) != p.nLPC;
+        if (bSet && static_cast<int>(*((dtype *)value)) != p.nLPC) {
+            bRemakeFmtTracker = true;
+        }
 	}
 	else if (ns == string("nfmts")) {
 		ptr = (void *)&p.nFmts;
@@ -697,8 +697,9 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 	else if (ns == string("ntracks")) {
 		ptr = (void *)&p.nTracks;
 
-		if (bSet)
-			bRemakeFmtTracker = (int)(*((dtype *)value)) != p.nTracks;
+        if (bSet && static_cast<int>(*((dtype *)value)) != p.nTracks) {
+            bRemakeFmtTracker = true;
+        }
 	}
 	else if (ns == string("avglen")) {
 		ptr = (void *)&p.avgLen;
@@ -706,8 +707,9 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 	else if (ns == string("cepswinwidth")) {
 		ptr = (void *)&p.cepsWinWidth;
 
-		if (bSet)
-			bRemakeFmtTracker = (int)(*((dtype *)value)) != p.cepsWinWidth;
+        if (bSet && static_cast<int>(*((dtype *)value)) != p.cepsWinWidth) {
+            bRemakeFmtTracker = true;
+        }
 	}
 	else if (ns == string("fb")) {
 		ptr = (void *)&p.fb;
@@ -729,25 +731,27 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 	else if (ns == string("pvocframelen")) {
 		ptr = (void *)&p.pvocFrameLen;
 
-		if (bSet)
-			bRemakePVoc = (int)(*((dtype *)value)) != p.pvocFrameLen;
+        if (bSet && static_cast<int>(*((dtype *)value)) != p.pvocFrameLen) {
+            bRemakePVoc = true;
+        }
 	}
 	else if (ns == string("pvochop")) {
 		ptr = (void *)&p.pvocHop;
 
-		if (bSet)
-			bRemakePVoc = (int)(*((dtype *)value)) != p.pvocHop;
+        if (bSet && static_cast<int>(*((dtype *)value)) != p.pvocHop) {
+            bRemakePVoc = true;
+        }
 	}
 	else if (ns == string("pitchlowerboundhz")) {
 		ptr = (void *)&p.pitchLowerBoundHz;
-		if (bSet) {
-			bRemakeFmtTracker = *((dtype *)value) != p.pitchLowerBoundHz;
+		if (bSet && *((dtype *)value) != p.pitchLowerBoundHz) {
+			bRemakeFmtTracker = true;
 		}
 	}
 	else if (ns == string("pitchupperboundhz")) {
 		ptr = (void *)&p.pitchUpperBoundHz;
-		if (bSet) {
-			bRemakeFmtTracker = *((dtype *)value) != p.pitchUpperBoundHz;
+		if (bSet && *((dtype *)value) != p.pitchUpperBoundHz) {
+			bRemakeFmtTracker = true;
 		}
 	}
 	else if (ns == string("bdownsampfilt")) {
@@ -755,13 +759,12 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 	}
 	else if (ns == string("nfb")) {
 		ptr = (void *)&p.nFB;
-
-		if (bSet)
-			bRemakePVoc = (int)(*((dtype *)value)) != p.nFB;
+        if (bSet && static_cast<int>(*((dtype *)value)) != p.nFB) {
+            bRemakePVoc = true;
+        }
 	}
 	else if (ns == string("mute")) {
-		ptr = (void *)p.mute;		
-
+        ptr = (void *)p.mute;
 		if ( bSet && (nPars != p.nFB) )
 			mexErrMsgTxt("Erroneous length of input delayFrames");
 		
@@ -1016,27 +1019,27 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 	else {
 		/* Set value(s) */
 		if (pType == Parameter::TYPE_BOOL) {
-			*((int *)ptr) = (int)(*((dtype *)value));
+			*((int *)ptr) = static_cast<int>(*((dtype *)value));
 		}
 		else if (pType == Parameter::TYPE_INT) {
-			*((int *)ptr) = (int)(*((dtype *)value));
+			*((int *)ptr) = static_cast<int>(*((dtype *)value));
 		}
 		else if (pType == Parameter::TYPE_DOUBLE) {
 			*((dtype *)ptr) = *((dtype *)value);
 		}
 		else if (pType == Parameter::TYPE_BOOL_ARRAY) {
 			for (int i = 0; i < len; i++) {
-				*((int *)ptr + i) = (int)(*((dtype *)value + i));
+				*((int *)ptr + i) = static_cast<int>(*((dtype *)value + i));
 			}
 		}
 		else if (pType == Parameter::TYPE_INT_ARRAY) {
 			for (int i = 0; i < len; i++) {
-				*((int *)ptr + i) = (int)(*((dtype *)value + i));
+				*((int *)ptr + i) = static_cast<int>(*((dtype *)value + i));
 			}
 		}
 		else if (pType == Parameter::TYPE_DOUBLE_ARRAY) {
 			for (int i = 0; i < len; i++) {
-				*((dtype *)ptr + i) = (dtype)(*((dtype *)value + i));
+				*((dtype *)ptr + i) = static_cast<dtype>(*((dtype *)value + i));
 			}
 
 			if ( ns == string("datapb") ) { /* Zero out the remaining part */
@@ -1083,7 +1086,7 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 			p.anaLen = p.frameShift + 2 * (p.nDelay - 1) * p.frameLen;
 		} else if (ns == string("delayframes")) {
 			for (int n = 0; n < maxNVoices && n < p.nFB; n++) {
-				p.delayFrames[n]		= (int)(*((dtype *)value + n));
+				p.delayFrames[n]		= static_cast<int>(*((dtype *)value + n));
 				if (p.delayFrames[n] < 0){
 					TRACE("WARNING: delayFrames[%d] < 0. Set to 0 automatically.\n", n);
 					p.delayFrames[n] = 0;
@@ -1110,7 +1113,7 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 
 		p.frameShift	= p.frameLen / p.nWin;
 		p.anaLen		= p.frameShift + 2 * (p.nDelay - 1) * p.frameLen;
-		time_step		= (dtype)p.frameShift * 1000 / p.sr;	//SC Unit: ms
+		time_step		= static_cast<dtype>(p.frameShift) * 1000.0 / p.sr;	// Unit: ms
 		p.minDetected	= p.nWin;
 
 		/* Verbose mode */
@@ -1403,11 +1406,14 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 		during_trans=false;
 		gtot[fi]=1;			// initialize gain factor				
 		si=fi*p.frameShift;// sample index
-		rms_o=sqrt(DSPF_dp_vecsum_sq(&oBuf[(p.nDelay-1)*p.frameLen+si],p.frameShift)/((dtype)p.frameShift)); //short time rms of current window
-		rms_s=calcRMS1(&oBuf[(p.nDelay-1)*p.frameLen+si], p.frameShift); // Smoothed RMS of original signal 
-		rms_p=calcRMS2(&pBuf[(p.nDelay-1)*p.frameLen+si], p.frameShift); // RMS preemphasized (i.e., high-pass filtered) signal, also smoothed	
+		rms_o = sqrt(DSPF_dp_vecsum_sq(
+            oBuf + (p.nDelay - 1) * p.frameLen + si,
+            p.frameShift) / (static_cast<dtype>(p.frameShift))); //short time rms of current window
+		rms_s = calcRMS1(oBuf + (p.nDelay - 1) * p.frameLen + si, p.frameShift); // Smoothed RMS of original signal 
+		rms_p = calcRMS2(pBuf + (p.nDelay - 1) * p.frameLen + si, p.frameShift); // RMS preemphasized (i.e., high-pass filtered) signal, also smoothed	
 
-		rms_fb = calcRMS_fb(&oBuf[(p.nDelay - 1) * p.frameLen + si], p.frameShift, rms_s > p.dRMSThresh); // Smoothed RMS of original signal
+		rms_fb = calcRMS_fb(oBuf + (p.nDelay - 1) * p.frameLen + si,
+                            p.frameShift, rms_s > p.dRMSThresh); // Smoothed RMS of original signal
 
 		rms_ratio = rms_s / rms_p; // rmsratio indicates if there is a fricative around here...	
 
@@ -1484,7 +1490,7 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 		}
 
 		a_rms_o[data_counter] = rms_s;
-		rmsSlopeN = (int)(rmsSlopeWin / ((dtype)p.frameLen / (dtype)p.sr));
+		rmsSlopeN = static_cast<int>(rmsSlopeWin / (static_cast<dtype>(p.frameLen) / static_cast<dtype>(p.sr)));
 		calcRMSSlope();
 
 		stat = ostTab.osTrack(stat, data_counter, frame_counter, 
@@ -1503,9 +1509,9 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 
 			if(during_trans && bDoFmts) // Determine whether the current point in perturbation field
 			{// yes : windowed deviation over x coordinate
-				loc=locateF2(f2mp);	// Interpolation (linear)								
-				locint=(int)floor(loc);
-				locfrac=loc-locint;
+				loc = locateF2(f2mp);	// Interpolation (linear)								
+                locint = static_cast<int>(floor(loc));
+				locfrac = loc - locint;
 				
 				/* That using ost and pcf files overrides the perturbatoin field 
 					specified with pertF2, pertAmp, pertPhi. */
@@ -1672,7 +1678,7 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 			}
 
 			// --- Time warping preparation ---
-			dtype t0 = (dtype)(frame_counter - (p.nDelay - 1)) * p.frameLen / p.sr;
+			dtype t0 = static_cast<dtype>(frame_counter - (p.nDelay - 1)) * p.frameLen / p.sr;
 			dtype t1;
 
 			// --- ~Time warping preparation ---
@@ -1802,7 +1808,7 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 				nzCnt++;
 			}
 		}
-		ms_out /= (dtype) nzCnt;
+        ms_out /= static_cast<dtype>(nzCnt);
 
 		if (isPvocFrame == 1
 			//&& (frame_counter_nowarp - (p.nDelay - 1) > p.pvocFrameLen / p.frameLen)
@@ -1928,7 +1934,7 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 		else if (p.stereoMode == 2) { /* Left audio; right simulated TTL */
 			for (n = 0; n < frame_size; n++) {
 				outFrame_ptr[2 * n] = outputBuf[n];
-				outFrame_ptr[2 * n + 1] = 0.99 * (dtype) duringPitchShift;
+                outFrame_ptr[2 * n + 1] = 0.99 * static_cast<dtype>(duringPitchShift);
 			}
 		}
 		else {
@@ -2031,8 +2037,9 @@ int Audapter::getDFmt(dtype *fmt_ptr,dtype *dFmt_ptr, dtype time)
 		else
 			deltaFmt[i0]=(fmt_ptr[i0]-lastFmt[i0])/time_step;//0.5625;
 
-		if (fabs(deltaFmt[i0])>p.maxDelta)
-			deltaFmt[i0]=p.maxDelta*(dtype)sign(deltaFmt[i0]);
+        if (fabs(deltaFmt[i0]) > p.maxDelta) {
+            deltaFmt[i0] = p.maxDelta * static_cast<dtype>(sign(deltaFmt[i0]));
+        }
 
 		deltaMaFmt[i0]=(1-p.dFmtsFF)*deltaFmt[i0]+p.dFmtsFF*deltaMaFmt[i0];
 		dFmt_ptr[i0]=deltaMaFmt[i0];
@@ -2173,14 +2180,16 @@ void Audapter::formantShiftFilter(dtype *xin_ptr, dtype* xout_ptr,
 // Calculate rms of buffer
 dtype Audapter::calcRMS1(const dtype *xin_ptr, int size)
 {
-	//SC rmsFF: RMF forgetting factor, by default equals 0.9.
-	ma_rms1=(1-p.rmsFF)*sqrt(DSPF_dp_vecsum_sq(xin_ptr,size)/(dtype)size)+p.rmsFF*ma_rms1;
+	// rmsFF: RMF forgetting factor, by default equals 0.9.
+	ma_rms1 = (1 - p.rmsFF) * sqrt(
+        DSPF_dp_vecsum_sq(xin_ptr, size) / static_cast<dtype>(size)) + p.rmsFF * ma_rms1;
 	return ma_rms1 ;
 }
 
 dtype Audapter::calcRMS2(const dtype *xin_ptr, int size)
 {
-	ma_rms2=(1-p.rmsFF)*sqrt(DSPF_dp_vecsum_sq(xin_ptr,size)/(dtype)size)+p.rmsFF*ma_rms2;
+	ma_rms2 = (1 - p.rmsFF) * sqrt(
+        DSPF_dp_vecsum_sq(xin_ptr, size) / static_cast<dtype>(size)) + p.rmsFF * ma_rms2;
 	return ma_rms2 ;
 }
 
@@ -2192,8 +2201,8 @@ dtype Audapter::calcRMS_fb(const dtype *xin_ptr, int size, bool above_rms)
 	dtype ff_inc, ff_dec;
 	
 	if (p.rmsFF_fb[2] > 0.0) {
-		ff_inc = (p.rmsFF_fb[1] - p.rmsFF_fb[0]) / (int) (p.rmsFF_fb[2] / frameDur);
-		ff_dec = (p.rmsFF_fb[0] - p.rmsFF_fb[1]) / (int) (p.rmsFF_fb[3] / frameDur);
+		ff_inc = (p.rmsFF_fb[1] - p.rmsFF_fb[0]) / static_cast<int>(p.rmsFF_fb[2] / frameDur);
+		ff_dec = (p.rmsFF_fb[0] - p.rmsFF_fb[1]) / static_cast<int>(p.rmsFF_fb[3] / frameDur);
 
 		/* Status tracking */
 		if (fb4_status == 0) {
@@ -2207,7 +2216,7 @@ dtype Audapter::calcRMS_fb(const dtype *xin_ptr, int size, bool above_rms)
 				fb4_counter++;
 				rmsFF_fb_now += ff_inc;
 
-				cntThresh = (int) (p.rmsFF_fb[2] / frameDur);
+				cntThresh = static_cast<int>(p.rmsFF_fb[2] / frameDur);
 				if (fb4_counter >= cntThresh) {
 					fb4_status = 2;
 					rmsFF_fb_now = p.rmsFF_fb[1];
@@ -2229,7 +2238,7 @@ dtype Audapter::calcRMS_fb(const dtype *xin_ptr, int size, bool above_rms)
 			if (!above_rms) {
 				fb4_counter++;
 
-				cntThresh = (int) (p.rmsFF_fb[3] / frameDur);
+				cntThresh = static_cast<int>(p.rmsFF_fb[3] / frameDur);
 				if (fb4_counter >= cntThresh) {
 					fb4_status = 4;
 				}
@@ -2249,16 +2258,10 @@ dtype Audapter::calcRMS_fb(const dtype *xin_ptr, int size, bool above_rms)
 				fb4_counter = 0;
 			}
 		}
-
-		/*if ((p.rmsFF_fb[1] - p.rmsFF_fb[0]) * (rmsFF_fb_now - p.rmsFF_fb[1]) < 0.0) {
-			rmsFF_fb_now += ff_inc;
-		}*/
 	}
 
-	//printf("fb4_status = %d\n", fb4_status);
-	//fflush(stdout);
-
-	ma_rms_fb = (1 - rmsFF_fb_now) * sqrt(DSPF_dp_vecsum_sq(xin_ptr,size) / (dtype)size) + rmsFF_fb_now * ma_rms_fb;
+	ma_rms_fb = (1 - rmsFF_fb_now) * sqrt(
+        DSPF_dp_vecsum_sq(xin_ptr, size) / static_cast<dtype>(size)) + rmsFF_fb_now * ma_rms_fb;
 	return ma_rms_fb;
 }
 
@@ -2275,8 +2278,7 @@ void Audapter::downSampSig(dtype *x, dtype *r, const int nr, const int downfact,
 		downSampFilter.filter(x, downSampBuffer, nr * downfact, 1.0);		
 
 	// decimation
-	for(int i0 = 0; i0 < nr; i0++)
-	{
+	for(size_t i0 = 0; i0 < nr; i0++) {
 		r[i0] = downSampBuffer[downfact *i0];
 	}
 }
@@ -2329,7 +2331,7 @@ dtype Audapter::locateF2(dtype f2){
 	if (f2<p.pertF2[k])
 		k--;
 
-	loc=(dtype)k;
+    loc = static_cast<dtype>(k);
 
 	loc+=(f2-p.pertF2[k])/(p.pertF2[k+1]-p.pertF2[k]);
 
@@ -2600,7 +2602,6 @@ void Audapter::writeSignalsToWavFile() {
 
 		for (i0 = 0; i0 < maxRecSize; i0++) {
 			wavx = (signed short)(32767. * algosignal_ptr[j0 * maxRecSize + i0]);
-			//wavx = (signed short)(32767. * 0.99 * sin(2 * M_PI * (dtype)(i0) / wavSampRate * 1000));
 
 			if (wavx > 32767)
 				wavx = 32727;
@@ -2639,7 +2640,7 @@ void Audapter::calcRMSSlope() {
 		}
 	}
 
-	a_rms_o_slp[data_counter] = nom / den / (p.frameLen / (dtype)p.sr);	
+    a_rms_o_slp[data_counter] = nom / den / (p.frameLen / static_cast<dtype>(p.sr));
 }
 
 

@@ -264,7 +264,7 @@ void PhaseVocoder :: procFrame(const dtype * inBuf, const dtype shift) {
 			/*for (int i1 = 0; i1 < 2; ++i1) {*/
 			p_tmp = X_phase[i0] - lastPhase[i0];
 
-			p_tmp -= (dtype)i0 * expct;
+            p_tmp -= static_cast<dtype>(i0) * expct;
 
 			qpd = static_cast<int>(p_tmp / M_PI);
 
@@ -276,7 +276,7 @@ void PhaseVocoder :: procFrame(const dtype * inBuf, const dtype shift) {
 			p_tmp -= M_PI * static_cast<dtype>(qpd);
 
 			p_tmp = osamp * p_tmp / (2. * M_PI);
-			p_tmp = (dtype)i0 * freqPerBin + p_tmp * freqPerBin;
+            p_tmp = static_cast<dtype>(i0) * freqPerBin + p_tmp * freqPerBin;
 
 			anaMagn[i0] = X_magn[i0];
 			anaFreq[i0] = p_tmp;
@@ -414,7 +414,7 @@ void PhaseVocoder :: procFrame(const dtype * inBuf, const dtype shift) {
 						
 			dp -= static_cast<dtype>(i0) * expct;
 						
-			qpd = (int)(dp / M_PI);
+			qpd = static_cast<int>(dp / M_PI);
 			if (qpd >= 0) 
 				qpd += qpd & 1;
 			else 
