@@ -2147,30 +2147,28 @@ int Audapter::gainAdapt(dtype *buffer,dtype *gtot_ptr,int framelen, int frameshi
 }
 
 
-
-
-void Audapter::formantShiftFilter(dtype *xin_ptr, dtype* xout_ptr, 
-								  dtype *oldPhi_ptr, dtype *newPhi_ptr, dtype *r_ptr, 
+void Audapter::formantShiftFilter(dtype* xIn, dtype* xOut, 
+								  dtype oldPhis[2], dtype newPhis[2], dtype mags[2], 
 								  const int size) {
 	// filter cascading two biquad IIR filters 
 	// coefficients for the first filter (f1 shift) NOTE: b_filt1[0]=1 (see initilization)
-	b_filt1[1]=-2*r_ptr[0]*cos(oldPhi_ptr[0]);
-	b_filt1[2]= r_ptr[0]*r_ptr[0]; 	
-	a_filt1[1]=-2*r_ptr[0]*cos(newPhi_ptr[0]);  
-	a_filt1[2]= r_ptr[0]*r_ptr[0]; 
+	b_filt1[1] = -2 * mags[0] * cos(oldPhis[0]);
+	b_filt1[2] = mags[0] * mags[0]; 	
+	a_filt1[1] = -2 * mags[0] * cos(newPhis[0]);  
+	a_filt1[2] = mags[0] * mags[0]; 
 
 	shiftF1Filter.setCoeff(3, a_filt1, 3, b_filt1);
 
 	// coefficients for the second filter (f2 shift) NOTE: b_filt2[0]=1 (see initilization)
-	b_filt2[1]=-2*r_ptr[1]*cos(oldPhi_ptr[1]);
-	b_filt2[2]= r_ptr[1]*r_ptr[1];
-	a_filt2[1]=-2*r_ptr[1]*cos(newPhi_ptr[1]);
-	a_filt2[2]= r_ptr[1]*r_ptr[1];
+	b_filt2[1] = -2 * mags[1] * cos(oldPhis[1]);
+	b_filt2[2] = mags[1] * mags[1];
+	a_filt2[1] = -2 * mags[1] * cos(newPhis[1]);
+	a_filt2[2] = mags[1] * mags[1];
 
 	shiftF2Filter.setCoeff(3, a_filt2, 3, b_filt2);
 
-	shiftF1Filter.filter(xin_ptr, filtbuf, size);
-	shiftF2Filter.filter(filtbuf, xout_ptr, size);
+	shiftF1Filter.filter(xIn, filtbuf, size);
+	shiftF2Filter.filter(filtbuf, xOut, size);
 }
 
 // Calculate rms of buffer

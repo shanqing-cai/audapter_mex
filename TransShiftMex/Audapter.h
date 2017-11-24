@@ -497,7 +497,8 @@ private:
 	//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  FUNCTIONS  *****************************************************%%%%%%%%%%%	
 	dtype  getGain(dtype * r, dtype * ophi,dtype * sphi, int nfmts);
 		
-	void formantShiftFilter (dtype *xin_ptr, dtype* xout_ptr,dtype *oldPhi_ptr,dtype *newPhi_ptr,dtype *r_ptr,const int size);
+	void formantShiftFilter(dtype* xIn, dtype* xOut,
+		                    dtype oldPhis[2], dtype newPhis[2], dtype mags[2], const int size);
 	dtype calcRMS1(const dtype *xin_ptr, int size);	
 	dtype calcRMS2(const dtype *xin_ptr, int size);
 	dtype calcRMS_fb(const dtype *xin_ptr, int size, bool above_rms);	
