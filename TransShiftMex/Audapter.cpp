@@ -402,7 +402,7 @@ Audapter::Audapter() :
 
 	/* Initialize phase vocoder */
     pVocs.clear();
-    for (size_t i = 0; i < p.nFB; ++i) {
+    for (int i = 0; i < p.nFB; ++i) {
         std::unique_ptr<PhaseVocoder> pVoc(new PhaseVocoder());
         try {
             pVoc->config(PhaseVocoder::operMode::PITCH_SHIFT_ONLY, p.nDelay,
@@ -1209,7 +1209,7 @@ void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars
 				t_operMode = PhaseVocoder::operMode::PITCH_SHIFT_ONLY;
 			}
 
-            for (size_t i = 0; i < p.nFB; ++i) {
+            for (int i = 0; i < p.nFB; ++i) {
                 std::unique_ptr<PhaseVocoder> pVoc(new PhaseVocoder());
                 try {
                     pVoc->config(t_operMode, p.nDelay, static_cast<dtype>(p.sr),
@@ -2776,7 +2776,7 @@ void Audapter::readPertCfg(int bVerbose) {
 	try {
 		pertCfg.readFromFile(str_pertCfgFN, bVerbose);
 	}
-	catch (PERT_CFG::pcfFileReadingError err) {
+	catch (PERT_CFG::pcfFileReadingError) {
 		string errMsg("Error reading from pcf file: ");
 		errMsg += str_pertCfgFN;
 
@@ -2815,7 +2815,7 @@ void Audapter::readPertCfg(int bVerbose) {
 	}
 
     pVocs.clear();
-	for (size_t i = 0; i < p.nFB; ++i) {
+	for (int i = 0; i < p.nFB; ++i) {
         std::unique_ptr<PhaseVocoder> pVoc(new PhaseVocoder());
 		try {
 			pVoc->config(pVocMode, p.nDelay, 
