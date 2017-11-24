@@ -93,11 +93,12 @@ Parameter::paramType Parameter::checkParam(const char *name) {
 	string inputNameStr = string(name);
 	transform(inputNameStr.begin(), inputNameStr.end(), inputNameStr.begin(), ::tolower);
 
-	int i;
+	size_t i;
 	for (i = 0; i < names.size(); i++) {
 		string nameStr = string(names[i]);
-		if (nameStr == inputNameStr)
-			break;
+        if (nameStr == inputNameStr) {
+            break;
+        }
 	}
 
 	if (i >= names.size()) {
@@ -106,7 +107,6 @@ Parameter::paramType Parameter::checkParam(const char *name) {
 	else {
 		return types[i];
 	}
-
 }
 
 /* Constructor of Audapter */
@@ -120,98 +120,98 @@ Audapter::Audapter() :
 
 	/* Modifiable parameters */
 	/* Boolean parameters */
-	params.addParam("bshift",		"Formant perturbation switch", Parameter::TYPE_BOOL);
-	params.addParam("btrack",		"Formant tracking switch", Parameter::TYPE_BOOL);
-	params.addParam("bdetect",		"Formant tracking period detection switch", Parameter::TYPE_BOOL);
-	params.addParam("bweight",		"Switch for intensity-weighted smoothing of formant frequencies", Parameter::TYPE_BOOL);
-	params.addParam("bcepslift",	"Switch for cepstral liftering for formant trackng", Parameter::TYPE_BOOL);
-	params.addParam("btrackpitch",  "Track pitch in real-time, using cepstral method", Parameter::TYPE_BOOL);
-	params.addParam("bratioshift",	"Switch for ratio-based formant shifting", Parameter::TYPE_BOOL);
-	params.addParam("bmelshift",	"Switch for formant shifting based on the mel frequency scale", Parameter::TYPE_BOOL);
-	params.addParam("bgainadapt",	"Formant perturbation gain adaptation switch", Parameter::TYPE_BOOL);
-	params.addParam("brmsclip",		"Switch for auto RMS intensity clipping (loudness protection)", Parameter::TYPE_BOOL);	//
-	params.addParam("bbypassfmt",	"Switch for bypassing formant tracking (for use in pitch shifting and time warping", Parameter::TYPE_BOOL);
-	params.addParam("bpitchshift",	"Pitch shifting switch", Parameter::TYPE_BOOL);
-	params.addParam("bdownsampfilt", "Down-sampling filter switch", Parameter::TYPE_BOOL);
-	params.addParam("mute",			"Global mute switch", Parameter::TYPE_BOOL_ARRAY);
-	params.addParam("bpvocmpnorm",	"Phase vocoder amplitude normalization switch", Parameter::TYPE_BOOL);
+	params.addBoolParam("bshift", "Formant perturbation switch");
+	params.addBoolParam("btrack", "Formant tracking switch");
+	params.addBoolParam("bdetect", "Formant tracking period detection switch");
+	params.addBoolParam("bweight", "Switch for intensity-weighted smoothing of formant frequencies");
+	params.addBoolParam("bcepslift", "Switch for cepstral liftering for formant trackng");
+	params.addBoolParam("btrackpitch", "Track pitch in real-time, using cepstral method");
+	params.addBoolParam("bratioshift", "Switch for ratio-based formant shifting");
+	params.addBoolParam("bmelshift", "Switch for formant shifting based on the mel frequency scale");
+	params.addBoolParam("bgainadapt", "Formant perturbation gain adaptation switch");
+	params.addBoolParam("brmsclip", "Switch for auto RMS intensity clipping (loudness protection)");	//
+	params.addBoolParam("bbypassfmt", "Switch for bypassing formant tracking (for use in pitch shifting and time warping");
+	params.addBoolParam("bpitchshift", "Pitch shifting switch");
+	params.addBoolParam("bdownsampfilt", "Down-sampling filter switch");
+	params.addBoolParam("mute", "Global mute switch");
+	params.addBoolParam("bpvocmpnorm", "Phase vocoder amplitude normalization switch");
 
 	/* Integer parameters */
-	params.addParam("srate",		"Sampling rate (Hz), after downsampling", Parameter::TYPE_INT);
-	params.addParam("framelen",		"Frame length (samples), after downsampling", Parameter::TYPE_INT);
-	params.addParam("ndelay",		"Number of delayed frames before an incoming frame is sent back", Parameter::TYPE_INT);
-	params.addParam("nwin",			"Length of an internal frame (frames)", Parameter::TYPE_INT);
-	params.addParam("nlpc",			"Order of LPC", Parameter::TYPE_INT);
-	params.addParam("nfmts",		"Number of formants to be shifted", Parameter::TYPE_INT);
-	params.addParam("ntracks",		"Number of formants to be tracked", Parameter::TYPE_INT);
-	params.addParam("avglen",		"Formant smoothing window length (frames)", Parameter::TYPE_INT);
-	params.addParam("cepswinwidth", "Window width for cepstral liftering", Parameter::TYPE_INT);
-	params.addParam("fb",			"Feedback mode (0-mute, 1-normal, 2-masking noise, 3-speech+noise, 4-speech modulated noise", Parameter::TYPE_INT);
-	params.addParam("minvowellen",  "Minimum vowel length (frames)", Parameter::TYPE_INT);
-	params.addParam("pvocframelen", "Phase vocoder frame length (samples)", Parameter::TYPE_INT);	//
-	params.addParam("pvochop",		"Phase vocoder frame hop (samples)", Parameter::TYPE_INT);	//
-	params.addParam("nfb",			"Number of feedbac voices", Parameter::TYPE_INT);
-	params.addParam("tsgntones",	"Tone sequence generator: number of tones", Parameter::TYPE_INT);
-	params.addParam("downfact",		"Downsampling factor", Parameter::TYPE_INT);
-	params.addParam("stereomode",	"Two-channel mode", Parameter::TYPE_INT);
+	params.addIntParam("srate", "Sampling rate (Hz), after downsampling");
+	params.addIntParam("framelen", "Frame length (samples), after downsampling");
+	params.addIntParam("ndelay", "Number of delayed frames before an incoming frame is sent back");
+	params.addIntParam("nwin", "Length of an internal frame (frames)");
+	params.addIntParam("nlpc", "Order of LPC");
+	params.addIntParam("nfmts", "Number of formants to be shifted");
+	params.addIntParam("ntracks", "Number of formants to be tracked");
+	params.addIntParam("avglen", "Formant smoothing window length (frames)");
+	params.addIntParam("cepswinwidth", "Window width for cepstral liftering");
+	params.addIntParam("fb", "Feedback mode (0-mute, 1-normal, 2-masking noise, 3-speech+noise, 4-speech modulated noise");
+	params.addIntParam("minvowellen", "Minimum vowel length (frames)");
+	params.addIntParam("pvocframelen", "Phase vocoder frame length (samples)");	//
+	params.addIntParam("pvochop", "Phase vocoder frame hop (samples)");	//
+	params.addIntParam("nfb", "Number of feedbac voices");
+	params.addIntParam("tsgntones", "Tone sequence generator: number of tones");
+	params.addIntParam("downfact", "Downsampling factor");
+	params.addIntParam("stereomode", "Two-channel mode");
 
 	/* Integer array parameters */
-	params.addParam("pvocampnormtrans", "Phase vocoder amplitude normalization transitional period length (frames)", Parameter::TYPE_INT_ARRAY);
-	params.addParam("delayframes",	"DAF global delay (frames): maxNVoices-long array", Parameter::TYPE_INT_ARRAY);
+	params.addIntArrayParam("pvocampnormtrans", "Phase vocoder amplitude normalization transitional period length (frames)");
+	params.addIntArrayParam("delayframes",	"DAF global delay (frames): maxNVoices-long array");
 
 	/* Double parameters */
-	params.addParam("scale",		"Output scaling factor (gain)", Parameter::TYPE_DOUBLE);
-	params.addParam("preemp",		"Pre-emphasis factor", Parameter::TYPE_DOUBLE);
-	params.addParam("rmsthr",		"RMS intensity threshold", Parameter::TYPE_DOUBLE);
-	params.addParam("rmsratio",		"RMS ratio threshold", Parameter::TYPE_DOUBLE);
-	params.addParam("rmsff",		"Forgetting factor for RMS intensity smoothing", Parameter::TYPE_DOUBLE);
-	params.addParam("dfmtsff",		"Forgetting factor for formant smoothing (in status tracking)", Parameter::TYPE_DOUBLE);	//
-	params.addParam("rmsclipthresh", "Auto RMS intensity clipping threshold (loudness protection)", Parameter::TYPE_DOUBLE);	//
+	params.addDoubleParam("scale", "Output scaling factor (gain)");
+	params.addDoubleParam("preemp", "Pre-emphasis factor");
+	params.addDoubleParam("rmsthr", "RMS intensity threshold");
+	params.addDoubleParam("rmsratio", "RMS ratio threshold");
+	params.addDoubleParam("rmsff", "Forgetting factor for RMS intensity smoothing");
+	params.addDoubleParam("dfmtsff", "Forgetting factor for formant smoothing (in status tracking)");	//
+	params.addDoubleParam("rmsclipthresh", "Auto RMS intensity clipping threshold (loudness protection)");	//
 
-	params.addParam("wgfreq",		"Waveform generator: sine-wave frequency (Hz)", Parameter::TYPE_DOUBLE);
-	params.addParam("wgamp",		"Waveform generator: sine-wave peak amplitude", Parameter::TYPE_DOUBLE);
-	params.addParam("wgtime",		"Waveform generator: sine-wave duration (s)", Parameter::TYPE_DOUBLE);
+	params.addDoubleParam("wgfreq", "Waveform generator: sine-wave frequency (Hz)");
+	params.addDoubleParam("wgamp", "Waveform generator: sine-wave peak amplitude");
+	params.addDoubleParam("wgtime", "Waveform generator: sine-wave duration (s)");
 
-	params.addParam("f2min",		"Formant perturbation field: minimum F2 (Hz)", Parameter::TYPE_DOUBLE);
-	params.addParam("f2max",		"Formant perturbation field: maximum F2 (Hz)", Parameter::TYPE_DOUBLE);
-	params.addParam("f1min",		"Formant perturbation field: minimum F1 (Hz)", Parameter::TYPE_DOUBLE);
-	params.addParam("f1max",		"Formant perturbation field: maximum F1 (Hz)", Parameter::TYPE_DOUBLE);
-	params.addParam("lbk",			"Formant perturbation field: Oblique lower border: Slope k", Parameter::TYPE_DOUBLE);
-	params.addParam("lbb",			"Formant perturbation field: Oblique lower border: Intercept b", Parameter::TYPE_DOUBLE);
+	params.addDoubleParam("f2min", "Formant perturbation field: minimum F2 (Hz)");
+	params.addDoubleParam("f2max", "Formant perturbation field: maximum F2 (Hz)");
+	params.addDoubleParam("f1min", "Formant perturbation field: minimum F1 (Hz)");
+	params.addDoubleParam("f1max", "Formant perturbation field: maximum F1 (Hz)");
+	params.addDoubleParam("lbk", "Formant perturbation field: Oblique lower border: Slope k");
+	params.addDoubleParam("lbb", "Formant perturbation field: Oblique lower border: Intercept b");
 
-	params.addParam("triallen",		"Trial length (s)", Parameter::TYPE_DOUBLE);
-	params.addParam("ramplen",		"Audio ramp length (s)", Parameter::TYPE_DOUBLE);
+	params.addDoubleParam("triallen", "Trial length (s)");
+	params.addDoubleParam("ramplen", "Audio ramp length (s)");
 
-	params.addParam("afact",		"Formant-tracking algorithm: alpha", Parameter::TYPE_DOUBLE);
-	params.addParam("bfact",		"Formant-tracking algorithm: beta", Parameter::TYPE_DOUBLE);
-	params.addParam("gfact",		"Formant-tracking algorithm: gamma", Parameter::TYPE_DOUBLE);
-	params.addParam("fn1",			"Formant-tracking algorithm: F1 prior", Parameter::TYPE_DOUBLE);
-	params.addParam("fn2",			"Formant-tracking algorithm: F2 prior", Parameter::TYPE_DOUBLE);
+	params.addDoubleParam("afact", "Formant-tracking algorithm: alpha");
+	params.addDoubleParam("bfact", "Formant-tracking algorithm: beta");
+	params.addDoubleParam("gfact", "Formant-tracking algorithm: gamma");
+	params.addDoubleParam("fn1", "Formant-tracking algorithm: F1 prior");
+	params.addDoubleParam("fn2", "Formant-tracking algorithm: F2 prior");
 
-	params.addParam("pitchlowerboundhz", "Lower bound for pitch, in Hz. Used by pitch tracker.", Parameter::TYPE_DOUBLE);
-	params.addParam("pitchupperboundhz", "Upper bound for pitch, in Hz. Used by pitch tracker.", Parameter::TYPE_DOUBLE);
+	params.addDoubleParam("pitchlowerboundhz", "Lower bound for pitch, in Hz. Used by pitch tracker.");
+	params.addDoubleParam("pitchupperboundhz", "Upper bound for pitch, in Hz. Used by pitch tracker.");
 
-	params.addParam("pitchshiftratio", "Pitch-shifting: ratio (1.0 = no shift)", Parameter::TYPE_DOUBLE_ARRAY);
+	params.addDoubleParam("fb3gain", "Noise gain factor for speech+noise feedback mode");
+    params.addDoubleParam("fb4gaindb", "Speech-modulated noise feedback: intensity gain factor");
 
-	params.addParam("rmsff_fb",		"Speech-modulated noise feedback: RMS forgetting factor", Parameter::TYPE_SMN_RMS_FF);
-	params.addParam("fb4gaindb",	"Speech-modulated noise feedback: intensity gain factor", Parameter::TYPE_DOUBLE);
-	params.addParam("fb3gain",		"Noise gain factor for speech+noise feedback mode", Parameter::TYPE_DOUBLE);
-	
 	/* Double array parameters */
-	params.addParam("datapb",		"Waveform for playback", Parameter::TYPE_DOUBLE_ARRAY);
-	params.addParam("pertf2",		"Formant perturbation field: F2 grid (Hz)", Parameter::TYPE_DOUBLE_ARRAY);
-	params.addParam("pertamp",		"Formant perturbation field: Perturbation vector amplitude", Parameter::TYPE_DOUBLE_ARRAY);
-	params.addParam("pertphi",		"Formant perturbation field: Perturbation vector angle", Parameter::TYPE_DOUBLE_ARRAY);
-	params.addParam("gain",			"Global intensity gain", Parameter::TYPE_DOUBLE_ARRAY);
+    params.addDoubleArrayParam("pitchshiftratio", "Pitch-shifting: ratio (1.0 = no shift)");
 
-	params.addParam("tsgtonedur",	"Tone sequence generator: tone durations (s)", Parameter::TYPE_DOUBLE_ARRAY);
-	params.addParam("tsgtonefreq",	"Tone sequence generator: tone frequencies (Hz)", Parameter::TYPE_DOUBLE_ARRAY);
-	params.addParam("tsgtoneamp",	"Tone sequence generator: tone peak amplitudes", Parameter::TYPE_DOUBLE_ARRAY);
-	params.addParam("tsgtoneramp",	"Tone sequence generator: tone ramp durations (s)", Parameter::TYPE_DOUBLE_ARRAY);
-	params.addParam("tsgint",		"Tone sequence generator: intervals between tone onsets (s)", Parameter::TYPE_DOUBLE_ARRAY);
+	params.addDoubleArrayParam("datapb", "Waveform for playback");
+	params.addDoubleArrayParam("pertf2", "Formant perturbation field: F2 grid (Hz)");
+	params.addDoubleArrayParam("pertamp", "Formant perturbation field: Perturbation vector amplitude");
+	params.addDoubleArrayParam("pertphi", "Formant perturbation field: Perturbation vector angle");
+	params.addDoubleArrayParam("gain", "Global intensity gain");
+
+	params.addDoubleArrayParam("tsgtonedur", "Tone sequence generator: tone durations (s)");
+	params.addDoubleArrayParam("tsgtonefreq", "Tone sequence generator: tone frequencies (Hz)");
+	params.addDoubleArrayParam("tsgtoneamp", "Tone sequence generator: tone peak amplitudes");
+	params.addDoubleArrayParam("tsgtoneramp", "Tone sequence generator: tone ramp durations (s)");
+	params.addDoubleArrayParam("tsgint", "Tone sequence generator: intervals between tone onsets (s)");
 
 	/* Other types of parameters */
-	params.addParam("pvocwarp",		"Phase vocoder time warping configuration", Parameter::TYPE_PVOC_WARP);	//
+    params.addParam("rmsff_fb", "Speech-modulated noise feedback: RMS forgetting factor", Parameter::TYPE_SMN_RMS_FF);
+	params.addParam("pvocwarp",	 "Phase vocoder time warping configuration", Parameter::TYPE_PVOC_WARP);	//
 
 	int		n;
 		
@@ -1376,13 +1376,14 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 	/* downsample signal provided by soundcard */
 	downSampSig(inFrame_ptr, inFrameBuf, p.frameLen, p.downFact, p.bDownSampFilt == 1);
 
-	if (p.bRecord)		//SC Record the downsampled original signal
-	{// recording signal in (downsampled)
-		DSPF_dp_blk_move(inFrameBuf, &signal_recorder[0][frame_counter * p.frameLen], p.frameLen);	//SC Copying
+	if (p.bRecord) {	// Record the downsampled original signal
+		DSPF_dp_blk_move(inFrameBuf,
+                         &signal_recorder[0][frame_counter * p.frameLen],
+                         p.frameLen);
 	}
 
 	// push samples in oBuf and pBuf
-	//SC audapter.oBuf: (downsampled) input, audapter.pBuf: preemphasized (downsampled) input
+	// oBuf: (downsampled) input; pBuf: preemphasized (downsampled) input
 	DSPF_dp_blk_move(oBuf + p.frameLen, oBuf, 2 * (p.nDelay - 1) * p.frameLen);	
 	DSPF_dp_blk_move(pBuf + p.frameLen, pBuf, 2 * (p.nDelay - 1) * p.frameLen);	//SC Pre-emphasized buffer shift to left
 
@@ -1394,18 +1395,17 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 	preEmpFilter.filter(inFrameBuf, pBuf + 2 * (p.nDelay - 1) * p.frameLen, p.frameLen, 1.0);
 
 	// load inBuf with p.frameLen samples of pBuf
-	//SC Copy pBuf to inBuf. pBuf is the signal based on which LPC and other
+	// Copy pBuf to inBuf. pBuf is the signal based on which LPC and other
 	// analysis will be done. inBuf is the signal that will be shifted (if in shifting mode).
 	DSPF_dp_blk_move(pBuf + (p.nDelay - 1) * p.frameLen, inBuf, p.frameLen);
 
 	// move inBuf to outBuf  (will be overwritten when filtering)
 	DSPF_dp_blk_move(inBuf, outBuf, p.frameLen);
 
-	for(fi = 0; fi < p.nWin; fi++)// each incoming frame is divided in nwin windows
-	{
-		during_trans=false;
-		gtot[fi]=1;			// initialize gain factor				
-		si=fi*p.frameShift;// sample index
+	for (fi = 0; fi < p.nWin; fi++) {  // each incoming frame is divided in nwin windows
+		during_trans = false; 
+		gtot[fi] = 1;  // initialize gain factor				
+		si = fi * p.frameShift;  // sample index
 		rms_o = sqrt(DSPF_dp_vecsum_sq(
             oBuf + (p.nDelay - 1) * p.frameLen + si,
             p.frameShift) / (static_cast<dtype>(p.frameShift))); //short time rms of current window
@@ -1421,10 +1421,10 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 		//SC Notice that the identification of a voiced frame requires, 1) RMS of the orignal signal is large enough,
 		//SC	2) RMS ratio between the orignal and preemphasized signals is large enough
 		if (rms_s >= p.dRMSThresh * 2) {			
-			above_rms=(isabove(rms_s,p.dRMSThresh) && isabove(rms_ratio,p.dRMSRatioThresh/1.3));
+			above_rms = isabove(rms_s, p.dRMSThresh) && isabove(rms_ratio, p.dRMSRatioThresh / 1.3);
 		}
 		else{
-			above_rms=(isabove(rms_s,p.dRMSThresh) && isabove(rms_ratio,p.dRMSRatioThresh));
+			above_rms = isabove(rms_s, p.dRMSThresh) && isabove(rms_ratio, p.dRMSRatioThresh);
 		}
 
 		/* TODO: Implement bDoFmts */
@@ -1436,12 +1436,13 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 		} */
 
 		/*if(above_rms)*/
-		if (bDoFmts) /* DEBUG: Ad hoc */
-		{
-			if (p.bWeight)	//SC bWeight: weighted moving averaging of the formants //Marked
-				wei=rms_o; // weighted moving average over short time rms
-			else
-				wei=1; // simple moving average
+		if (bDoFmts) {
+            if (p.bWeight) {  //SC bWeight: weighted moving averaging of the formants //Marked
+                wei = rms_o; // weighted moving average over short time rms
+            }
+            else {
+                wei = 1; // simple moving average
+            }   
 
 			fmtTracker->procFrame(pBuf + si, rms_o, amps, wmaPhis, bw, fmts);
 
@@ -1450,25 +1451,25 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 				f1m = hz2mel(fmts[0]);
 				f2m = hz2mel(fmts[1]);
 			}
-			else{
+			else {
 				f1m = fmts[0];
 				f2m = fmts[1];
 			}
 
 			getDFmt(&fmts[0], &dFmts[0], time_elapsed); // formant derivatives (note utilized in the current version, but may be useful in the future)
 
-			if (p.bDetect)	//SC bDetect: to detect transition?
-				during_trans=detectTrans(&fmts[0], &dFmts[0], data_counter, time_elapsed); // [a] [i] transition detection
-			else
-				during_trans=false;
+            if (p.bDetect) {	//SC bDetect: to detect transition?
+                during_trans = detectTrans(&fmts[0], &dFmts[0], data_counter, time_elapsed); // [a] [i] transition detection
+            }
+            else {
+                during_trans = false;
+            }
 
-			time_elapsed+=time_step;
+			time_elapsed += time_step;
 
-			//SC(2009/02/02)
 			bLastFrameAboveRMS = 1;
 		}
-		else
-		{
+		else {
 			time_elapsed = 0.0;
 			//weiVec[circ_counter]=0;  // Marked, TODO
 			for (i0 = 0; i0 < p.nTracks; i0++) {		//SC Put zeros in formant frequency and amplitude for unvoiced portion
@@ -1493,10 +1494,14 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 		rmsSlopeN = static_cast<int>(rmsSlopeWin / (static_cast<dtype>(p.frameLen) / static_cast<dtype>(p.sr)));
 		calcRMSSlope();
 
-		stat = ostTab.osTrack(stat, data_counter, frame_counter, 
-							  static_cast<double>(a_rms_o[data_counter]), static_cast<double>(a_rms_o_slp[data_counter]), static_cast<double>(rms_ratio), 
-							  data_recorder[1], 
-							  static_cast<double>(p.frameLen) / static_cast<double>(p.sr));
+		stat = ostTab.osTrack(stat,
+                              data_counter,
+                              frame_counter, 
+                              static_cast<double>(a_rms_o[data_counter]),
+                              static_cast<double>(a_rms_o_slp[data_counter]),
+                              static_cast<double>(rms_ratio),
+                              data_recorder[1], 
+                              static_cast<double>(p.frameLen) / static_cast<double>(p.sr));
 		
 		if (p.bShift)
 		{
@@ -1507,8 +1512,8 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 				during_trans = (pertCfg.fmtPertAmp[stat] != 0);
 			}
 
-			if(during_trans && bDoFmts) // Determine whether the current point in perturbation field
-			{// yes : windowed deviation over x coordinate
+			if (during_trans && bDoFmts) {  // Determine whether the current point in perturbation field
+			    // yes : windowed deviation over x coordinate
 				loc = locateF2(f2mp);	// Interpolation (linear)								
                 locint = static_cast<int>(floor(loc));
 				locfrac = loc - locint;
@@ -1520,8 +1525,8 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 					mphi = pertCfg.fmtPertPhi[stat];
 				}
 				else {
-					mamp=p.pertAmp[locint]+locfrac*(p.pertAmp[locint+1]-p.pertAmp[locint]);	// Interpolaton (linear)
-					mphi=p.pertPhi[locint]+locfrac*(p.pertPhi[locint+1]-p.pertPhi[locint]);
+					mamp = p.pertAmp[locint] + locfrac*(p.pertAmp[locint + 1] - p.pertAmp[locint]);	// Interpolaton (linear)
+					mphi = p.pertPhi[locint] + locfrac*(p.pertPhi[locint + 1] - p.pertPhi[locint]);
 				}
 
 				if (!p.bRatioShift){	// Absoluate shift					
@@ -1543,33 +1548,27 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 					newPhis[1]=sf2m/p.sr*2*M_PI;
 				}
 			}
-			else
-			{// no : no force applied
+			else {
+                // no : no force applied
 				maintain_trans=false;
 				during_trans=false;	
 				newPhis[0]=wmaPhis[0];	// No shifting
 				newPhis[1]=wmaPhis[1];
 			}
 
-			if(during_trans || maintain_trans)// directly after transition
-			{
-				for (i0=0;i0<2;i0++)
-				{
-					sFmts[i0]=newPhis[i0]*p.sr/(2*M_PI); // shifted fotmants for recording
+			if (during_trans || maintain_trans) {  // directly after transition
+				for (i0 = 0; i0 < 2; i0++) {
+					sFmts[i0] = newPhis[i0] * p.sr / (2 * M_PI); // shifted fotmants for recording
 				}
-
-				formantShiftFilter(&inBuf[si],&outBuf[si],&wmaPhis[0],&newPhis[0],&amps[0],p.frameShift); // f1 f2 filtering 
-				gtot[fi]=getGain(&amps[0],&wmaPhis[0],&newPhis[0],p.nFmts); // gain factor calculation
-
+				formantShiftFilter(inBuf + si, outBuf + si, wmaPhis, newPhis, amps, p.frameShift); // f1 f2 filtering 
+				gtot[fi] = getGain(amps, wmaPhis, newPhis, p.nFmts); // gain factor calculation
+			} else {  // no transition
+                if (above_rms) {
+                    formantShiftFilter(inBuf + si, fakeBuf, wmaPhis, wmaPhis, amps, p.frameShift);
+                }
 			}
-			else// no transition
-			{
-	 
-				if(above_rms)				
-					formantShiftFilter(&inBuf[si],&fakeBuf[0],&wmaPhis[0],&wmaPhis[0],&amps[0],p.frameShift);
-			}
-
 		}
+
 		// data recording
 		data_recorder[0][data_counter] = frame_counter * p.frameLen + si + 1;// matlab intervals
 		data_recorder[1][data_counter] = rms_s;
@@ -1577,17 +1576,15 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 		data_recorder[3][data_counter] = rms_o;
 
 		offs = 4;
-		//SC Write formant frequencies and amplitudes to data_recorder
-		for (i0 = 0; i0 < p.nTracks; i0++)
-		{
+		// Write formant frequencies and amplitudes to data_recorder
+		for (i0 = 0; i0 < p.nTracks; i0++) {
 			data_recorder[i0 + offs][data_counter] = fmts[i0];
 			data_recorder[i0 + offs + p.nTracks][data_counter] = amps[i0];
 		}
 		offs += 2 * p.nTracks;
 
-		//SC Write time derivative of formants and shifted formants to data_recorder
-		for (i0 = 0; i0 < 2; i0++)
-		{
+		// Write time derivative of formants and shifted formants to data_recorder
+		for (i0 = 0; i0 < 2; i0++) {
 			data_recorder[i0 + offs][data_counter] = dFmts[i0];
 			data_recorder[i0 + offs + 2][data_counter] = sFmts[i0];
 		}
@@ -1596,7 +1593,7 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 		//SC Write the LPC coefficients to data_recorder
 		for (i0=0;i0<p.nLPC+1;i0++)
 		{
-			data_recorder[i0+offs][data_counter]		= fmtTracker->lpcAi[i0];
+			data_recorder[i0+offs][data_counter] = fmtTracker->lpcAi[i0];
 		}
 		offs += p.nLPC + 1;
 
@@ -1609,16 +1606,15 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 	
 	// gain adaption: optional
 	//SC Notice that gain adaptation is done after formant shifts
-	if (p.bGainAdapt) 
-		nZC = gainAdapt(&outBuf[0], &gtot[0], p.frameLen, p.frameShift); // apply gain adaption between zerocrossings
+    if (p.bGainAdapt) {
+        nZC = gainAdapt(outBuf, gtot, p.frameLen, p.frameShift); // apply gain adaption between zerocrossings
+    }
 
-	//SC(2012/10/19)
-	nZCp = gainPerturb(&outBuf[0], &gtot[0], p.frameLen, p.frameShift);
-		
-	if (!p.bBypassFmt) { /* Not bypassing LP formant tracking and shifting */
+	nZCp = gainPerturb(outBuf, gtot, p.frameLen, p.frameShift);
+
+	if (!p.bBypassFmt) {  // Not bypassing LP formant tracking and shifting
 		// deemphasize last processed frame and send to outframe buffer
-		//SC(2008/05/07)
-		deEmpFilter.filter(outBuf, &outFrameBuf[outFrameBuf_circPtr], p.frameLen, 1.0);
+		deEmpFilter.filter(outBuf, outFrameBuf + outFrameBuf_circPtr, p.frameLen, 1.0);
 		//DSPF_dp_blk_move(&outBuf[0],&outFrameBuf[0],p.frameLen);
 
 		if (rms_s > p.rmsClipThresh && p.bRMSClip == 1){	//SC(2009/02/06) RMS clipping protection

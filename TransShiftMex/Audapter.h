@@ -107,13 +107,29 @@ private:
 
 public:
 	Parameter() { nParams = 0; };
-	void addParam(const char *name, const char * helpMsg, const paramType type) {
-		names.push_back(name);
-		helpMsgs.push_back(helpMsg);
-		types.push_back(type);
 
-		nParams = names.size();
-	};
+    void addParam(const char *name, const char * helpMsg, const paramType type) {
+        names.push_back(name);
+        helpMsgs.push_back(helpMsg);
+        types.push_back(type);
+
+        nParams = names.size();
+    };
+    void addBoolParam(const char* name, const char* helpMsg) {
+        addParam(name, helpMsg, TYPE_BOOL);
+    };
+    void addIntParam(const char* name, const char* helpMsg) {
+        addParam(name, helpMsg, TYPE_INT);
+    }
+    void addIntArrayParam(const char* name, const char* helpMsg) {
+        addParam(name, helpMsg, TYPE_INT_ARRAY);
+    }
+    void addDoubleParam(const char* name, const char* helpMsg) {
+        addParam(name, helpMsg, TYPE_DOUBLE);
+    }
+    void addDoubleArrayParam(const char* name, const char* helpMsg) {
+        addParam(name, helpMsg, TYPE_DOUBLE_ARRAY);
+    }
 
 	paramType checkParam(const char *name);
 };
