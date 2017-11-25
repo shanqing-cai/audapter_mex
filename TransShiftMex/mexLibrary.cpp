@@ -258,12 +258,15 @@ void mexFunction( int nlhs, mxArray *plhs[],
 			}
 
 			if (inParNDims == 2) {
-				if (inParSize[0] == 1)
-					nPars = inParSize[1];				
-				else if (inParSize[1] == 1)
-					nPars = inParSize[0];
-				else
-					mexErrMsgTxt("ERROR: Input parameter is not a scalar or a row or column vector");
+                if (inParSize[0] == 1) {
+                    nPars = inParSize[1];
+                }
+                else if (inParSize[1] == 1) {
+                    nPars = inParSize[0];
+                }
+                else {
+                    mexErrMsgTxt("ERROR: Input parameter is not a scalar or a row or column vector");
+                }
 			}
 
             if (nrhs >= 4) {

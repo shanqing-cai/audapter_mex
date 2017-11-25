@@ -5,24 +5,24 @@ DSP functions
 */
 
 #include <cmath>
+#include <memory>
 
 #include "DSPF.h"
 
 /* copy a block of data from one address x to r */
 void DSPF_dp_blk_move(const double * x, double * r, const int nx)	
 {
-	//memmove((void*)r,(void*)x,nx*sizeof(double));
-	//memcpy((void*)r,(void*)x,nx*sizeof(double));
-	int i;
-	for (i = 0 ; i < nx; i++)
-		r[i] = x[i];
+    memcpy(r, x, nx * sizeof(double));
+    /*for (int i = 0; i < nx; i++) {
+        r[i] = x[i];
+    }*/
 }
 double DSPF_dp_vecsum_sq(const double *x,int n)    //SC get norm (power) of a vector                       
 {
-	int i;
-    double sum=0;
-    for(i = 0;  i < n; i++ )
-		sum += x[i]*x[i];
+    double sum = 0.0;
+    for (int i = 0; i < n; i++) {
+        sum += x[i] * x[i];
+    }
     return sum;
 }              
 void DSPF_dp_fir_gen(const double *  x, const double *  h, double *  r, int nh, int nr)	//SC convolution or correlation

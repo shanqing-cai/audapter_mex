@@ -41,12 +41,13 @@ Speech Laboratory, Boston University
 
 #include "mex.h"
 
+#include "DSPF.h"
 #include "filter.h"
+#include "lpc_formant.h"
 #include "ost.h"
 #include "pcf.h"
-#include "DSPF.h"
-#include "lpc_formant.h"
 #include "phase_vocoder.h"
+#include "time_domain_shifter.h"
 
 typedef double dtype;
 
@@ -96,7 +97,8 @@ public:
 		TYPE_INT_ARRAY, 
 		TYPE_DOUBLE_ARRAY, 
 		TYPE_PVOC_WARP, 
-		TYPE_SMN_RMS_FF
+		TYPE_SMN_RMS_FF,
+        TYPE_TIME_DOMAIN_PITCH_SHIFT_SCHEDULE,
 	} paramType;
 
 private:
@@ -142,7 +144,7 @@ private:
 	/* Core configuration */
 	static const int nCoeffsSRFilt = 21;
 	static const int downSampFact_default = 3;
-	static const int maxFrameLen = 1152 / downSampFact_default;
+	static const int maxFrameLen = 2880 / downSampFact_default;
 	static const int maxBufLen = maxFrameLen * 15;
 	static const int maxNWin = 16;
 	static const int maxNFmts = 5;
@@ -213,6 +215,9 @@ private:
 	/* Phase vocoder object */
     std::vector<std::unique_ptr<PhaseVocoder>> pVocs;
 
+    /* Time-domain pitch shifter */
+    std::unique_ptr<audapter::TimeDomainShifter> timeDomainShifter;
+
 	// 
 	dtype time_step;       // process time unit 
 	dtype ma_rms1;			// moving average rms 
@@ -243,6 +248,7 @@ private:
 	dtype inBuf[maxFrameLen];							// Buffer stores input samples after downsampling
 	dtype outBuf[maxFrameLen];							// Buffer stores processed output
 	dtype fakeBuf[maxFrameLen];							// trash buffer to flush filter states
+    dtype f0Buf[maxFrameLen];  // Buffer for F0-related operations.
 	dtype zeros[maxFrameLen];						    // utility buffer for filtering
 
 	//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  VARIOUS EXTRACTED DATA  *****************************************************%%%%%%%%%%%	
@@ -279,6 +285,7 @@ private:
 
 	IIR_Filter<dtype> shiftF1Filter;	/* Biquad filter for shifting F1 */
 	IIR_Filter<dtype> shiftF2Filter;	/* Biquad filter for shifting F2 */
+	IIR_Filter<dtype> f0Filter;  // Filter for pitch (e.g., bandpass filtering around pitch).
 
 	// first filter (f1 shift)
 	dtype a_filt1[3];								// denominator coefficients 
@@ -411,7 +418,7 @@ private:
 		int	   bCepsLift;				//SC-Mod(2008/05/15) Whether the cepstral lifting is done before the autocorrelation
 
 		// Parameters related to the pitch tracker.
-		int    bTrackPitch;
+		int    bTimeDomainShift;
 		dtype  pitchLowerBoundHz;
 		dtype  pitchUpperBoundHz;
 
@@ -421,8 +428,8 @@ private:
 		//SC(2012/03/05) Frequency/pitch shifting
 		int		bPitchShift;
 		dtype	pitchShiftRatio[maxNVoices];
+        audapter::TimeDomainShifter::PitchShiftSchedule timeDomainPitchShiftSchedule;
 
-		
 		//SC-Mod(2008/01/05). Arrays: for intensity correction during formant shifting (mainly for the use of parallel shifts)		
 		dtype wgFreq;										//SC Wave generator frequency (Hz)
 		dtype wgAmp;										//SC Wave generator amplitude (digitized peak amplitude)
@@ -499,6 +506,7 @@ private:
 		
 	void formantShiftFilter(dtype* xIn, dtype* xOut,
 		                    dtype oldPhis[2], dtype newPhis[2], dtype mags[2], const int size);
+	void f0BandpassFilter(dtype* xIn, dtype* xOut, dtype f0, dtype sr, const int size);
 	dtype calcRMS1(const dtype *xin_ptr, int size);	
 	dtype calcRMS2(const dtype *xin_ptr, int size);
 	dtype calcRMS_fb(const dtype *xin_ptr, int size, bool above_rms);	
@@ -529,6 +537,8 @@ private:
 	void *Audapter::setGetParam(bool bSet, const char *name, void * value, int nPars, bool bVerbose, int *length);
 
 	void initializePreEmpFilter();
+
+    void checkParameters() const;
 
 public:
 	/* Action modes */

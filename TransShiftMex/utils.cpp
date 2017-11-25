@@ -12,6 +12,8 @@
 #include <sstream>
 #include <iterator>
 
+#include "mex.h"
+
 #include "ost.h"
 
 using namespace std;
@@ -93,4 +95,15 @@ vector<string> removeComments(const vector<string> items, const char cc) {
 	}
 
 	return items_nc;
+}
+
+void printVector(const double* x, const size_t len) {
+    mexPrintf("[");
+    for (size_t i = 0; i < len; ++i) {
+        mexPrintf("%f", x[i]);
+        if (i < len - 1) {
+            mexPrintf(",");
+        }
+    }
+    mexPrintf("]\n");
 }

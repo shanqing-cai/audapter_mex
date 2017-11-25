@@ -29,4 +29,6 @@ std::vector<std::string> splitStringToVector(const std::string &s);
 /* Remove comments */
 std::vector<std::string> removeComments(const std::vector<std::string> items, const char cc);
 
+void printVector(const double* x, const size_t len);
+
 #endif
