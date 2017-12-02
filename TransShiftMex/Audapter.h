@@ -158,7 +158,7 @@ private:
 	/* Data recorder */
 	static const int maxDataVec = 2 * maxNTracks + 10 + maxNLPC + 5;
 	static const int maxRecSize = 230400;
-	static const int maxDataSize = 230400;	
+    static const int maxDataSize = 230400;
 	
 	/* Perturbation field */
 	static const int pfNPoints = 257;	/* Number of points in the perturbation field */

@@ -45,8 +45,7 @@ namespace audapter {
                           dtype* y,
                           const int len);
 
-        // Get the current output frame.
-        /*void getOutputFrame();*/
+        dtype getLatestShiftedPitchHz() const;
 
     private:
         TimeDomainShifter() {};
@@ -113,6 +112,8 @@ namespace audapter {
         int lastPitchCycleBegin;  
         // The ending idx of the last pitch cycle, exclusive.
         int lastPitchCycleEnd;
+
+        dtype latestShiftedPitchHz;
     };
 
 };   // namespace Audapter

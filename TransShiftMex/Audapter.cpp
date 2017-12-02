@@ -1448,11 +1448,16 @@ void Audapter::checkParameters() const {
         mexErrMsgTxt(errMsg.str().c_str());
     }
 
-    if (p.bPitchShift && p.bTimeDomainShift) {
-        std::ostringstream errMsg;
-        errMsg
-            << "bPitchShift and bTimeDomainShift are mutually exclusive.";
-        mexErrMsgTxt(errMsg.str().c_str());
+    if (p.bTimeDomainShift) {
+        if (p.bPitchShift) {
+            std::ostringstream errMsg;
+            errMsg
+                << "bPitchShift and bTimeDomainShift are mutually exclusive.";
+            mexErrMsgTxt(errMsg.str().c_str());
+        }   
+        if (!p.bCepsLift) {
+            mexErrMsgTxt("bTimeDomainShift = 1 requires bCepsLift = 1.");
+        }
     }
 }
 
@@ -1479,7 +1484,9 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 	char wavfn_in[256], wavfn_out[256];
 	// ====== ~Variables for frequency/pitch shifting (smbPitchShift) ======
 
-    checkParameters();
+    if (frame_counter == 0) {
+        checkParameters();
+    }
 
 	if (frame_size != p.downFact * p.frameLen)	//SC This ought to be satisfied. Just for safeguard.
 		return 1;
@@ -1891,6 +1898,10 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 	offs++;
 	if (p.bTimeDomainShift) {
 	    data_recorder[offs][data_counter] = fmtTracker->getLatestPitchHz();
+        if (above_rms) {
+            offs++;
+            data_recorder[offs][data_counter] = timeDomainShifter->getLatestShiftedPitchHz();
+        }
 	}
 	 
 	// === ~Frequency/pitch shifting code ===

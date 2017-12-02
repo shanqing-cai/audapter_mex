@@ -14,7 +14,8 @@ namespace audapter {
         const int frameLen,
         const PitchShiftSchedule& pitchShiftSchedule) :
         sr(sr), frameLen(frameLen), pitchShiftSchedule(pitchShiftSchedule),
-        rotBufPtr(0), scratchReadPtr(0), scratchWritePtr(0) {
+        rotBufPtr(0), scratchReadPtr(0), scratchWritePtr(0),
+        latestShiftedPitchHz(0.0) {
         checkPitchShiftSchedule();
 
         bufLen = static_cast<int>(static_cast<dtype>(sr) / 25.0);
@@ -33,6 +34,9 @@ namespace audapter {
     TimeDomainShifter::~TimeDomainShifter() {
         if (rotBuf) {
             delete[] rotBuf;
+        }
+        if (scratchBuf) {
+            delete[] scratchBuf;
         }
     }
 
@@ -55,6 +59,10 @@ namespace audapter {
 
         lastPitchCycleBegin = 0;
         lastPitchCycleEnd = 0;
+    }
+
+    dtype TimeDomainShifter::getLatestShiftedPitchHz() const {
+        return latestShiftedPitchHz;
     }
 
     void TimeDomainShifter::processFrame(const dtype* f,
@@ -185,6 +193,7 @@ namespace audapter {
         // Length of the latest unshifted pitch cycle.
         const int n0 = lastPitchCycleEnd - lastPitchCycleBegin;
         const dtype pitchShiftRatio = getPitchShiftRatio();
+        latestShiftedPitchHz = static_cast<dtype>(sr) / n0 * pitchShiftRatio;   
         // Length of the shifted pitch cycle.
         //mexPrintf("pitchShiftRatio = %f\n", pitchShiftRatio);  // DEBUG
         const int n1 = static_cast<int>(
