@@ -15,7 +15,8 @@ namespace audapter {
         const PitchShiftSchedule& pitchShiftSchedule) :
         sr(sr), frameLen(frameLen), pitchShiftSchedule(pitchShiftSchedule),
         rotBufPtr(0), scratchReadPtr(0), scratchWritePtr(0),
-        latestShiftedPitchHz(0.0) {
+        trackedPitchCycle(0.0), latestShiftedPitchHz(0.0),
+        latestInputPitchCycleBegin(0), discontinuity(0) {
         checkPitchShiftSchedule();
 
         bufLen = static_cast<int>(static_cast<dtype>(sr) / 25.0);
@@ -59,10 +60,23 @@ namespace audapter {
 
         lastPitchCycleBegin = 0;
         lastPitchCycleEnd = 0;
+        trackedPitchCycle = 0;
+
+        latestShiftedPitchHz = 0.0;
+        latestInputPitchCycleBegin = 0;
+        discontinuity = 0;
     }
 
     dtype TimeDomainShifter::getLatestShiftedPitchHz() const {
         return latestShiftedPitchHz;
+    }
+
+    int TimeDomainShifter::getLatestInputPitchCycleBegin() const {
+        return latestInputPitchCycleBegin;
+    }
+
+    dtype TimeDomainShifter::getDiscontinuity() const {
+        return discontinuity;
     }
 
     void TimeDomainShifter::processFrame(const dtype* f,
@@ -143,13 +157,6 @@ namespace audapter {
         return rotBuf[nonNegIdx % bufLen];
     }
 
-    // TODO(cais): Remove.
-    /*const inline dtype TimeDomainShifter::accessScratchBuf(
-        const int idx) const {
-        const int nonNegIdx = idx >= 0 ? idx : idx + scratchLen;
-        return scratchBuf[nonNegIdx % bufLen];
-    }*/
-
     bool TimeDomainShifter::scratchNeedsPitchCycle() {
         if (zcIndices.empty()) {
             return false;
@@ -191,11 +198,27 @@ namespace audapter {
 
     void TimeDomainShifter::genShiftedPitchCycle() {
         // Length of the latest unshifted pitch cycle.
-        const int n0 = lastPitchCycleEnd - lastPitchCycleBegin;
+        int n0 = lastPitchCycleEnd - lastPitchCycleBegin;
+
+        // Exponential smoothing of pitch cycle.
+        if (pitchCycleSmoothingFactor > 0.0) {
+            if (trackedPitchCycle == 0.0) {
+                trackedPitchCycle = static_cast<dtype>(n0);
+            }
+            else {
+                trackedPitchCycle =
+                    pitchCycleSmoothingFactor * static_cast<dtype>(n0) +
+                    (1 - pitchCycleSmoothingFactor) * trackedPitchCycle;
+            }
+            n0 = static_cast<dtype>(round(trackedPitchCycle));
+        }
+
         const dtype pitchShiftRatio = getPitchShiftRatio();
-        latestShiftedPitchHz = static_cast<dtype>(sr) / n0 * pitchShiftRatio;   
+        if (zcIndices.size() > 1) {
+            latestShiftedPitchHz = static_cast<dtype>(sr) / n0 * pitchShiftRatio;
+        }
+        latestInputPitchCycleBegin = lastPitchCycleBegin;
         // Length of the shifted pitch cycle.
-        //mexPrintf("pitchShiftRatio = %f\n", pitchShiftRatio);  // DEBUG
         const int n1 = static_cast<int>(
             round(static_cast<dtype>(n0) / pitchShiftRatio));
 
@@ -219,6 +242,7 @@ namespace audapter {
                 added = accessRotBuf(accessIdx);
                 if (methodId != 0) {
                     if (b > 0) {
+                        // TODO(cais): Optimize if necessary.
                         const dtype y2 = accessRotBuf(lastPitchCycleBegin + b);
                         const dtype y3 = accessRotBuf(lastPitchCycleEnd - 1);
                         const dtype y2prime = 0.5 * (y2 - y3);
@@ -261,7 +285,8 @@ namespace audapter {
         }
 
         if (methodId == 2) {
-            smoothScratch(scratchWritePtr - 1, scratchWritePtr + 2);
+            //smoothScratch(scratchWritePtr - 1, scratchWritePtr + 2);
+            smoothScratch(scratchWritePtr, scratchWritePtr + 3);
         }
 
         if (verbose) {
@@ -274,6 +299,13 @@ namespace audapter {
                 }
             }
             mexPrintf("]\n");
+        }
+
+        // DEBUG
+        if (scratchWritePtr > 0) {
+            discontinuity =
+                scratchBuf[(scratchWritePtr) % scratchLen] -
+                scratchBuf[(scratchWritePtr - 1) % scratchLen];
         }
 
         // Update scratchWritePtr.
@@ -342,15 +374,18 @@ namespace audapter {
 
 
     void TimeDomainShifter::smoothScratch(int begin, int end) {
+        //mexPrintf("smoothScratch: begin = %d, end = %d\n", begin, end);  // DEBUG
         for (int i = begin; i < end; ++i) {
             const dtype xMinus2 = scratchBuf[getScratchIndex(i - 2)];
             const dtype xMinus1 = scratchBuf[getScratchIndex(i - 1)];
             const dtype x = scratchBuf[getScratchIndex(i)];
             const dtype xPlus1 = scratchBuf[getScratchIndex(i + 1)];
             const dtype xPlus2 = scratchBuf[getScratchIndex(i + 2)];
-            scratchBuf[getScratchIndex(i)] =
+            /*scratchBuf[getScratchIndex(i)] =
                 0.1 * xMinus2 + 0.2 * xMinus1 + 0.4 * x + 0.2 * xPlus1
-                + 0.1 * xPlus2;
+                + 0.1 * xPlus2;*/
+            scratchBuf[getScratchIndex(i)] =
+                0.2 * xMinus2 + 0.3 * xMinus1 + 0.5 * x;
         }
     }
 

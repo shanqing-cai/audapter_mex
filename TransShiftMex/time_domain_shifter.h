@@ -46,6 +46,8 @@ namespace audapter {
                           const int len);
 
         dtype getLatestShiftedPitchHz() const;
+        int getLatestInputPitchCycleBegin() const;  // DEBUG
+        dtype getDiscontinuity() const;  // DEBUG
 
     private:
         TimeDomainShifter() {};
@@ -113,7 +115,13 @@ namespace audapter {
         // The ending idx of the last pitch cycle, exclusive.
         int lastPitchCycleEnd;
 
-        dtype latestShiftedPitchHz;
+        // Experimental. Use 0.0 to deactivate smoothing of pitch cycle length.
+        const dtype pitchCycleSmoothingFactor = 0.0;
+        dtype trackedPitchCycle;
+           
+        dtype latestShiftedPitchHz;  // DEBUG
+        int latestInputPitchCycleBegin;  // DEBUG For debug only?
+        dtype discontinuity;  // DEBUG
     };
 
 };   // namespace Audapter

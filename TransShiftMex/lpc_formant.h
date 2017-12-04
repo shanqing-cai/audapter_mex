@@ -9,6 +9,8 @@
 #ifndef LPC_FORMANT_H
 #define LPC_FORMANT_H
 
+#include <vector>
+
 typedef double dtype;
 
 #ifndef M_PI
@@ -22,16 +24,50 @@ struct CepstralPitchTrackerConfig {
 	bool activated;
 	dtype pitchLowerBoundHz;
 	dtype pitchUpperBoundHz;
+    int smoothPitchTrackerMemoryWindow;  // TODO(cais): Make configurable?
 
 	CepstralPitchTrackerConfig() :
-		activated(false), pitchLowerBoundHz(0.0), pitchUpperBoundHz(0.0) {}
+		activated(false), pitchLowerBoundHz(0.0), pitchUpperBoundHz(0.0),
+        smoothPitchTrackerMemoryWindow(5) {}
 
 	CepstralPitchTrackerConfig(
 		const bool activated,
 		const dtype pitchLowerBoundHz,
 		const dtype pitchUpperBoundHz) :
 		activated(activated), pitchLowerBoundHz(pitchLowerBoundHz),
-		pitchUpperBoundHz(pitchUpperBoundHz) {}
+		pitchUpperBoundHz(pitchUpperBoundHz),
+        smoothPitchTrackerMemoryWindow(5) {}
+};
+
+// A class to help real-time pitch tracking by memorizing prior pitch values.
+class SmoothPitchTracker {
+public:
+    // Constructor.
+    //
+    // Args:
+    //   sr: Sampling rate.
+    //   window: How many prior time points to keep track of.
+    SmoothPitchTracker(const int sr, const int window);
+    virtual ~SmoothPitchTracker();
+
+    // Perform tracking.
+    //
+    //
+    dtype track(std::vector<std::pair<int, dtype>>& indexAndMags);
+
+    void reset();
+
+private:
+    int trackPitchValues(
+        std::vector<std::pair<int, dtype>>::iterator candBegin,
+        std::vector<std::pair<int, dtype>>::iterator candEnd);
+
+    const int numCandidates = 3;
+    const int ignoreFirstFrames = 10;
+    const dtype sr;
+    const int window;
+    dtype* memory;
+    int frameCounter;
 };
 
 class LPFormantTracker {
@@ -115,6 +151,8 @@ private:
 	//dtype * phi_s;			/* Smoothed pole angles */
 
 	dtype latestPitchHz;  /* Latest-tracked pitch value, in Hz. */
+
+    SmoothPitchTracker smoothPitchTracker;
 
 	int mwaCtr;		/* Moving average counter */
 	int mwaCircCtr; /* Moving average circular counter */

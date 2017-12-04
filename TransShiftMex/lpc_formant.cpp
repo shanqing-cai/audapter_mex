@@ -6,7 +6,11 @@
 
 */
 
+#include <algorithm>
 #include <cmath>
+#include <vector>
+
+#include "mex.h"
 
 #include "lpc_formant.h"
 #include "DSPF.h"
@@ -18,6 +22,80 @@ inline dtype mul_sign(const dtype &a, const dtype &b) {
 
 inline int imax(const int &k, const int &j) {
 	return (k <= j ? j : k);
+}
+
+SmoothPitchTracker::SmoothPitchTracker(const int sr, const int window) :
+    sr(sr), window(window), frameCounter(0) {
+    memory = new dtype[window];
+    reset();
+}
+
+SmoothPitchTracker::~SmoothPitchTracker() {
+    if (memory) {
+        delete[] memory;
+    }
+}
+
+void SmoothPitchTracker::reset() {
+    for (int i = 0; i < window; ++i) {
+        memory[i] = -1.0;
+    }
+    frameCounter = 0;
+}
+
+dtype SmoothPitchTracker::track(
+    std::vector<std::pair<int, dtype>>& indexAndMags) {
+    // Perform partial sort to get the top-3 cepstral points
+    std::vector<std::pair<int, dtype>>::iterator candBegin =
+        indexAndMags.begin();
+    const size_t len = indexAndMags.size();
+    std::vector<std::pair<int, dtype>>::iterator candMiddle =
+        (len >= numCandidates) ? candBegin + numCandidates : indexAndMags.end();
+    std::partial_sort(
+        candBegin, candMiddle, indexAndMags.end(),
+        [](std::pair<int, dtype> a, std::pair<int, dtype> b) {
+        return a.second > b.second;  // Sort in descending order.
+    });    
+    return sr / trackPitchValues(candBegin, candMiddle);
+}
+
+int SmoothPitchTracker::trackPitchValues(
+    std::vector<std::pair<int, dtype>>::iterator candBegin,
+    std::vector<std::pair<int, dtype>>::iterator candEnd) {
+    dtype memoryMean = 0.0;
+    bool anyMemory = false;
+    for (int i = 0; i < window; ++i) {
+        if (memory[i] > 0.0) {
+            anyMemory = true;
+            memoryMean += memory[i];
+        }
+    }
+    memoryMean /= static_cast<dtype>(window);
+
+    int winner = (*candBegin).first;
+    if (frameCounter > ignoreFirstFrames && anyMemory) {
+        dtype minCost = std::numeric_limits<dtype>::infinity();
+        int bestIndex = -1;
+        auto iter = candBegin;
+        while (iter < candEnd) {
+            const dtype dist = abs((*iter).first - memoryMean);
+            if (dist < minCost) {  // Find the closest to memoryMean.
+                minCost = dist;
+                bestIndex = iter - candBegin;
+            }
+            iter++;
+        }
+        winner = (*(candBegin + bestIndex)).first;
+    }
+
+    // Refresh memory.
+    for (int i = 1; i < window; ++i) {
+        memory[i - 1] = memory[i];
+    }
+    memory[window - 1] = winner;
+
+    frameCounter++;
+    return winner;
 }
 
 /* Constructor
@@ -53,7 +131,8 @@ LPFormantTracker::LPFormantTracker(const int t_nLPC, const int t_sr, const int t
 	bMWA(t_bMWA), avgLen(t_avgLen),
 	bTrackPitch(pitchTrackerConfig.activated),
 	pitchLowerBoundHz(pitchTrackerConfig.pitchLowerBoundHz),
-	pitchUpperBoundHz(pitchTrackerConfig.pitchUpperBoundHz) {
+	pitchUpperBoundHz(pitchTrackerConfig.pitchUpperBoundHz),
+    smoothPitchTracker(t_sr, pitchTrackerConfig.smoothPitchTrackerMemoryWindow) {
 	/* Input sanity checks */
     if ((nLPC <= 0) || (bufferSize <= 0) || (nFFT <= 0) || (nTracks <= 0)) {
         throw initializationError();
@@ -249,12 +328,15 @@ void LPFormantTracker::reset() {
 		}
 	}
 
-	for(int i0 = 0; i0 < maxAvgLen; ++i0)
-		weiVec[i0]=0.0;
+    for (int i0 = 0; i0 < maxAvgLen; ++i0) {
+        weiVec[i0] = 0.0;
+    }
 
 	sumWei = 0.0;
 
 	postSupraThreshReset();
+
+    smoothPitchTracker.reset();
 }
 
 /* Levinson recursion for linear prediction (LP) */
@@ -595,18 +677,7 @@ void LPFormantTracker::getAi(dtype* xx, dtype* aa) {
 		// Now ftBuf2 is Xceps: the cepstrum
 		const int minCepstralIndex = bTrackPitch ? static_cast<int>(sr / pitchUpperBoundHz) : -1;
 		const int maxCepstralIndex = bTrackPitch ? static_cast<int>(sr / pitchLowerBoundHz) : -1;
-		int cepstralIndex = -1;
-		dtype maxCepstralMag = -10e20;
-
 		for (i0 = 0; i0 < nFFT; i0++){
-			if (bTrackPitch && i0 >= minCepstralIndex && i0 < maxCepstralIndex) {
-				const dtype cepstralMag = sqrt(ftBuf2[i0 * 2] * ftBuf2[i0 * 2] + ftBuf2[i0 * 2 + 1] * ftBuf2[i0 * 2 + 1]);
-				if (cepstralMag > maxCepstralMag) {
-					maxCepstralMag = cepstralMag;
-					cepstralIndex = i0;
-				}
-			}
-
 			if (i0 < cepsWinWidth || i0 > nFFT - cepsWinWidth){			// Adjust! 
 				ftBuf1[i0 * 2] = ftBuf2[i0 * 2] / nFFT;		// Normlize the result of the previous IFFT
 
@@ -617,7 +688,13 @@ void LPFormantTracker::getAi(dtype* xx, dtype* aa) {
 			}
 		}
 		if (bTrackPitch) {
-			latestPitchHz = static_cast<dtype>(sr / cepstralIndex);
+            std::vector<std::pair<int, dtype>> indexMags;
+            for (int i = minCepstralIndex; i < maxCepstralIndex; ++i) {
+                indexMags.push_back(std::make_pair(
+                    i,
+                    ftBuf2[i * 2] * ftBuf2[i * 2] + ftBuf2[i * 2 + 1] * ftBuf2[i * 2 + 1]));
+            }
+            latestPitchHz = smoothPitchTracker.track(indexMags);
 		}
 		// Now ftBuf1 is Xcepw: the windowed cepstrum
 		DSPF_dp_cfftr2(nFFT,ftBuf1,fftc,1);
