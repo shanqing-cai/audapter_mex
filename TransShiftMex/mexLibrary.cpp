@@ -8,23 +8,24 @@
 #include "mex.h"
 #include "Audapter.h"
 #include "audioIO.h"
+#include "version.h"
 
 #include <windows.h>
 #pragma comment(lib, "Winmm.lib")
 
 using namespace std;
 
-#define N_ACTIONS 17
+#define N_ACTIONS 18
 char *actionNames[N_ACTIONS] = {"info", "start", "stop", "setParam", "getParam", 
 								"getData", "runFrame", "reset", "outFrame",
 								"ost", "pcf", "playTone", "playWave",
 								"playToneSeq", "writeToneSeq", "getMaxPBLen", 
-								"deviceName"};
+								"deviceName", "version"};
 int actionCode[N_ACTIONS] = {0, 1, 2, 3, 15,
 							 4, 5, 6, 7,
 							 8, 9, 11, 12, 
 							 13, 14, 51, 
-							 100};
+							 100, 999};
 
 int getActionNum(int nActions, char **actionNames, int *actionCode, char *actionName) {
 	int act = -1;
@@ -61,7 +62,8 @@ void printHelp() {
 	mexPrintf("\t\t14 / writeToneSeq:	Write the waveform of the last tone sequence to wav file\n");	
 	mexPrintf("\t\t\n");
 	mexPrintf("\t\t51 / getMaxPBLen:	Get the wav playback length\n");	
-	mexPrintf("\t\t100 / deviceName:Set audio device name\n");
+	mexPrintf("\t\t100 / deviceName: Set audio device name\n");
+    mexPrintf("\t\t999 / version: Get the version of Audapter\n");
 	mexPrintf("\t\t\n");
 	mexPrintf("\n");
 }
@@ -633,6 +635,10 @@ void mexFunction( int nlhs, mxArray *plhs[],
 				}
 			}
 			break;
+
+        case 999:
+            mexPrintf("Audapter version %s\n", audapter::Version::version);
+            break;
 
 		default:
             mexPrintf("Action unknown:  %d\n", action);

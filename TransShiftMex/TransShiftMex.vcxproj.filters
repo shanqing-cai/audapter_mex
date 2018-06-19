@@ -45,6 +45,9 @@
     <ClCompile Include="time_domain_shifter.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="version.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Audapter.h">
@@ -73,6 +76,9 @@
     </ClInclude>
     <ClInclude Include="time_domain_shifter.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="version.h">
+      <Filter>Source Files</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>
