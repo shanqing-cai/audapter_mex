@@ -6,6 +6,12 @@ namespace audapter {
 
     typedef double dtype;
 
+    enum TimeDomainShifterAlgorithm {
+        PP_NONE,
+        PP_PEAKS,
+        PP_VALLEYS,
+    };
+
     class TimeDomainShifter {
     public:
         typedef std::vector<std::pair<dtype, dtype>> PitchShiftSchedule;
@@ -23,7 +29,8 @@ namespace audapter {
         //       2.0 corresponds to shifting up 1 octave,
         //       0.5 corresponds to shifting down 1 octave,
         //       etc.
-        TimeDomainShifter(const int sr,
+        TimeDomainShifter(const TimeDomainShifterAlgorithm algorithm,
+                          const int sr,
                           const int frameLen,
                           const PitchShiftSchedule& pitchShiftSchedule);
         virtual ~TimeDomainShifter();
@@ -50,8 +57,6 @@ namespace audapter {
         dtype getDiscontinuity() const;  // DEBUG
 
     private:
-        TimeDomainShifter() {};
-
         // Copy a segment to the rotating buffer and increment the
         // rotating-buffer pointer.
         //
@@ -77,18 +82,17 @@ namespace audapter {
         //   end: end index of the part to smooth (exclusive).
         void smoothScratch(int begin, int end);
 
+        const int extractPeakIndex(const bool isMaximum);
+        void extractSmoothedPeakIndex(const bool isMaximum);
+
         int getScratchIndex(int i);
 
         // Get the pitch shift ratio for the current moment, given the
         // prespecified pitch-shift schedule and the current time.
         dtype getPitchShiftRatio() const;
 
-        // methodId:
-        //   0: similar alfnie's crop;
-        //   1: linear intepolation for b > 0;
-        //   2: same as 1, but with smoothing at the junctions of the
-        //      pitch-shifted cycles.
-        const int methodId = 2;
+        const TimeDomainShifterAlgorithm algorithm;
+
         const bool verbose = false;
         const dtype maxPitchShiftRatio = 1.5;
 
@@ -115,12 +119,25 @@ namespace audapter {
         // The ending idx of the last pitch cycle, exclusive.
         int lastPitchCycleEnd;
 
+        // Same as lastPitchCycleBegin, but with peak adjustment.
+        int lastPeakAdjustedPitchCycleBegin;
+        // Same as lastPitchCycleEnd, but with peak adjustment.
+        int lastPeakAdjustedPitchCycleEnd;
+
+
+        // Peak/valley index in pitch cycle, with smoothing.
+        int lastPitchCyclePeakIndex;
+        dtype pitchCyclePeakIndexState;
+        // Factor for exponential smoothing of the peak/valley index.
+        // Should be a number between 0 and 1. The smaller the value is,
+        // the stronger the smoothing is.
+        dtype pitchCyclePeakSmoothingAlpha = 0.01;
+
         // Experimental. Use 0.0 to deactivate smoothing of pitch cycle length.
         const dtype pitchCycleSmoothingFactor = 0.0;
         dtype trackedPitchCycle;
            
         dtype latestShiftedPitchHz;  // DEBUG
-        int latestInputPitchCycleBegin;  // DEBUG For debug only?
         dtype discontinuity;  // DEBUG
     };
 

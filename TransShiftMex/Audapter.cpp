@@ -227,6 +227,13 @@ Audapter::Audapter() :
         "Each pitch-shift amount is defined in the same way as parameter 'pitchshiftratio', i.e.,\n"
         "1.0 corresponds to no shift. Each pitch-shift amount is required to be a positive number.",
         Parameter::TYPE_TIME_DOMAIN_PITCH_SHIFT_SCHEDULE);
+    params.addParam(
+        "timedomainpitchshiftalgorithm",
+        "Time-domain pitch shift algorithm: Can take one of the following values.\n"
+        "0 - pp_none: does not adjust pitch cycles (default).\n"
+        "1 - pp_peaks: adjusts pitch cycle based on waveform maximum.\n"
+        "2 - pp_valleys: adjusts pitch cycle based on waveform minimum.\n",
+        Parameter::TYPE_TIME_DOMAIN_PITCH_SHIFT_ALGORITHM);
 
 	int		n;
 
@@ -432,7 +439,8 @@ Audapter::Audapter() :
 
     /* Initialize time-domain shifter */
     timeDomainShifter.reset(
-        new audapter::TimeDomainShifter(p.sr, p.frameLen,
+        new audapter::TimeDomainShifter(
+            p.timeDomainPitchShiftAlgorithm, p.sr, p.frameLen,
             audapter::TimeDomainShifter::PitchShiftSchedule()));
 
 //************************************** Initialize filter coefs **************************************	
@@ -984,6 +992,16 @@ void *Audapter::setGetParam(bool bSet,
                 "supported yet.");
         }
     }
+    else if (ns == string("timedomainpitchshiftalgorithm")) {
+        if (bSet) {
+            bRemakeTimeDomainShifter = true;
+        }
+        else {
+            mexErrMsgTxt(
+                "Getting the value of p.timeDomainPitchShiftAlgorithm is not "
+                "supported yet.");
+        }
+    }
 	else if (ns == string("pvocwarp")) {
 		/*ptr = (void *) pertCfg.warpCfg[0];
 		if (pertCfg.warpCfg.size() > 0) {
@@ -1143,7 +1161,7 @@ void *Audapter::setGetParam(bool bSet,
             if (nPars == 1) {
                 p.timeDomainPitchShiftSchedule.clear();
                 p.timeDomainPitchShiftSchedule.push_back(
-                    std::make_pair(0.0, *(dtype *)value));
+                    std::make_pair(0.0, *(dtype *)value)); 
                 if (bVerbose) {
                     mexPrintf("timeDomainPitchShiftSchedule: single value: t=%f, %f\n",
                         0.0, p.timeDomainPitchShiftSchedule[0].second);
@@ -1172,6 +1190,12 @@ void *Audapter::setGetParam(bool bSet,
                     }
                 }
             }
+        }
+        else if (pType == Parameter::TYPE_TIME_DOMAIN_PITCH_SHIFT_ALGORITHM) {
+            const int algorithmId = static_cast<int>(*(dtype *)value);
+            p.timeDomainPitchShiftAlgorithm =
+                static_cast<audapter::TimeDomainShifterAlgorithm>(algorithmId);
+            mexPrintf("algorithm id %f\n", algorithmId);
         }
 	
 		/* Additional internal parameter changes */
@@ -1323,6 +1347,7 @@ void *Audapter::setGetParam(bool bSet,
             // TODO(cais): Check incompatible parameter values, e.g., p.nFB > 1.
             timeDomainShifter.reset(
                 new audapter::TimeDomainShifter(
+                    p.timeDomainPitchShiftAlgorithm,
                     p.sr, p.frameLen, p.timeDomainPitchShiftSchedule));
         }
 		return NULL;

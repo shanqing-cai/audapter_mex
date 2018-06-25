@@ -279,7 +279,6 @@ void mexFunction( int nlhs, mxArray *plhs[],
             }
 
 			break;
-
 		case 15:			//SC Get paramters of the audapter object
 			if (nrhs < 2)
 				mexErrMsgTxt("getParam: name not supplied");

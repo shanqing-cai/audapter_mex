@@ -99,6 +99,7 @@ public:
 		TYPE_PVOC_WARP, 
 		TYPE_SMN_RMS_FF,
         TYPE_TIME_DOMAIN_PITCH_SHIFT_SCHEDULE,
+        TYPE_TIME_DOMAIN_PITCH_SHIFT_ALGORITHM,
 	} paramType;
 
 private:
@@ -429,6 +430,7 @@ private:
 		int		bPitchShift;
 		dtype	pitchShiftRatio[maxNVoices];
         audapter::TimeDomainShifter::PitchShiftSchedule timeDomainPitchShiftSchedule;
+        audapter::TimeDomainShifterAlgorithm timeDomainPitchShiftAlgorithm;
 
 		//SC-Mod(2008/01/05). Arrays: for intensity correction during formant shifting (mainly for the use of parallel shifts)		
 		dtype wgFreq;										//SC Wave generator frequency (Hz)

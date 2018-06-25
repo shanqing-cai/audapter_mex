@@ -10,13 +10,15 @@
 namespace audapter {
 
     TimeDomainShifter::TimeDomainShifter(
+        const TimeDomainShifterAlgorithm algorithm,
         const int sr,
         const int frameLen,
         const PitchShiftSchedule& pitchShiftSchedule) :
+        algorithm(algorithm),
         sr(sr), frameLen(frameLen), pitchShiftSchedule(pitchShiftSchedule),
         rotBufPtr(0), scratchReadPtr(0), scratchWritePtr(0),
         trackedPitchCycle(0.0), latestShiftedPitchHz(0.0),
-        latestInputPitchCycleBegin(0), discontinuity(0) {
+        discontinuity(0) {
         checkPitchShiftSchedule();
 
         bufLen = static_cast<int>(static_cast<dtype>(sr) / 25.0);
@@ -43,7 +45,7 @@ namespace audapter {
 
     void TimeDomainShifter::reset() {
         totalLen = 0;
-        segCount = 0;        
+        segCount = 0;
         lastPitchFilteredSample = 0.0;
         zcIndices.clear();
 
@@ -62,17 +64,17 @@ namespace audapter {
         lastPitchCycleEnd = 0;
         trackedPitchCycle = 0;
 
+        lastPeakAdjustedPitchCycleBegin = -1;
+        lastPeakAdjustedPitchCycleEnd = -1;
+
         latestShiftedPitchHz = 0.0;
-        latestInputPitchCycleBegin = 0;
         discontinuity = 0;
+
+        pitchCyclePeakIndexState = -1.0;
     }
 
     dtype TimeDomainShifter::getLatestShiftedPitchHz() const {
         return latestShiftedPitchHz;
-    }
-
-    int TimeDomainShifter::getLatestInputPitchCycleBegin() const {
-        return latestInputPitchCycleBegin;
     }
 
     dtype TimeDomainShifter::getDiscontinuity() const {
@@ -107,15 +109,42 @@ namespace audapter {
                 zcIndices.size() > 1 ? zcIndices[zcIndices.size() - 2] : 0;
             lastPitchCycleEnd = zcIndices[zcIndices.size() - 1];
 
+            if ((algorithm == TimeDomainShifterAlgorithm::PP_PEAKS ||
+                 algorithm == TimeDomainShifterAlgorithm::PP_VALLEYS) &&
+                zcIndices.size() > 1) {
+                extractSmoothedPeakIndex(algorithm == TimeDomainShifterAlgorithm::PP_PEAKS);
+                const int adjustment = static_cast<int>(round(pitchCyclePeakIndexState)) -
+                    (lastPitchCycleEnd - lastPitchCycleBegin);
+                if (lastPeakAdjustedPitchCycleEnd != -1) {
+                    lastPeakAdjustedPitchCycleBegin = lastPeakAdjustedPitchCycleEnd;
+                }
+                else {
+                    // This is the first time a peak/valley has been detected. We we
+                    // cannot really obtain the beginning of the last peak/valley-adjusted
+                    // pitch cycle. Instead, we assume the location of the peak/valley
+                    // is relatively stable and make a guess based on the beginning
+                    // of the beginning of the unadjusted pitch cycle.
+                    lastPeakAdjustedPitchCycleBegin = lastPitchCycleBegin + adjustment;
+                }
+                lastPeakAdjustedPitchCycleEnd = lastPitchCycleEnd + adjustment;
+            }
+
             if (verbose) {
-                mexPrintf("ps0 =[");
+                mexPrintf("ps0=[");
                 for (int i = lastPitchCycleBegin; i < lastPitchCycleEnd; ++i) {
                     mexPrintf("%f", accessRotBuf(i));
                     if (i < lastPitchCycleEnd - 1) {
                         mexPrintf(",");
                     }
                 }
-                mexPrintf("]\n");
+                mexPrintf("];\n");
+            }
+
+            if (verbose &&
+                (algorithm == TimeDomainShifterAlgorithm::PP_PEAKS ||
+                 algorithm == TimeDomainShifterAlgorithm::PP_VALLEYS)) {
+                mexPrintf("peakIndex=%f;\n", pitchCyclePeakIndexState);
+                mexPrintf("plot(ps0); hold on; ylim = get(gca, 'ylim'); plot([peakIndex, peakIndex], ylim); ginput(1); clf;\n", pitchCyclePeakIndexState);
             }
         }
 
@@ -145,6 +174,41 @@ namespace audapter {
         segCount++;
         lastPitchFilteredSample = f[len - 1];
         totalLen += len;
+    }
+
+    const int TimeDomainShifter::extractPeakIndex(const bool isMaximum) {
+        int peakIndex = -1;
+        if (lastPitchCycleEnd <= lastPitchCycleBegin) {
+            return peakIndex;
+        }
+
+        dtype peakValue = isMaximum ? -1e12 : 1e12;
+
+        for (int i = lastPitchCycleBegin; i < lastPitchCycleEnd; ++i) {
+            const dtype value = accessRotBuf(i);
+            if (isMaximum && value > peakValue) {
+                peakValue = value;
+                peakIndex = i - lastPitchCycleBegin;
+            }
+            else if (!isMaximum && value < peakValue) {
+                peakValue = value;
+                peakIndex = i - lastPitchCycleBegin;
+            }
+        }
+
+        return peakIndex;
+    }
+
+    void TimeDomainShifter::extractSmoothedPeakIndex(const bool isMaximum) {
+        const dtype peakIndex = static_cast<dtype>(extractPeakIndex(isMaximum));
+        if (pitchCyclePeakIndexState < 0.0) {
+            pitchCyclePeakIndexState = peakIndex;
+        }
+        else {
+            pitchCyclePeakIndexState =
+                pitchCyclePeakSmoothingAlpha * peakIndex +
+                (1 - pitchCyclePeakSmoothingAlpha) * pitchCyclePeakIndexState;
+        }
     }
 
     void TimeDomainShifter::copyToRotBuf(const dtype* x) {
@@ -197,8 +261,18 @@ namespace audapter {
     }
 
     void TimeDomainShifter::genShiftedPitchCycle() {
+        int accessBegin = lastPitchCycleBegin;
+        int accessEnd = lastPitchCycleEnd;
+        if ((algorithm == TimeDomainShifterAlgorithm::PP_PEAKS ||
+             algorithm == TimeDomainShifterAlgorithm::PP_VALLEYS) &&
+            lastPeakAdjustedPitchCycleBegin != -1 &&
+            lastPeakAdjustedPitchCycleEnd != -1) {
+            accessBegin = lastPeakAdjustedPitchCycleBegin;
+            accessEnd = lastPeakAdjustedPitchCycleEnd;
+        }
+
         // Length of the latest unshifted pitch cycle.
-        int n0 = lastPitchCycleEnd - lastPitchCycleBegin;
+        int n0 = accessEnd - accessBegin;
 
         // Exponential smoothing of pitch cycle.
         if (pitchCycleSmoothingFactor > 0.0) {
@@ -217,7 +291,7 @@ namespace audapter {
         if (zcIndices.size() > 1) {
             latestShiftedPitchHz = static_cast<dtype>(sr) / n0 * pitchShiftRatio;
         }
-        latestInputPitchCycleBegin = lastPitchCycleBegin;
+
         // Length of the shifted pitch cycle.
         const int n1 = static_cast<int>(
             round(static_cast<dtype>(n0) / pitchShiftRatio));
@@ -230,66 +304,38 @@ namespace audapter {
         int b = 0;
         dtype offset = 0.0;
         while (b < n0) {
-            if (verbose) {
-                mexPrintf("ps_b = [");
-            }
+            /*if (verbose) {
+                mexPrintf("ps_b=[");
+            }*/
             for (int i = 0; i < n1; ++i) {
                 dtype added = 0.0;
-                int accessIdx = lastPitchCycleBegin + b + i;
-                if (accessIdx > lastPitchCycleEnd - 1) {
-                    accessIdx = lastPitchCycleEnd - 1;
+                int accessIdx = accessBegin + b + i;
+                if (accessIdx > accessEnd - 1) {
+                    accessIdx = accessEnd - 1;
                 }
                 added = accessRotBuf(accessIdx);
-                if (methodId != 0) {
-                    if (b > 0) {
-                        // TODO(cais): Optimize if necessary.
-                        const dtype y2 = accessRotBuf(lastPitchCycleBegin + b);
-                        const dtype y3 = accessRotBuf(lastPitchCycleEnd - 1);
-                        const dtype y2prime = 0.5 * (y2 - y3);
-                        const dtype y3prime = 0.5 * (y3 - y2);
-                        added = y2prime + (y3prime - y2prime) * static_cast<dtype>(i)
-                            / static_cast<dtype>(n1 - 1);
-                    }
-                }
-                scratchBuf[(scratchWritePtr + i) % scratchLen] += added;
-                if (methodId == 0) {
-                    offset += added;
-                }
 
-                if (verbose) {
-                    mexPrintf("%f", added);
-                    if (i < n1 - 1) {
-                        mexPrintf(",");
-                    }
+                if (b > 0) {
+                    // TODO(cais): Optimize if necessary.
+                    const dtype y2 = accessRotBuf(accessBegin + b);
+                    const dtype y3 = accessRotBuf(accessEnd - 1);
+                    const dtype y2prime = 0.5 * (y2 - y3);
+                    const dtype y3prime = 0.5 * (y3 - y2);
+                    added = y2prime + (y3prime - y2prime) * static_cast<dtype>(i)
+                        / static_cast<dtype>(n1 - 1);
                 }
+                
+                scratchBuf[(scratchWritePtr + i) % scratchLen] += added;                
             }
-            if (verbose) {
+            /*if (verbose) {
                 mexPrintf("]\n");
-            }
+            }*/
             b += n1;
         }
+        
+         smoothScratch(scratchWritePtr, scratchWritePtr + 3);
 
-        if (methodId == 0) {
-            // TODO(cais): Optimize: The baseline can be calculated beforehand.
-            dtype baseline = 0.0;
-            for (int i = lastPitchCycleBegin; i < lastPitchCycleEnd; ++i) {
-                baseline += accessRotBuf(i);
-            }
-            offset -= baseline;
-            offset /= (lastPitchCycleEnd - lastPitchCycleBegin);
-
-            // Substract the offset.
-            for (int i = 0; i < n1; ++i) {
-                scratchBuf[(scratchWritePtr + i) % scratchLen] -= offset;
-            }
-        }
-
-        if (methodId == 2) {
-            //smoothScratch(scratchWritePtr - 1, scratchWritePtr + 2);
-            smoothScratch(scratchWritePtr, scratchWritePtr + 3);
-        }
-
-        if (verbose) {
+        /*if (verbose) {
             mexPrintf("offset = %f\n", offset);
             mexPrintf("ps_c = [");
             for (int i = 0; i < n1; ++i) {
@@ -299,7 +345,7 @@ namespace audapter {
                 }
             }
             mexPrintf("]\n");
-        }
+        }*/
 
         // DEBUG
         if (scratchWritePtr > 0) {
