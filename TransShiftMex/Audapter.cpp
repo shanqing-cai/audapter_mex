@@ -191,6 +191,7 @@ Audapter::Audapter() :
 	params.addDoubleParam("pitchlowerboundhz", "Lower bound for pitch, in Hz. Used by pitch tracker.");
 	params.addDoubleParam("pitchupperboundhz", "Upper bound for pitch, in Hz. Used by pitch tracker.");
 
+	params.addDoubleParam("fb2gain", "Noise gain factor for noise only mode");
 	params.addDoubleParam("fb3gain", "Noise gain factor for speech+noise feedback mode");
     params.addDoubleParam("fb4gaindb", "Speech-modulated noise feedback: intensity gain factor");
 
@@ -275,6 +276,8 @@ Audapter::Audapter() :
 	p.fb4Gain			= pow(10.0, p.fb4GainDB / 20);
 
 	p.fb3Gain			= 0.0;
+
+	p.fb2Gain			= 1.0;
 
 	p.dPreemp			= 0.98;	// preemphasis factor
 	p.dScale			= 1.0;	// scaling the output (when upsampling) (does not affect internal signal
@@ -1084,6 +1087,9 @@ void *Audapter::setGetParam(bool bSet,
 	}
 	else if (ns == string("fb3gain")) {
 		ptr = (void *)&p.fb3Gain;
+	}
+	else if (ns == string("fb2gain")) {
+		ptr = (void *)&p.fb2Gain;
 	}
 	else {		
 		string errStr("Unknown parameter name: ");
@@ -2013,7 +2019,7 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 	else if (p.fb >= 2 && p.fb <= 4) {
 		for(n = 0;n < p.frameLen; n++) {
 			if (p.fb == 2)	// noise only
-				outFrameBufSum[n + p.pvocFrameLen - p.frameLen] = data_pb[pbCounter];
+				outFrameBufSum[n + p.pvocFrameLen - p.frameLen] = data_pb[pbCounter] * p.fb2Gain;
 			else if (p.fb == 3)	// voice + noise				
 				outFrameBufSum[n + p.pvocFrameLen - p.frameLen] = outFrameBufSum[n + p.pvocFrameLen - p.frameLen] + data_pb[pbCounter] * p.fb3Gain;
 			else if (p.fb == 4)	// Speech-modulated noise	

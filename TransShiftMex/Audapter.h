@@ -374,6 +374,8 @@ private:
 		dtype rmsFF;                   // rms fogetting factor for long time rms 
 		dtype rmsFF_fb[4];             // rms fogetting factor for fb mode 4 {ff_onset, ff_final, trans_time (s), ending time (s)} 
 
+		dtype fb2Gain;					// gain (scaling factor) of the noise under fb mode 2
+
 		dtype fb3Gain;					// gain (scaling factor) of the blended noise under fb mode 3
 
 		dtype fb4GainDB;				// gain (in dB) of the speech-modulated noise under fb mode 4
