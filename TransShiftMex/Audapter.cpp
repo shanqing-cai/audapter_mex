@@ -1201,7 +1201,7 @@ void *Audapter::setGetParam(bool bSet,
             const int algorithmId = static_cast<int>(*(dtype *)value);
             p.timeDomainPitchShiftAlgorithm =
                 static_cast<audapter::TimeDomainShifterAlgorithm>(algorithmId);
-            mexPrintf("algorithm id %f\n", algorithmId);
+            // mexPrintf("algorithm id %f\n", algorithmId);
         }
 	
 		/* Additional internal parameter changes */
