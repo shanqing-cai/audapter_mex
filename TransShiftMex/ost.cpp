@@ -455,7 +455,7 @@ int OST_TAB::osTrack(const int stat, const int data_counter, const int frame_cou
 					}
 				}
 				else {
-					stat_out = stat + 1;
+					stat_out = stat - 1;
 				}
 			}
 
@@ -501,7 +501,7 @@ int OST_TAB::osTrack(const int stat, const int data_counter, const int frame_cou
 					}
 				}
 				else {
-					stat_out = stat + 1;
+					stat_out = stat - 1;
 				}
 			}
 			else {
