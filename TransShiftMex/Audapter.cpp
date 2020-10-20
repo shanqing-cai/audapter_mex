@@ -718,6 +718,7 @@ void *Audapter::setGetParam(bool bSet,
 			bRemakeFmtTracker = true;
 			bRemakePVoc = true;
             bRemakeTimeDomainShifter = true;
+			bRemakeFilter = true;
 		}
 	}
     else if (ns == string("framelen")) {
@@ -832,6 +833,9 @@ void *Audapter::setGetParam(bool bSet,
 	}
 	else if (ns == string("downfact")) {
 		ptr = (void *)&p.downFact;
+		if (bSet && static_cast<int>(*((dtype*)value)) != p.downFact) {
+			bRemakeFilter = true;
+		}
 	}
 	else if (ns == string("stereomode")) {
 		ptr = (void *)&p.stereoMode;
