@@ -96,6 +96,7 @@ public:
 		TYPE_BOOL_ARRAY,
 		TYPE_INT_ARRAY, 
 		TYPE_DOUBLE_ARRAY, 
+		TYPE_DOUBLE_2DARRAY,
 		TYPE_PVOC_WARP, 
 		TYPE_SMN_RMS_FF,
         TYPE_TIME_DOMAIN_PITCH_SHIFT_SCHEDULE,
@@ -133,6 +134,9 @@ public:
     void addDoubleArrayParam(const char* name, const char* helpMsg) {
         addParam(name, helpMsg, TYPE_DOUBLE_ARRAY);
     }
+	void addDouble2DArrayParam(const char* name, const char* helpMsg) {
+		addParam(name, helpMsg, TYPE_DOUBLE_2DARRAY);
+	}
 
 	paramType checkParam(const char *name);
 };
@@ -450,9 +454,12 @@ private:
 		dtype F1Max;
 		dtype LBk;
 		dtype LBb;
+		dtype pertF1[pfNPoints];
 		dtype pertF2[pfNPoints];		
 		dtype pertPhi[pfNPoints];
 		dtype pertAmp[pfNPoints];
+		dtype pertPhi2D[pfNPoints][pfNPoints];
+		dtype pertAmp2D[pfNPoints][pfNPoints];
 		dtype minVowelLen;
 		
 		bool transDone;
@@ -497,6 +504,9 @@ private:
 		/*SC(2013/04/07) Options to bypass the formant tracker (useful for situations in which lower latency under pitch shifting or time warping is required */
 		int bBypassFmt;
 
+		// Switch for using F1 and F2 formant perturbation, instead of just F2.
+		int bPitchShift2D;
+
 		/* SC (2013-08-06) stereoMode */
 		int stereoMode;		/* 0 - left only; 1 - left-right identical; 2 - left audio + right simulate TTL */
 
@@ -528,6 +538,7 @@ private:
 	
 	dtype Audapter::hz2mel(dtype hz);
 	dtype Audapter::mel2hz(dtype hz);
+	dtype Audapter::locateF1(dtype f1);
 	dtype Audapter::locateF2(dtype f2);
 
 	void	DSPF_dp_cfftr2(int n, dtype * x, dtype * w, int n_min);

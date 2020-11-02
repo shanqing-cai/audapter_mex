@@ -131,6 +131,7 @@ Audapter::Audapter() :
 	params.addBoolParam("bgainadapt", "Formant perturbation gain adaptation switch");
 	params.addBoolParam("brmsclip", "Switch for auto RMS intensity clipping (loudness protection)");	//
 	params.addBoolParam("bbypassfmt", "Switch for bypassing formant tracking (for use in pitch shifting and time warping");
+	params.addBoolParam("bpitchshift2d", "Switch for using F1 and F2 for formant perturbation, instead of just F2");	
 	params.addBoolParam("bpitchshift", "Pitch shifting switch");
 	params.addBoolParam("bdownsampfilt", "Down-sampling filter switch");
 	params.addBoolParam("mute", "Global mute switch");
@@ -199,6 +200,7 @@ Audapter::Audapter() :
     params.addDoubleArrayParam("pitchshiftratio", "Pitch-shifting: ratio (1.0 = no shift)");
       
 	params.addDoubleArrayParam("datapb", "Waveform for playback");
+	params.addDoubleArrayParam("pertf1", "Formant perturbation field: F1 grid (Hz)");
 	params.addDoubleArrayParam("pertf2", "Formant perturbation field: F2 grid (Hz)");
 	params.addDoubleArrayParam("pertamp", "Formant perturbation field: Perturbation vector amplitude");
 	params.addDoubleArrayParam("pertphi", "Formant perturbation field: Perturbation vector angle");
@@ -209,6 +211,10 @@ Audapter::Audapter() :
 	params.addDoubleArrayParam("tsgtoneamp", "Tone sequence generator: tone peak amplitudes");
 	params.addDoubleArrayParam("tsgtoneramp", "Tone sequence generator: tone ramp durations (s)");
 	params.addDoubleArrayParam("tsgint", "Tone sequence generator: intervals between tone onsets (s)");
+
+	/* Double 2D array parameters */
+	params.addDouble2DArrayParam("pertamp2d", "Formant perturbation field: Perturbation vector amplitude for F1-F2");
+	params.addDouble2DArrayParam("pertphi2d", "Formant perturbation field: Perturbation vector angle for F1-F2");
 
 	/* Other types of parameters */
     params.addParam("rmsff_fb", "Speech-modulated noise feedback: RMS forgetting factor", Parameter::TYPE_SMN_RMS_FF);
@@ -236,7 +242,7 @@ Audapter::Audapter() :
         "2 - pp_valleys: adjusts pitch cycle based on waveform minimum.\n",
         Parameter::TYPE_TIME_DOMAIN_PITCH_SHIFT_ALGORITHM);
 
-	int		n;
+	int		n, m;
 
 	strcpy_s(deviceName, sizeof(deviceName), "MOTU MicroBook");
 		
@@ -348,9 +354,14 @@ Audapter::Audapter() :
 	p.LBb		= 0;		// The intercept of a tilted boundary (mel)
 
 	for(n=0;n<pfNPoints;n++){
+		p.pertF1[n]=0;			// Independent variable of the perturbation vectors
 		p.pertF2[n]=0;			// Independent variable of the perturbation vectors
 		p.pertAmp[n]=0;			// Magnitude of the perturbation vectors (mel)
-		p.pertPhi[n]=0;			// Angle of the perturbation vectors (rad). 0 corresponds to the x+ axis. Increase in the countetclockwise direction. 
+		p.pertPhi[n]=0;			// Angle of the perturbation vectors (rad). 0 corresponds to the x+ axis. Increase in the counterclockwise direction. 
+		for (m = 0; m < pfNPoints; m++) {
+			p.pertAmp2D[n][m] = 0;	// Magnitude of the perturbation vectors (mel) in F1-F2 space
+			p.pertPhi2D[n][m] = 0;	// Angle of the perturbation vectors (rad) for [F1][F2]. 0 corresponds to the x+ axis. Increase in the counterclockwise direction. 
+		}
 	}
 
 	p.minVowelLen=60;
@@ -458,19 +469,19 @@ Audapter::Audapter() :
 	b_filt2[0] = 1;
 
 	/* Filters */
-	const dtype t_srfilt_a[nCoeffsSRFilt] = {1.000000000000000000000000, -4.137689759094149300000000, 11.417342955970334000000000, -21.230389508442666000000000, 
-											 31.507204607241498000000000, -36.677292780605917000000000, 36.042584528469732000000000, -28.996821243768743000000000, 
-											 20.262367357856544000000000, -11.637468104552259000000000, 5.968975493498319000000000, -2.417954280896708500000000, 
-											 0.941027354810217260000000, -0.241109659478893040000000, 0.083935453370180629000000, -0.005511361553189712100000, 
-											 0.006142808678570149300000, 0.001292100725808184000000, 0.000588047191250507470000, 0.000146757274221299580000, 
-											 0.000035865709068928935000};
-	const dtype t_srfilt_b[nCoeffsSRFilt] = {0.005985366448016847400000, -0.000000000068663473436596, 0.029926833561855812000000, 0.014963399494903253000000, 
-											 0.072946803942075492000000, 0.066399110082245749000000, 0.128831523706446540000000, 0.141307195958322970000000, 
-											 0.183515087779119460000000, 0.196038702055692930000000, 0.207578586483177310000000, 0.196038702055692630000000, 
-											 0.183515087779119760000000, 0.141307195958322280000000, 0.128831523706446790000000, 0.066399110082245277000000, 
-											 0.072946803942075533000000, 0.014963399494903067000000, 0.029926833561855826000000, -0.000000000068663525932820, 
-											 0.005985366448016846500000};
-
+	const dtype t_srfilt_a[nCoeffsSRFilt] = { 1.000000000000000000000000, -4.137689759094149300000000, 11.417342955970334000000000, -21.230389508442666000000000,
+											 31.507204607241498000000000, -36.677292780605917000000000, 36.042584528469732000000000, -28.996821243768743000000000,
+											 20.262367357856544000000000, -11.637468104552259000000000, 5.968975493498319000000000, -2.417954280896708500000000,
+											 0.941027354810217260000000, -0.241109659478893040000000, 0.083935453370180629000000, -0.005511361553189712100000,
+											 0.006142808678570149300000, 0.001292100725808184000000, 0.000588047191250507470000, 0.000146757274221299580000,
+											 0.000035865709068928935000 };
+	const dtype t_srfilt_b[nCoeffsSRFilt] = { 0.005985366448016847400000, -0.000000000068663473436596, 0.029926833561855812000000, 0.014963399494903253000000,
+												 0.072946803942075492000000, 0.066399110082245749000000, 0.128831523706446540000000, 0.141307195958322970000000,
+												 0.183515087779119460000000, 0.196038702055692930000000, 0.207578586483177310000000, 0.196038702055692630000000,
+												 0.183515087779119760000000, 0.141307195958322280000000, 0.128831523706446790000000, 0.066399110082245277000000,
+												 0.072946803942075533000000, 0.014963399494903067000000, 0.029926833561855826000000, -0.000000000068663525932820,
+												 0.005985366448016846500000 };
+	
 	downSampFilter.setCoeff(nCoeffsSRFilt, t_srfilt_a, nCoeffsSRFilt, t_srfilt_b);
 	upSampFilter.setCoeff(nCoeffsSRFilt, t_srfilt_a, nCoeffsSRFilt, t_srfilt_b);
 
@@ -482,6 +493,7 @@ Audapter::Audapter() :
 	sprintf_s(wavFileBase, "");
 
 	p.bBypassFmt = 0;
+	p.bPitchShift2D = 0;
 
 	reset();
 }
@@ -670,6 +682,7 @@ void *Audapter::setGetParam(bool bSet,
 	bool bRemakeFmtTracker = false; /* Flag for reinitialization of formant tracker */
 	bool bRemakePVoc = false; /* Flag for reinitialization of the phase vocoder */
     bool bRemakeTimeDomainShifter = false;
+	bool bRemakeFilter = false; /* Flag for reinitialization of Chebyshev filter based on sample rate */
 
 	if (ns == string("bgainadapt")) {
 		ptr = (void *)&p.bGainAdapt;
@@ -710,6 +723,9 @@ void *Audapter::setGetParam(bool bSet,
 	else if (ns == string("bbypassfmt")) {
 		ptr = (void *)&p.bBypassFmt;
 	}
+	else if (ns == string("bpitchshift2d")) {
+		ptr = (void *)&p.bPitchShift2D;
+	}
 	else if (ns == string("srate")) {
 		ptr = (void *)&p.sr;
 
@@ -717,6 +733,7 @@ void *Audapter::setGetParam(bool bSet,
 			bRemakeFmtTracker = true;
 			bRemakePVoc = true;
             bRemakeTimeDomainShifter = true;
+			bRemakeFilter = true;
 		}
 	}
     else if (ns == string("framelen")) {
@@ -831,6 +848,9 @@ void *Audapter::setGetParam(bool bSet,
 	}
 	else if (ns == string("downfact")) {
 		ptr = (void *)&p.downFact;
+		if (bSet && static_cast<int>(*((dtype*)value)) != p.downFact) {
+			bRemakeFilter = true;
+		}
 	}
 	else if (ns == string("stereomode")) {
 		ptr = (void *)&p.stereoMode;
@@ -888,6 +908,10 @@ void *Audapter::setGetParam(bool bSet,
 	else if (ns == string("f2max")) {
 		ptr = (void *)&p.F2Max;
 	}
+	else if (ns == string("pertf1")) {
+		ptr = (void*)p.pertF1;
+		len = pfNPoints;
+	}
 	else if (ns == string("pertf2")) {
 		ptr = (void *)p.pertF2;
 		len = pfNPoints;
@@ -898,6 +922,14 @@ void *Audapter::setGetParam(bool bSet,
 	}
 	else if (ns == string("pertphi")) {
 		ptr = (void *)p.pertPhi;
+		len = pfNPoints;
+	}
+	else if (ns == string("pertamp2d")) {	
+		ptr = (void*)p.pertAmp2D;
+		len = pfNPoints;
+	}
+	else if (ns == string("pertphi2d")) {	
+		ptr = (void*)p.pertPhi2D;
 		len = pfNPoints;
 	}
 	else if (ns == string("f1min")) {
@@ -1129,10 +1161,16 @@ void *Audapter::setGetParam(bool bSet,
 			for (int i = 0; i < len; i++) {
 				*((dtype *)ptr + i) = static_cast<dtype>(*((dtype *)value + i));
 			}
-
-			if ( ns == string("datapb") ) { /* Zero out the remaining part */
+			if (ns == string("datapb")) { /* Zero out the remaining part */
 				for (int i = len; i < maxPBSize; i++)
-					*((dtype *)ptr + i) = 0.0;
+					*((dtype*)ptr + i) = 0.0;
+			}
+		}
+		else if (pType == Parameter::TYPE_DOUBLE_2DARRAY) {
+			for (int i = 0; i < len; i++) {
+				for (int j = 0; j < len; j++) { //transpose input matrix to support Matlab-style row,col indexing
+					*((dtype*)ptr + i * len + j) = static_cast<dtype>(*((dtype*)value + j * len + i));
+				}
 			}
 		}
 		else if (pType == Parameter::TYPE_PVOC_WARP) {
@@ -1356,6 +1394,42 @@ void *Audapter::setGetParam(bool bSet,
                     p.timeDomainPitchShiftAlgorithm,
                     p.sr, p.frameLen, p.timeDomainPitchShiftSchedule));
         }
+
+		if (bRemakeFilter) {
+			if (p.sr < 24000) {
+				const dtype t_srfilt_a[nCoeffsSRFilt] = { 1.000000000000000000000000, -4.137689759094149300000000, 11.417342955970334000000000, -21.230389508442666000000000,
+											 31.507204607241498000000000, -36.677292780605917000000000, 36.042584528469732000000000, -28.996821243768743000000000,
+											 20.262367357856544000000000, -11.637468104552259000000000, 5.968975493498319000000000, -2.417954280896708500000000,
+											 0.941027354810217260000000, -0.241109659478893040000000, 0.083935453370180629000000, -0.005511361553189712100000,
+											 0.006142808678570149300000, 0.001292100725808184000000, 0.000588047191250507470000, 0.000146757274221299580000,
+											 0.000035865709068928935000 };
+				const dtype t_srfilt_b[nCoeffsSRFilt] = { 0.005985366448016847400000, -0.000000000068663473436596, 0.029926833561855812000000, 0.014963399494903253000000,
+											 0.072946803942075492000000, 0.066399110082245749000000, 0.128831523706446540000000, 0.141307195958322970000000,
+											 0.183515087779119460000000, 0.196038702055692930000000, 0.207578586483177310000000, 0.196038702055692630000000,
+											 0.183515087779119760000000, 0.141307195958322280000000, 0.128831523706446790000000, 0.066399110082245277000000,
+											 0.072946803942075533000000, 0.014963399494903067000000, 0.029926833561855826000000, -0.000000000068663525932820,
+											 0.005985366448016846500000 };
+
+				downSampFilter.setCoeff(nCoeffsSRFilt, t_srfilt_a, nCoeffsSRFilt, t_srfilt_b);
+				upSampFilter.setCoeff(nCoeffsSRFilt, t_srfilt_a, nCoeffsSRFilt, t_srfilt_b);
+			}
+			else { // p.sr >= 24000
+				const dtype t_srfilt_a[nCoeffsSRFilt] = { 1.0000000000000000000, 3.4481656492253330000, 9.9677395770288580000, 20.3563883964761500000, 35.3515451698157000000,
+											51.3378381681464600000, 65.0847255760543000000, 72.1895242327609500000, 70.9375513295429300000, 61.8795384032066100000,
+											48.0368536403349900000, 33.1365872297097100000, 20.2446398086081300000, 10.8839382556327500000, 5.0988600871107350000,
+											2.0511226618448560000, 0.6931641143765566000, 0.1902388505692541000, 0.0400780264331726300, 0.0058210765566203220,
+											0.0004436668758932810 };
+				const dtype t_srfilt_b[nCoeffsSRFilt] = { 0.02106340131664485, 0.17449492990123160, 0.81002913025495730, 2.67755927192330300, 6.93664353530818800,
+											14.79589600478253000, 26.75618128948480000, 41.78558255267905000, 57.03426036978479000, 68.54991411127352000,
+											72.85151472689256000, 68.54991411127358000, 57.03426036978490000, 41.78558255267917000, 26.75618128948491000,
+											14.79589600478261000, 6.93664353530823300, 2.67755927192332300, 0.81002913025496460, 0.17449492990123360,
+											0.02106340131664512 };
+
+				downSampFilter.setCoeff(nCoeffsSRFilt, t_srfilt_a, nCoeffsSRFilt, t_srfilt_b);
+				upSampFilter.setCoeff(nCoeffsSRFilt, t_srfilt_a, nCoeffsSRFilt, t_srfilt_b);
+			}
+		}
+
 		return NULL;
 	}
 
@@ -1411,6 +1485,17 @@ void Audapter::queryParam(const char *name, mxArray **output) {
 			}
 			else if (pType == Parameter::TYPE_DOUBLE || pType == Parameter::TYPE_DOUBLE_ARRAY) {
 				output_ptr[i] = *((double *)val + i);
+			}
+		}
+	}
+	else if (pType == Parameter::TYPE_DOUBLE_2DARRAY) {
+
+		*output = mxCreateDoubleMatrix(length, length, mxREAL);
+		double* output_ptr = mxGetPr(*output);
+
+		for (int i = 0; i < length; i++) {
+			for (int j = 0; j < length; j++) {
+				output_ptr[i * length + j] = *((double*)val + j * length + i);
 			}
 		}
 	}
@@ -1500,8 +1585,8 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 	static bool maintain_trans = false;
 	bool above_rms = false;
 	bool during_pitchShift = false;
-	dtype sf1m, sf2m, loc, locfrac, mphi, mamp;
-	int locint, n;
+	dtype sf1m, sf2m, locf1, locf2, locfracf1, locfracf2, mphi, mamp;
+	int locintf1, locintf2, n, m;
 
 	/* Temporary buffer for holding output before duplexing into stereo */
 	dtype outputBuf[maxFrameLen];
@@ -1668,22 +1753,34 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 
 			if (during_trans && above_rms) {  // Determine whether the current point in perturbation field
 			    // yes : windowed deviation over x coordinate
-				loc = locateF2(f2mp);	// Interpolation (linear)								
-                locint = static_cast<int>(floor(loc));
-				locfrac = loc - locint;
+				//loc = locateF2(f2mp);	// Interpolation (linear)								
+                //locint = static_cast<int>(floor(loc));
+				//locfrac = loc - locint;
+				locf1 = locateF1(f1m);	// Interpolation (linear) 2D pert field edit
+				locf2 = locateF2(f2mp);	// Interpolation (linear) 2D pert field edit
+				locintf1 = static_cast<int>(floor(locf1)); //2D pert field edit
+				locfracf1 = locf1 - locintf1; //2D pert field edit
+				locintf2 = static_cast<int>(floor(locf2)); //2D pert field edit
+				locfracf2 = locf1 - locintf2;
 				
-				/* That using ost and pcf files overrides the perturbatoin field 
+				/* That using ost and pcf files overrides the perturbation field 
 					specified with pertF2, pertAmp, pertPhi. */
 				if (pertCfg.n > 0) {
-					mamp = pertCfg.fmtPertAmp[stat];
+					mamp = pertCfg.fmtPertAmp[stat];		
 					mphi = pertCfg.fmtPertPhi[stat];
 				}
 				else {
-					mamp = p.pertAmp[locint] + locfrac*(p.pertAmp[locint + 1] - p.pertAmp[locint]);	// Interpolaton (linear)
-					mphi = p.pertPhi[locint] + locfrac*(p.pertPhi[locint + 1] - p.pertPhi[locint]);
+					if (p.bPitchShift2D) { 
+						mamp = p.pertAmp2D[locintf1][locintf2]; // Interpolaton (linear),2D pert field edit
+						mphi = p.pertPhi2D[locintf1][locintf2]; // 2D pert field edit
+					}	
+					else {
+						mamp = p.pertAmp[locintf2] + locfracf2 * (p.pertAmp[locintf2 + 1] - p.pertAmp[locintf2]);	// Interpolaton (linear)
+						mphi = p.pertPhi[locintf2] + locfracf2 * (p.pertPhi[locintf2 + 1] - p.pertPhi[locintf2]);
+					}
 				}
 
-				if (!p.bRatioShift){	// Absoluate shift					
+				if (!p.bRatioShift){	// Absolute shift					
 					sf1m = f1m + mamp * cos(mphi);	// Shifting imposed
 					sf2m = f2m + mamp * sin(mphi);
 				}
@@ -1712,7 +1809,7 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 
 			if (during_trans || maintain_trans) {  // directly after transition
 				for (i0 = 0; i0 < 2; i0++) {
-					sFmts[i0] = newPhis[i0] * p.sr / (2 * M_PI); // shifted fotmants for recording
+					sFmts[i0] = newPhis[i0] * p.sr / (2 * M_PI); // shifted formants for recording
 				}
 				formantShiftFilter(inBuf + si, outBuf + si, wmaPhis, newPhis, amps, p.frameShift); // f1 f2 filtering 
 				gtot[fi] = getGain(amps, wmaPhis, newPhis, p.nFmts); // gain factor calculation
@@ -2496,9 +2593,37 @@ dtype Audapter::mel2hz(dtype mel){	// Convert frequency from mel to Hz
 	return hz;
 }
 
+dtype Audapter::locateF1(dtype f1) {
+	//SC Locate the value of f2 in the pertF1 table, through a binary search.
+	//SC Used for subsequent interpolation.
+	dtype loc;
+	int k = 1 << (pfNBit - 1), n;
+
+	for (n = 0; n < pfNBit - 1; n++) {
+		if (f1 >= p.pertF1[k])
+			k = k + (1 << (pfNBit - n - 2));
+		else
+			k = k - (1 << (pfNBit - n - 2));
+	}
+	if (f1 < p.pertF1[k])
+		k--;
+
+	loc = static_cast<dtype>(k);
+
+	loc += (f1 - p.pertF1[k]) / (p.pertF1[k + 1] - p.pertF1[k]);
+
+	if (loc >= pfNPoints - 1) {	//pfNPoints=257, so locint not be greater than 255 (pfNPoints-2)
+		loc = pfNPoints - 1 - 0.000000000001;
+	}
+	if (loc < 0) {
+		loc = 0;
+	}
+	return loc;
+}
+
 dtype Audapter::locateF2(dtype f2){	
 //SC Locate the value of f2 in the pertF2 table, through a binary search.
-//SC Usef for subsequent interpolation. 
+//SC Used for subsequent interpolation. 
 	dtype loc;
 	int k=1<<(pfNBit-1),n;
 

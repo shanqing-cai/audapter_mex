@@ -224,7 +224,7 @@ void OST_TAB::readFromFile(const string ostFN, const int bVerbose)
 			try {
 				mode[i0] = ostModeMap.at(items[1]); /* WARNING: Assume C++11 is available */
 			}
-			catch (out_of_range) {
+			catch (...) {
 				//fclose(fp);
 				throw unrecognizedOSTModeError(items[1]);
 			}

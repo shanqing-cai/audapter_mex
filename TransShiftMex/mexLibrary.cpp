@@ -267,7 +267,8 @@ void mexFunction( int nlhs, mxArray *plhs[],
                     nPars = inParSize[0];
                 }
                 else {
-                    mexErrMsgTxt("ERROR: Input parameter is not a scalar or a row or column vector");
+                    //mexErrMsgTxt("ERROR: Input parameter is not a scalar or a row or column vector");
+					nPars = inParSize[0];
                 }
 			}
 
