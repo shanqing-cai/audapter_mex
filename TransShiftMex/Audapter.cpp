@@ -2328,15 +2328,16 @@ bool Audapter::detectTrans(dtype *fmt_ptr, dtype *dFmt_ptr,int datcnt, dtype tim
 			}
 			else{
 				btransition=false;				
-				if (p.transCounter>=p.minVowelLen){	CWN TODO TESTING for dropouts
-					p.transDone=true;
-				}
+				//if (p.transCounter>=p.minVowelLen){	CWN TODO TESTING for dropouts
+				//	p.transDone=true;
+				//}
 				p.transCounter=0;
 			}			
 		}
 		else{
 			btransition=false;
 			p.transCounter=0;
+			p.transDone = false;	// CWN TODO TESTING for dropouts
 		}
 	}
 	else{
