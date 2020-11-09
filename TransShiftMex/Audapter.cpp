@@ -131,7 +131,7 @@ Audapter::Audapter() :
 	params.addBoolParam("bgainadapt", "Formant perturbation gain adaptation switch");
 	params.addBoolParam("brmsclip", "Switch for auto RMS intensity clipping (loudness protection)");	//
 	params.addBoolParam("bbypassfmt", "Switch for bypassing formant tracking (for use in pitch shifting and time warping");
-	params.addBoolParam("bpitchshift2d", "Switch for using F1 and F2 for formant perturbation, instead of just F2");	
+	params.addBoolParam("bshift2d", "Switch for using F1 and F2 for formant perturbation, instead of just F2");	
 	params.addBoolParam("bpitchshift", "Pitch shifting switch");
 	params.addBoolParam("bdownsampfilt", "Down-sampling filter switch");
 	params.addBoolParam("mute", "Global mute switch");
@@ -493,7 +493,7 @@ Audapter::Audapter() :
 	sprintf_s(wavFileBase, "");
 
 	p.bBypassFmt = 0;
-	p.bPitchShift2D = 0;
+	p.bShift2D = 0;
 
 	reset();
 }
@@ -723,8 +723,8 @@ void *Audapter::setGetParam(bool bSet,
 	else if (ns == string("bbypassfmt")) {
 		ptr = (void *)&p.bBypassFmt;
 	}
-	else if (ns == string("bpitchshift2d")) {
-		ptr = (void *)&p.bPitchShift2D;
+	else if (ns == string("bshift2d")) {
+		ptr = (void *)&p.bShift2D;
 	}
 	else if (ns == string("srate")) {
 		ptr = (void *)&p.sr;
@@ -1770,7 +1770,7 @@ int Audapter::handleBuffer(dtype *inFrame_ptr, dtype *outFrame_ptr, int frame_si
 					mphi = pertCfg.fmtPertPhi[stat];
 				}
 				else {
-					if (p.bPitchShift2D) { 
+					if (p.bShift2D) { 
 						mamp = p.pertAmp2D[locintf1][locintf2]; // Interpolaton (linear),2D pert field edit
 						mphi = p.pertPhi2D[locintf1][locintf2]; // 2D pert field edit
 					}	
@@ -2328,7 +2328,7 @@ bool Audapter::detectTrans(dtype *fmt_ptr, dtype *dFmt_ptr,int datcnt, dtype tim
 			}
 			else{
 				btransition=false;				
-				if (p.transCounter>=p.minVowelLen){
+				if (p.transCounter>=p.minVowelLen){	CWN TODO TESTING for dropouts
 					p.transDone=true;
 				}
 				p.transCounter=0;

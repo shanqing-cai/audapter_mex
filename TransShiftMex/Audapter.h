@@ -505,7 +505,7 @@ private:
 		int bBypassFmt;
 
 		// Switch for using F1 and F2 formant perturbation, instead of just F2.
-		int bPitchShift2D;
+		int bShift2D;
 
 		/* SC (2013-08-06) stereoMode */
 		int stereoMode;		/* 0 - left only; 1 - left-right identical; 2 - left audio + right simulate TTL */
