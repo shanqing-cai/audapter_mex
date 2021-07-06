@@ -314,15 +314,17 @@ namespace audapter {
                     accessIdx = accessEnd - 1;
                 }
                 added = accessRotBuf(accessIdx);
-
+                
                 if (b > 0) {
                     // TODO(cais): Optimize if necessary.
-                    const dtype y2 = accessRotBuf(accessBegin + b);
-                    const dtype y3 = accessRotBuf(accessEnd - 1);
-                    const dtype y2prime = 0.5 * (y2 - y3);
-                    const dtype y3prime = 0.5 * (y3 - y2);
-                    added = y2prime + (y3prime - y2prime) * static_cast<dtype>(i)
-                        / static_cast<dtype>(n1 - 1);
+                    if (b == n1 && n0-n1+i > n1) {
+                        const dtype y2 = accessRotBuf(accessBegin + b);
+                        const dtype y3 = accessRotBuf(accessEnd - 1);
+                        added = (y3 - y2) * static_cast<dtype>(n0-n1+i-n1) / static_cast<dtype>(n0-n1);
+                    }
+                    else {
+                        added = 0.0;
+                    }
                 }
                 
                 scratchBuf[(scratchWritePtr + i) % scratchLen] += added;                
